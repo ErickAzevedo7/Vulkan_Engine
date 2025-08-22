@@ -106,7 +106,21 @@ public:
 
     void recreateSwapChain();
 
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+    VkFormat findDepthFormat();
+
+    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+
+	VkPipelineLayout getPipelineLayout();
+
+    VkPipeline getPipeline();
+
     VkInstance getInstance();
+
+	VkBuffer getVertexBuffer();
+
+	VkBuffer getIndexBuffer();
 
     VkPhysicalDevice getPhysicalDevice();
 
@@ -122,6 +136,8 @@ public:
 
     VkFormat getSwapChainImageFormat();
 
+    VkSampleCountFlagBits getmsaaSamples();
+
     bool getSwapChainRecreated();
 
     bool getFramebufferResized();
@@ -131,6 +147,10 @@ public:
     void setSwapChainRecreated(bool value);
 
     std::vector<VkImageView> getSwapChainImageViews();
+
+	VkImageView getDepthImageView();
+
+	VkImageView getColorResolveImageView();
 
     VkExtent2D getSwapChainExtent();
 
@@ -147,6 +167,13 @@ public:
     VkSwapchainKHR getSwapChain();
 
     std::vector<VkCommandBuffer> getCommandBuffers();
+
+	std::vector<VkDescriptorSet> getDescriptorSets();
+
+	VkImageView getTextureImageView();
+
+	VkSampler getTextureSampler();
+
 private:
     GLFWwindow* window;
     VkInstance instance;
@@ -214,8 +241,6 @@ private:
 
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
-    VkFormat findDepthFormat();
-
     bool hasStencilComponent(VkFormat format);
 
     void createDepthResources();
@@ -223,8 +248,6 @@ private:
     void createTextureSampler();
 
     void createTextureImageView();
-
-    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
@@ -251,8 +274,6 @@ private:
     void createVertexBuffer();
 
     void createIndexBuffer();
-
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     void createSyncObjects();
 

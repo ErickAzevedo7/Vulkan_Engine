@@ -4,6 +4,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include "vulkancore.h"
+#include "ViewPort.h"
 
 class VulkanEngine {
 public:
@@ -11,8 +12,11 @@ public:
 		// Initialize Vulkan
         engineCore.initWindow();
 		engineCore.initVulkan();
+
+		viewPort.init(&engineCore);
 		init();
 		mainLoop();
+        viewPort.cleanup();
 		cleanup();
 		engineCore.cleanup();
     }
@@ -37,13 +41,13 @@ public:
 
         engineCore.recordCommandBuffer(engineCore.getCommandBuffers()[engineCore.getCurrentFrame()], imageIndex);
 
+		viewPort.recordViewportCommandBuffer(viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
+
         recordImguiCommandBuffer(imGuiCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
 
         engineCore.updateUniformBuffer(engineCore.getCurrentFrame());
 
-
-		std::array<VkCommandBuffer, 2> submitCommandBuffers = { engineCore.getCommandBuffers()[engineCore.getCurrentFrame()], imGuiCommandBuffers[engineCore.getCurrentFrame()]};
-
+		std::array<VkCommandBuffer, 3> submitCommandBuffers = { engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()] ,imGuiCommandBuffers[engineCore.getCurrentFrame()] };
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -91,30 +95,66 @@ public:
     }
 
     void mainLoop() {
+        std::vector<VkDescriptorSet> m_Dset;
+
+        m_Dset.resize(viewPort.m_ViewportImageViews.size());
+        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+            m_Dset[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
         while (!glfwWindowShouldClose(engineCore.getWindow())) {
             glfwPollEvents();
 
             if (engineCore.getSwapChainRecreated())
             {
+                for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+                    ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
+
 				cleanupFramebuffers();
 				createframebuffers();
+				viewPort.cleanupFramebuffers();
+				viewPort.recreateViewport();
+
+                for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+                    m_Dset[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 				engineCore.setSwapChainRecreated(false);
             }
 
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
-            ImGui::ShowDemoWindow();
+            ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+            ImGui::Begin("Viewport");
+
+            ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+
+            ImGui::Image((ImTextureID) m_Dset[engineCore.getCurrentFrame()], ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+
+			ImGui::End();
+
+			ImGui::Begin("Settings");
+			ImGui::Text("Viewport Size: %dx%d", (int)viewportPanelSize.x, (int)viewportPanelSize.y);
+			ImGui::End();
+
+			ImGui::Begin("scene");
+			ImGui::End();
+
+			ImGui::Begin("Assets");
+			ImGui::End();
+
             ImGui::Render();
 
             drawFrame();
         }
-
         vkDeviceWaitIdle(engineCore.getDevice());
+
+        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+            ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
     }
 private:
 	VkResult err;
-	VulkanCore engineCore;
+    VulkanCore engineCore;
+	ViewPort viewPort;
 	VkCommandPool imGuiCommandPool;
 	std::vector<VkCommandBuffer> imGuiCommandBuffers;
     VkRenderPass imGuiRenderPass;
@@ -141,9 +181,19 @@ private:
 
         VkDescriptorPoolSize pool_sizes[] =
         {
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE },
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
         };
-        VkDescriptorPoolCreateInfo pool_info = {};
+        VkDescriptorPoolCreateInfo pool_info{};
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
         pool_info.maxSets = 0;
@@ -162,7 +212,7 @@ private:
             imageCount = swapChainSupport.capabilities.maxImageCount;
         }
 
-        VkAttachmentDescription attachment = {};
+        VkAttachmentDescription attachment{};
         attachment.format = engineCore.getSwapChainImageFormat();
         attachment.samples = VK_SAMPLE_COUNT_1_BIT;
         attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -172,7 +222,7 @@ private:
         attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-        VkAttachmentReference color_attachment = {};
+        VkAttachmentReference color_attachment{};
         color_attachment.attachment = 0;
         color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
@@ -181,7 +231,7 @@ private:
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment;
 
-        VkSubpassDependency dependency = {};
+        VkSubpassDependency dependency{};
         dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
         dependency.dstSubpass = 0;
         dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -189,7 +239,7 @@ private:
         dependency.srcAccessMask = 0;  // or VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-        VkRenderPassCreateInfo info = {};
+        VkRenderPassCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         info.attachmentCount = 1;
         info.pAttachments = &attachment;
@@ -210,7 +260,7 @@ private:
 
         // Setup Platform/Renderer backends
         ImGui_ImplGlfw_InitForVulkan(engineCore.getWindow(), true);
-        ImGui_ImplVulkan_InitInfo init_info = {};
+        ImGui_ImplVulkan_InitInfo init_info{};
         init_info.Instance = engineCore.getInstance();
         init_info.PhysicalDevice = engineCore.getPhysicalDevice();
         init_info.Device = engineCore.getDevice();
@@ -230,24 +280,23 @@ private:
     }
 
     void recordImguiCommandBuffer(VkCommandBuffer commandBuffer ,uint32_t ImageIndex) {
-		VkCommandBufferBeginInfo beginInfo = {};
+		VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         err = vkBeginCommandBuffer(commandBuffer, &beginInfo);
         check_vk_result(err);
 
-        VkRenderPassBeginInfo info = {};
+        VkRenderPassBeginInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = imGuiRenderPass;
         info.framebuffer = imGuiFramebuffers[ImageIndex];
         info.renderArea.extent.width = engineCore.getSwapChainExtent().width;
         info.renderArea.extent.height = engineCore.getSwapChainExtent().height;
         info.clearValueCount = 1;
-        std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
-        clearValues[1].depthStencil = { 1.0f, 0 };
-        info.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        info.pClearValues = clearValues.data();
+        VkClearValue clearValue{};
+        clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+        info.clearValueCount = 1;
+        info.pClearValues = &clearValue;
         vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
         // Record Imgui Draw Data and draw funcs into command buffer
@@ -284,7 +333,7 @@ private:
 	}
 
     void createCommandPool(VkCommandPool* commandPool, VkCommandPoolCreateFlags flags) {
-        VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+        VkCommandPoolCreateInfo commandPoolCreateInfo{};
         commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         commandPoolCreateInfo.queueFamilyIndex = engineCore.getGraphicsQueueFamily();
         commandPoolCreateInfo.flags = flags;
@@ -295,7 +344,7 @@ private:
     }
 
     void createCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool& commandPool) {
-        VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+        VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
         commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         commandBufferAllocateInfo.commandPool = commandPool;

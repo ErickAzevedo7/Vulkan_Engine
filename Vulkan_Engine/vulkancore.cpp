@@ -225,30 +225,6 @@ void VulkanCore::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ima
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)swapChainExtent.width;
-    viewport.height = (float)swapChainExtent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-    VkRect2D scissor{};
-    scissor.offset = { 0, 0 };
-    scissor.extent = swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-    VkBuffer vertexBuffers[] = { vertexBuffer };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -295,8 +271,24 @@ void VulkanCore::recreateSwapChain() {
     swapChainRecreated = true;
 }
 
+VkPipelineLayout VulkanCore::getPipelineLayout() {
+	return pipelineLayout;
+}
+
+VkPipeline VulkanCore::getPipeline() {
+	return graphicsPipeline;
+}
+
 VkInstance VulkanCore::getInstance() {
 	return instance;
+}
+
+VkBuffer VulkanCore::getVertexBuffer() {
+	return vertexBuffer;
+}
+
+VkBuffer VulkanCore::getIndexBuffer() {
+	return indexBuffer;
 }
 
 VkPhysicalDevice VulkanCore::getPhysicalDevice() {
@@ -350,6 +342,14 @@ std::vector<VkImageView> VulkanCore::getSwapChainImageViews() {
 	return swapChainImageViews;
 }
 
+VkImageView VulkanCore::getDepthImageView() {
+	return depthImageView;
+}
+
+VkImageView VulkanCore::getColorResolveImageView() {
+	return colorImageView;
+}
+
 VkExtent2D VulkanCore::getSwapChainExtent() {
 	return swapChainExtent;
 }
@@ -380,6 +380,22 @@ VkSwapchainKHR VulkanCore::getSwapChain() {
 
 std::vector<VkCommandBuffer> VulkanCore::getCommandBuffers() {
 	return commandBuffers;
+}
+
+std::vector<VkDescriptorSet> VulkanCore::getDescriptorSets() {
+	return descriptorSets;
+}
+
+VkImageView VulkanCore::getTextureImageView() {
+	return textureImageView;
+}
+
+VkSampler VulkanCore::getTextureSampler() {
+	return textureSampler;
+}
+
+VkSampleCountFlagBits VulkanCore::getmsaaSamples() {
+	return msaaSamples;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanCore::debugCallback(
@@ -1109,10 +1125,6 @@ void VulkanCore::createRenderPass() {
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference colorAttachmentRef{};
-    colorAttachmentRef.attachment = 0;
-    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = findDepthFormat();
     depthAttachment.samples = msaaSamples;
@@ -1123,10 +1135,6 @@ void VulkanCore::createRenderPass() {
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
     VkAttachmentDescription colorAttachmentResolve{};
     colorAttachmentResolve.format = swapChainImageFormat;
     colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1136,6 +1144,14 @@ void VulkanCore::createRenderPass() {
     colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthAttachmentRef{};
+    depthAttachmentRef.attachment = 1;
+    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorAttachmentResolveRef{};
     colorAttachmentResolveRef.attachment = 2;
@@ -1151,8 +1167,8 @@ void VulkanCore::createRenderPass() {
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
