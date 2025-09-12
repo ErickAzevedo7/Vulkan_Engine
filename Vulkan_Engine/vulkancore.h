@@ -174,6 +174,8 @@ public:
 
 	VkSampler getTextureSampler();
 
+	std::vector<void*> getUniformBuffersMapped();
+
 private:
     GLFWwindow* window;
     VkInstance instance;

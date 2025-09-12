@@ -5,6 +5,7 @@
 #include "imgui_impl_vulkan.h"
 #include "vulkancore.h"
 #include "ViewPort.h"
+#include "Editor/EditorCamera.h"
 
 class VulkanEngine {
 public:
@@ -14,6 +15,7 @@ public:
 		engineCore.initVulkan();
 
 		viewPort.init(&engineCore);
+		editorCamera.init(&engineCore);
 		init();
 		mainLoop();
         viewPort.cleanup();
@@ -45,7 +47,7 @@ public:
 
         recordImguiCommandBuffer(imGuiCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
 
-        engineCore.updateUniformBuffer(engineCore.getCurrentFrame());
+		editorCamera.updateUniformBuffer(engineCore.getCurrentFrame());
 
 		std::array<VkCommandBuffer, 3> submitCommandBuffers = { engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()] ,imGuiCommandBuffers[engineCore.getCurrentFrame()] };
 
@@ -154,6 +156,7 @@ public:
 private:
 	VkResult err;
     VulkanCore engineCore;
+	EditorCamera editorCamera;
 	ViewPort viewPort;
 	VkCommandPool imGuiCommandPool;
 	std::vector<VkCommandBuffer> imGuiCommandBuffers;
