@@ -45,6 +45,10 @@ void ViewPort::cleanupFramebuffers() {
 	for (auto image : m_ViewportImages) {
 		vkDestroyImage(engineCore->getDevice(), image, nullptr);
 	}
+
+	for (auto memory : m_DstImageMemory) {
+		vkFreeMemory(engineCore->getDevice(), memory, nullptr);
+	}
 }
 
 void ViewPort::recreateViewport() {

@@ -23,6 +23,7 @@ public:
 		init();
 		mainLoop();
         viewPort.cleanup();
+
 		cleanup();
 		engineCore.cleanup();
     }
