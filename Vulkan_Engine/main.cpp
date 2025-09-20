@@ -7,6 +7,10 @@
 #include "ViewPort.h"
 #include "Editor/EditorCamera.h"
 
+//GLOBAL VARIABLES
+float deltaTime = 0.0f;	// Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame   
+
 class VulkanEngine {
 public:
     void run() {
@@ -104,7 +108,11 @@ public:
             m_Dset[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         while (!glfwWindowShouldClose(engineCore.getWindow())) {
+            float currentFrame = glfwGetTime();
+            deltaTime = currentFrame - lastFrame;
+            lastFrame = currentFrame;
             glfwPollEvents();
+            inputProcess();
 
             if (engineCore.getSwapChainRecreated())
             {
@@ -371,6 +379,18 @@ private:
         ImGui::DestroyContext();
         vkDestroyDescriptorPool(engineCore.getDevice(), imguiDescriptorPool, nullptr);
     }
+
+	void inputProcess() {
+        const float cameraSpeed = 2.5f * deltaTime; // adjust accordingly
+        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_W) == GLFW_PRESS)
+            editorCamera.cameraPos += cameraSpeed * editorCamera.cameraFront;
+        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_S) == GLFW_PRESS)
+            editorCamera.cameraPos -= cameraSpeed * editorCamera.cameraFront;
+        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_A) == GLFW_PRESS)
+            editorCamera.cameraPos -= glm::normalize(glm::cross(editorCamera.cameraFront, editorCamera.cameraUp)) * cameraSpeed;
+        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_D) == GLFW_PRESS)
+            editorCamera.cameraPos += glm::normalize(glm::cross(editorCamera.cameraFront, editorCamera.cameraUp)) * cameraSpeed;
+	}
 };
 
 int main() {
