@@ -1,7 +1,13 @@
 #pragma once  
 #define GLM_ENABLE_EXPERIMENTAL  
 #include <vulkan/vulkan.h>  
-#include "vulkancore.h"  
+#include "vulkancore.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h" 
+
+
+extern float deltaTime;
 
 class EditorCamera  
 {  
@@ -14,11 +20,13 @@ public:
 	static float pitch;  
 	static float lastX;
 	static float lastY;
-	static bool firstMouse;
 	void init(VulkanCore* core);  
 
 	void updateUniformBuffer(uint32_t currentImage);  
-	static void mouse_callback(GLFWwindow* window, double xpos, double ypos);  
+	static void mousePosHandler();
+	void inputProcess();
 private:  
-	VulkanCore* engineCore;  
+	VulkanCore* engineCore;
+	static bool isDragging;
+	static void updateCursorLoop();
 };  

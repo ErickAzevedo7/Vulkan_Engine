@@ -15,17 +15,17 @@ class VulkanEngine {
 public:
     void run() {
 		// Initialize Vulkan
-        engineCore.initWindow();
-		engineCore.initVulkan();
+      engineCore.initWindow();
+      engineCore.initVulkan();
 
-		viewPort.init(&engineCore);
-		editorCamera.init(&engineCore);
-		init();
-		mainLoop();
-        viewPort.cleanup();
+      viewPort.init(&engineCore);
+      editorCamera.init(&engineCore);
+      init();
+      mainLoop();
+      viewPort.cleanup();
 
-		cleanup();
-		engineCore.cleanup();
+      cleanup();
+      engineCore.cleanup();
     }
 
     void drawFrame() {
@@ -48,13 +48,13 @@ public:
 
         engineCore.recordCommandBuffer(engineCore.getCommandBuffers()[engineCore.getCurrentFrame()], imageIndex);
 
-		viewPort.recordViewportCommandBuffer(viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
+		  viewPort.recordViewportCommandBuffer(viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
 
         recordImguiCommandBuffer(imGuiCommandBuffers[engineCore.getCurrentFrame()], imageIndex);
 
-		editorCamera.updateUniformBuffer(engineCore.getCurrentFrame());
+		  editorCamera.updateUniformBuffer(engineCore.getCurrentFrame());
 
-		std::array<VkCommandBuffer, 3> submitCommandBuffers = { engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()] ,imGuiCommandBuffers[engineCore.getCurrentFrame()] };
+		  std::array<VkCommandBuffer, 3> submitCommandBuffers = { engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()] ,imGuiCommandBuffers[engineCore.getCurrentFrame()] };
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -113,7 +113,6 @@ public:
             deltaTime = currentFrame - lastFrame;
             lastFrame = currentFrame;
             glfwPollEvents();
-            inputProcess();
 
             if (engineCore.getSwapChainRecreated())
             {
@@ -136,6 +135,8 @@ public:
             ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
             ImGui::Begin("Viewport");
+
+            inputProcess();
 
             ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
@@ -163,12 +164,12 @@ public:
             ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
     }
 private:
-	VkResult err;
+    VkResult err;
     VulkanCore engineCore;
-	EditorCamera editorCamera;
-	ViewPort viewPort;
-	VkCommandPool imGuiCommandPool;
-	std::vector<VkCommandBuffer> imGuiCommandBuffers;
+    EditorCamera editorCamera;
+    ViewPort viewPort;
+    VkCommandPool imGuiCommandPool;
+    std::vector<VkCommandBuffer> imGuiCommandBuffers;
     VkRenderPass imGuiRenderPass;
     std::vector<VkFramebuffer> imGuiFramebuffers;
     VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
@@ -190,6 +191,7 @@ private:
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+        io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
         VkDescriptorPoolSize pool_sizes[] =
         {
@@ -268,7 +270,7 @@ private:
         imGuiCommandBuffers.resize(engineCore.getSwapChainImageViews().size());
         createCommandBuffers(imGuiCommandBuffers.data(), static_cast<uint32_t>(imGuiCommandBuffers.size()), imGuiCommandPool);
 
-		createframebuffers();
+		  createframebuffers();
 
         // Setup Platform/Renderer backends
         ImGui_ImplGlfw_InitForVulkan(engineCore.getWindow(), true);
@@ -292,7 +294,7 @@ private:
     }
 
     void recordImguiCommandBuffer(VkCommandBuffer commandBuffer ,uint32_t ImageIndex) {
-		VkCommandBufferBeginInfo beginInfo{};
+		  VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         err = vkBeginCommandBuffer(commandBuffer, &beginInfo);
@@ -382,16 +384,8 @@ private:
     }
 
 	void inputProcess() {
-        const float cameraSpeed = 2.5f * deltaTime; // adjust accordingly
-        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_W) == GLFW_PRESS)
-            editorCamera.cameraPos += cameraSpeed * editorCamera.cameraFront;
-        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_S) == GLFW_PRESS)
-            editorCamera.cameraPos -= cameraSpeed * editorCamera.cameraFront;
-        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_A) == GLFW_PRESS)
-            editorCamera.cameraPos -= glm::normalize(glm::cross(editorCamera.cameraFront, editorCamera.cameraUp)) * cameraSpeed;
-        if (glfwGetKey(engineCore.getWindow(), GLFW_KEY_D) == GLFW_PRESS)
-            editorCamera.cameraPos += glm::normalize(glm::cross(editorCamera.cameraFront, editorCamera.cameraUp)) * cameraSpeed;
-	}
+		editorCamera.inputProcess();
+   	}
 };
 
 int main() {
