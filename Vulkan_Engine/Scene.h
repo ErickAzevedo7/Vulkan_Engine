@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include "Entity.h"
+#include <utility>
 
 class Scene {
  public:
@@ -8,7 +9,7 @@ class Scene {
   ~Scene();
 
   // Add a new entity to the scene
-  Entity& createEntity(std::string name);
+  Entity& createEntity(const std::string& name);
 
   // Remove an entity by index
   void removeEntity(size_t index);

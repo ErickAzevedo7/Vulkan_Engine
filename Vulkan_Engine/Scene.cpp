@@ -1,15 +1,32 @@
 #include "Scene.h"
 
+#include <utility>
+
 Scene::Scene(std::string name) {
-  this->name = name;
+  this->name = std::move(name);
 }
 
 Scene::~Scene() {
   return;
 }
 
-Entity& Scene::createEntity(std::string name) {
-  entities.emplace_back(name);
+Entity& Scene::createEntity(const std::string& name) {
+  std::string uniqueName = name;
+  int counter = 1;
+  bool nameExists = true;
+
+  while (nameExists) {
+	  nameExists = false;
+    for (const auto& entity : entities) {
+      if (entity.getName() == uniqueName) {
+        nameExists = true;
+        uniqueName = name + "(" + std::to_string(counter++) + ")";
+        break;
+      }
+    }
+  }
+
+  entities.emplace_back(uniqueName);
   return entities.back();
 }
 

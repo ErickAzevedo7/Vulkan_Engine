@@ -7,7 +7,7 @@ MeshComponent::MeshComponent(Entity* owner,
   if (!meshManager) {
     throw std::invalid_argument("MeshManager pointer is null.");
   }
-  mesh = meshManager->getMesh(
+  mesh = MeshManager::getMesh(
       meshName);
   if (!mesh) {
     throw std::runtime_error("Mesh not found: " + meshName);

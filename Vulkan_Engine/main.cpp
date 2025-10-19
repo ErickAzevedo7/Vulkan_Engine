@@ -7,6 +7,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include "scene/SceneManager.h"
+#include "ui/SceneUi.h"
 
 // GLOBAL VARIABLES
 float deltaTime = 0.0f;  // Time between current frame and last frame
@@ -192,49 +193,7 @@ class VulkanEngine {
                   (int)viewportPanelSize.y);
       ImGui::End();
 
-      static int selectedEntity = -1;
-
-      ImGui::Begin("scene");
-      auto* scene = SceneManager::getActiveScene();
-      if (scene) {
-        for (size_t i = 0; i < scene->getEntityCount(); ++i) {
-          Entity& entity = scene->getEntity(i);
-          std::string label = entity.getName().empty()
-                                  ? ("Entity " + std::to_string(i))
-                                  : entity.getName();
-
-          // Selectable entity
-          if (ImGui::Selectable(label.c_str(), selectedEntity == (int)i)) {
-            selectedEntity = (int)i;
-          }
-
-          // Right-click context menu for each entity
-          if (ImGui::BeginPopupContextItem()) {
-            if (ImGui::MenuItem("Remove")) {
-              scene->removeEntity(i);
-              if (selectedEntity == (int)i)
-                selectedEntity = -1;
-              ImGui::EndPopup();
-              break;  // Entities list changed, break out of loop
-            }
-            ImGui::EndPopup();
-          }
-        }
-
-        // If an entity is selected, show editing options
-        if (selectedEntity >= 0 &&
-            selectedEntity < (int)scene->getEntityCount()) {
-          ImGui::Separator();
-          Entity& entity = scene->getEntity(selectedEntity);
-          char nameBuffer[128];
-          strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
-          nameBuffer[sizeof(nameBuffer) - 1] = 0;
-          // Add more component editing here as needed
-        }
-      } else {
-        ImGui::Text("No active scene.");
-      }
-      ImGui::End();
+      SceneUi::render();
 
       ImGui::Begin("Assets");
       ImGui::End();
