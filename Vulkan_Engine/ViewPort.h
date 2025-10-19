@@ -1,7 +1,9 @@
 #pragma once
 #define GLM_ENABLE_EXPERIMENTAL
 #include <vulkan/vulkan.h>
-#include "vulkancore.h"
+#include "core/vulkancore.h"
+#include "core/utils/Utils.h"
+#include <Entity.h>
 class ViewPort
 {
 public:

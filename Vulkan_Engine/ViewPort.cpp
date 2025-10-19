@@ -114,7 +114,7 @@ void ViewPort::createViewportImage() {
 		vkGetImageMemoryRequirements(engineCore->getDevice(), m_ViewportImages[i], &memRequirements);
 		memAllocInfo.allocationSize = memRequirements.size;
 		// Memory must be host visible to copy from
-		memAllocInfo.memoryTypeIndex = engineCore->findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		memAllocInfo.memoryTypeIndex = Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		if (vkAllocateMemory(engineCore->getDevice(), &memAllocInfo, nullptr, &m_DstImageMemory[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate image memory!");
