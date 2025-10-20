@@ -5,15 +5,14 @@
 class MeshComponent : public Component {
  public:
   MeshComponent(Entity* owner,
-                MeshManager* meshManager,
                 const std::string& meshName);
   ~MeshComponent();
 
   void render(VkCommandBuffer commandBuffer,
               VkPipeline pipeline,
               VkPipelineLayout pipelineLayout,
-              VkDescriptorSet descriptorSet);
-
+              VkDescriptorSet descriptorSet) const;
+	
   // Accessors
   Mesh* GetMesh() const;
   Entity* GetOwner() const;

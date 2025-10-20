@@ -23,6 +23,7 @@
     <ClCompile Include="components\MeshComponent.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
+    <ClCompile Include="SceneRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -47,6 +48,7 @@
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="scene\SceneManager.h" />
     <ClInclude Include="ui\SceneUi.h" />
+    <ClInclude Include="SceneRenderer.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

@@ -153,6 +153,7 @@
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="components\Transform.cpp" />
     <ClCompile Include="core\Vertices.cpp" />
+    <ClCompile Include="SceneRenderer.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
     <ClCompile Include="ViewPort.cpp" />
@@ -177,6 +178,7 @@
     <ClInclude Include="Scene.h" />
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="core\Vertices.h" />
+    <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="scene\SceneManager.h" />
     <ClInclude Include="ViewPort.h" />

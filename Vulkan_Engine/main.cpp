@@ -1,6 +1,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define GLM_ENABLE_EXPERIMENTAL
 #include "Editor/EditorCamera.h"
+#include "SceneRenderer.h"
 #include "ViewPort.h"
 #include "core/vulkancore.h"
 #include "imgui.h"
@@ -19,12 +20,13 @@ class VulkanEngine {
     // Initialize Vulkan
     engineCore.initWindow();
     engineCore.initVulkan();
-
+    SceneRenderer::init(&engineCore);
     viewPort.init(&engineCore);
     editorCamera.init(&engineCore);
     SceneManager::loadDefaults();
     init();
     mainLoop();
+
     viewPort.cleanup();
 
     cleanup();
@@ -180,11 +182,6 @@ class VulkanEngine {
       ImGui::Image((ImTextureID)m_Dset[engineCore.getCurrentFrame()],
                    ImVec2{viewportPanelSize.x, viewportPanelSize.y});
 
-      // Draw a red line from (p.x, p.y) to (p.x + 100, p.y + 100) with a
-      // thickness of 3.0f
-      draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x + 100.0f, p.y + 100.0f),
-                         IM_COL32(255, 0, 0, 255), 3.0f);
-
       ImGui::End();
       ImGui::PopStyleVar(2);
 
@@ -205,10 +202,28 @@ class VulkanEngine {
           }
 
           if (ImGui::MenuItem("Create Cube")) {
-            SceneManager::getActiveScene()->createEntity("Cube");
+            Entity& entity =
+                SceneManager::getActiveScene()->createEntity("Cube");
+            MeshComponent* meshComp = new MeshComponent(&entity, "cube");
+            Transform* transformComp = new Transform();
+            entity.addComponent(meshComp);
+            entity.addComponent(transformComp);
           }
           if (ImGui::MenuItem("Create Sphere")) {
-            SceneManager::getActiveScene()->createEntity("Sphere");
+            Entity& entity =
+                SceneManager::getActiveScene()->createEntity("Sphere");
+            MeshComponent* meshComp = new MeshComponent(&entity, "sphere");
+            Transform* transformComp = new Transform();
+            entity.addComponent(meshComp);
+            entity.addComponent(transformComp);
+          }
+          if (ImGui::MenuItem("Create Quad")) {
+            Entity& entity =
+                SceneManager::getActiveScene()->createEntity("Quad");
+            MeshComponent* meshComp = new MeshComponent(&entity, "quad");
+            Transform* transformComp = new Transform();
+            entity.addComponent(meshComp);
+            entity.addComponent(transformComp);
           }
           ImGui::EndMenu();
         }

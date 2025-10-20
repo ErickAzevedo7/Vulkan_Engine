@@ -5,6 +5,7 @@
 #include <vector>
 #include "core/utils/Utils.h"
 
+
 struct Vertex {
   glm::vec3 pos;
   glm::vec3 color;
@@ -104,6 +105,9 @@ class MeshManager {
   static Mesh createMesh(std::vector<Vertex> vertices,
                          std::vector<uint32_t> indices,
                          VkCommandPool commandPool);
+
+  static void generateSphere(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, uint32_t X_SEGMENTS,
+                             uint32_t Y_SEGMENTS);
 
   static Mesh* getMesh(std::string name);
 

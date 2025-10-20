@@ -72,7 +72,6 @@ void VulkanCore::initWindow() {
 }
 
 void VulkanCore::initVulkan() {
-    Mesh test;
     physicalDevice = VK_NULL_HANDLE;
     currentFrame = 0;
     bool framebufferResized = false;
@@ -97,9 +96,6 @@ void VulkanCore::initVulkan() {
     createTextureImageView();
     createTextureSampler();
     loadModel();
-    test = MeshManager::createMesh(vertices, indices, commandPool);
-	vertexBuffer = test.vertexBuffer;
-	indexBuffer = test.indexBuffer;
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();

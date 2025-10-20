@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include "core/vulkancore.h"
 #include "core/utils/Utils.h"
+#include "SceneRenderer.h"
 #include <Entity.h>
 class ViewPort
 {

@@ -1,8 +1,42 @@
 #include "MeshManager.h"
+#define _USE_MATH_DEFINES
+#include "math.h"
 
 Mesh MeshManager::cube;
 Mesh MeshManager::quad;
 Mesh MeshManager::sphere;
+
+void MeshManager::generateSphere(std::vector<Vertex>& vertices,
+                                 std::vector<uint32_t>& indices,
+                                 uint32_t X_SEGMENTS = 32,
+                                 uint32_t Y_SEGMENTS = 16) {
+  vertices.clear();
+  indices.clear();
+
+  for (uint32_t y = 0; y <= Y_SEGMENTS; y++) {
+    for (uint32_t x = 0; x <= X_SEGMENTS; x++) {
+      float xSegment = (float)x / (float)X_SEGMENTS;
+      float ySegment = (float)y / (float)Y_SEGMENTS;
+      float xPos = std::cos(xSegment * 2.0f * M_PI) * std::sin(ySegment * M_PI);
+      float yPos = std::cos(ySegment * M_PI);
+      float zPos = std::sin(xSegment * 2.0f * M_PI) * std::sin(ySegment * M_PI);
+
+      vertices.push_back({
+          {xPos * 0.5f, yPos * 0.5f, zPos * 0.5f},  // position
+          {xPos, yPos, zPos},                       // normal
+          {xSegment, ySegment}                      // uv
+      });
+    }
+  }
+
+  bool oddRow = false;
+  for (uint32_t y = 0; y < Y_SEGMENTS; ++y) {
+    for (uint32_t x = 0; x <= X_SEGMENTS; ++x) {
+      indices.push_back(y * (X_SEGMENTS + 1) + x);
+      indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+    }
+  }
+}
 
 VkVertexInputBindingDescription Vertex::getBindingDescription() {
   VkVertexInputBindingDescription bindingDescription{};
@@ -51,7 +85,10 @@ void MeshManager::loadDefaults(VkCommandPool commandPool,
                                VkQueue graphicsQueue) {
   quad = createMesh(quadVertices, quadIndices, commandPool);
   cube = createMesh(cubeVertices, cubeIndices, commandPool);
-  // sphere = createMesh(sphereVertices, sphereIndices, commandPool);
+  std::vector<Vertex> sphereVerts;
+  std::vector<uint32_t> sphereInds;
+  generateSphere(sphereVerts, sphereInds);
+  sphere = createMesh(sphereVerts, sphereInds, commandPool);
 }
 
 Mesh MeshManager::createMesh(std::vector<Vertex> vertices,
@@ -63,6 +100,8 @@ Mesh MeshManager::createMesh(std::vector<Vertex> vertices,
                      mesh.vertexMemory);
 
   createIndexBuffer(indices, commandPool, mesh.indexBuffer, mesh.indexMemory);
+
+  mesh.indexCount = static_cast<uint32_t>(indices.size());
 
   return mesh;
 }

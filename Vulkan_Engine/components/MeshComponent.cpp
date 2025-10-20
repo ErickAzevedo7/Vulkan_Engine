@@ -1,12 +1,8 @@
 #include "MeshComponent.h"
 
 MeshComponent::MeshComponent(Entity* owner,
-                             MeshManager* meshManager,
                              const std::string& meshName)
     : Component(), owner(owner), meshManager(meshManager), visible(true) {
-  if (!meshManager) {
-    throw std::invalid_argument("MeshManager pointer is null.");
-  }
   mesh = MeshManager::getMesh(
       meshName);
   if (!mesh) {
@@ -15,13 +11,14 @@ MeshComponent::MeshComponent(Entity* owner,
 }
 
 MeshComponent::~MeshComponent() {
-  
+  mesh = nullptr;
+  owner = nullptr;
 }
 
 void MeshComponent::render(VkCommandBuffer commandBuffer,
                            VkPipeline pipeline,
                            VkPipelineLayout pipelineLayout,
-                           VkDescriptorSet descriptorSet) {
+                           VkDescriptorSet descriptorSet) const {
   if (!visible || !mesh)
     return;
 
