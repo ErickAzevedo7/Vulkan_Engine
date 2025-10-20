@@ -1,25 +1,25 @@
 #pragma once
 
+#include <GLFW/glfw3.h>
+#include <stb_image.h>
+#include <tiny_obj_loader.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <optional>
 #include <set>
-#include <stb_image.h>
 #include <stdexcept>
-#include <tiny_obj_loader.h>
 #include <unordered_map>
 #include <vector>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/hash.hpp>
 
 #include "core/utils/Utils.h"
 #include "mesh/MeshManager.h"
@@ -157,6 +157,8 @@ class VulkanCore {
 
   std::vector<void*> getUniformBuffersMapped();
 
+  static VkCommandPool getCommandPool();
+
  private:
   GLFWwindow* window;
   VkInstance instance;
@@ -176,7 +178,7 @@ class VulkanCore {
   VkPipelineLayout pipelineLayout;
   VkPipeline graphicsPipeline;
   std::vector<VkFramebuffer> swapChainFramebuffers;
-  VkCommandPool commandPool;
+  static VkCommandPool commandPool;
   std::vector<VkCommandBuffer> commandBuffers;
   std::vector<VkSemaphore> imageAvailableSemaphores;
   std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -206,6 +208,7 @@ class VulkanCore {
   VkDeviceMemory colorImageMemory;
   VkImageView colorImageView;
 
+ private:
   static VKAPI_ATTR VkBool32 VKAPI_CALL
   debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                 VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -228,24 +231,11 @@ class VulkanCore {
                                VkImageTiling tiling,
                                VkFormatFeatureFlags features);
 
-  bool hasStencilComponent(VkFormat format);
-
   void createDepthResources();
 
   void createTextureSampler();
 
   void createTextureImageView();
-
-  void copyBufferToImage(VkBuffer buffer,
-                         VkImage image,
-                         uint32_t width,
-                         uint32_t height);
-
-  void transitionImageLayout(VkImage image,
-                             VkFormat format,
-                             VkImageLayout oldLayout,
-                             VkImageLayout newLayout,
-                             uint32_t mipLevels);
 
   void generateMipmaps(VkImage image,
                        VkFormat imageFormat,
@@ -254,17 +244,6 @@ class VulkanCore {
                        uint32_t mipLevels);
 
   void createTextureImage();
-
-  void createImage(uint32_t width,
-                   uint32_t height,
-                   uint32_t mipLevels,
-                   VkSampleCountFlagBits numSamples,
-                   VkFormat format,
-                   VkImageTiling tiling,
-                   VkImageUsageFlags usage,
-                   VkMemoryPropertyFlags properties,
-                   VkImage& image,
-                   VkDeviceMemory& imageMemory);
 
   void createDescriptorSets();
 
