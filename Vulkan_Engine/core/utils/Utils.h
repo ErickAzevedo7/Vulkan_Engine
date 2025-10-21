@@ -45,4 +45,8 @@ void copyBufferToImage(VkBuffer buffer,
                        uint32_t width,
                        uint32_t height,
                        VkCommandPool commandPool);
+VkImageView createImageView(VkImage image,
+                            VkFormat format,
+                            VkImageAspectFlags aspectFlags,
+                            uint32_t mipLevels);
 }  // namespace Utils

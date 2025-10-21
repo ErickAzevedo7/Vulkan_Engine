@@ -88,11 +88,6 @@ class VulkanCore {
 
   VkFormat findDepthFormat();
 
-  VkImageView createImageView(VkImage image,
-                              VkFormat format,
-                              VkImageAspectFlags aspectFlags,
-                              uint32_t mipLevels);
-
   VkPipelineLayout getPipelineLayout();
 
   VkPipeline getPipeline();
@@ -232,10 +227,6 @@ class VulkanCore {
                                VkFormatFeatureFlags features);
 
   void createDepthResources();
-
-  void createTextureSampler();
-
-  void createTextureImageView();
 
   void generateMipmaps(VkImage image,
                        VkFormat imageFormat,
