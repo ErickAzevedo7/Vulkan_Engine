@@ -182,9 +182,9 @@ void ViewPort::createViewportImage() {
 void ViewPort::createViewportImageViews() {
   m_ViewportImageViews.resize(m_ViewportImages.size());
   for (uint32_t i = 0; i < m_ViewportImages.size(); i++) {
-    m_ViewportImageViews[i] = engineCore->createImageView(
-        m_ViewportImages[i], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT,
-        1);
+    m_ViewportImageViews[i] =
+        Utils::createImageView(m_ViewportImages[i], VK_FORMAT_B8G8R8A8_SRGB,
+                               VK_IMAGE_ASPECT_COLOR_BIT, 1);
   }
 }
 
@@ -302,7 +302,7 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   // // Optional beginInfo.pInheritanceInfo = nullptr; // Optional
 
   if (vkBeginCommandBuffer(
-          m_ViewportCommandBuffers[engineCore->getCurrentFrame()],
+          m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
           &beginInfo) != VK_SUCCESS) {
     throw std::runtime_error("failed to begin recording command buffer!");
   }
@@ -321,7 +321,7 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
   renderPassInfo.pClearValues = clearValues.data();
 
-  vkCmdBeginRenderPass(m_ViewportCommandBuffers[engineCore->getCurrentFrame()],
+  vkCmdBeginRenderPass(m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
                        &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
   VkViewport viewport{};
@@ -341,14 +341,13 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   VkBuffer vertexBuffers[] = {engineCore->getVertexBuffer()};
   VkDeviceSize offsets[] = {0};
 
-  SceneRenderer::RenderScene(
-      commandBuffer, engineCore->getPipeline(), engineCore->getPipelineLayout(),
-      engineCore->getDescriptorSets()[engineCore->getCurrentFrame()]);
+  SceneRenderer::RenderScene(commandBuffer, engineCore->getPipeline(),
+                             engineCore->getPipelineLayout(), imageIndex);
 
   vkCmdEndRenderPass(commandBuffer);
 
   if (vkEndCommandBuffer(
-          m_ViewportCommandBuffers[engineCore->getCurrentFrame()]) !=
+          m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()]) !=
       VK_SUCCESS) {
     throw std::runtime_error("failed to record command buffer!");
   }

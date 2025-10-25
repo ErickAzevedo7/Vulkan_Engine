@@ -149,14 +149,15 @@
     <ClCompile Include="imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="components\MeshComponent.cpp" />
-    <ClCompile Include="mesh\MeshManager.cpp" />
+    <ClCompile Include="managers\MeshManager.cpp" />
+    <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="components\Transform.cpp" />
     <ClCompile Include="core\Vertices.cpp" />
     <ClCompile Include="SceneRenderer.cpp" />
-    <ClCompile Include="texture\TextureManager.cpp" />
+    <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
-    <ClCompile Include="scene\SceneManager.cpp" />
+    <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="ViewPort.cpp" />
     <ClCompile Include="core\vulkancore.cpp" />
   </ItemGroup>
@@ -175,14 +176,15 @@
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="imgui\misc\cpp\imgui_stdlib.h" />
     <ClInclude Include="components\MeshComponent.h" />
-    <ClInclude Include="mesh\MeshManager.h" />
+    <ClInclude Include="managers\MeshManager.h" />
+    <ClInclude Include="managers\MaterialManager.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="core\Vertices.h" />
     <ClInclude Include="SceneRenderer.h" />
-    <ClInclude Include="texture\TextureManager.h" />
+    <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="ui\SceneUi.h" />
-    <ClInclude Include="scene\SceneManager.h" />
+    <ClInclude Include="managers\SceneManager.h" />
     <ClInclude Include="ViewPort.h" />
     <ClInclude Include="core\vulkancore.h" />
   </ItemGroup>

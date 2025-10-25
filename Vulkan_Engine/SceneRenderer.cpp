@@ -9,7 +9,7 @@ void SceneRenderer::init(VulkanCore* engineCore) {
 void SceneRenderer::RenderScene(VkCommandBuffer commandBuffer,
                                 VkPipeline pipeline,
                                 VkPipelineLayout pipelineLayout,
-                                VkDescriptorSet descriptorSet) {
+                                uint32_t imageIndex) {
   Scene* scene = SceneManager::getActiveScene();
 
   size_t entities = scene->getEntityCount();
@@ -17,7 +17,7 @@ void SceneRenderer::RenderScene(VkCommandBuffer commandBuffer,
     Entity* entity = &scene->getEntity(i);
 
     RenderEntity(entity, commandBuffer, pipeline, pipelineLayout,
-                 descriptorSet);
+                 imageIndex);
   }
 }
 
@@ -25,7 +25,7 @@ void SceneRenderer::RenderEntity(const Entity* entity,
                                  VkCommandBuffer commandBuffer,
                                  VkPipeline pipeline,
                                  VkPipelineLayout pipelineLayout,
-                                 VkDescriptorSet descriptorSet) {
+                                 uint32_t imageIndex) {
   const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
   if (!meshComp) {
@@ -33,6 +33,9 @@ void SceneRenderer::RenderEntity(const Entity* entity,
   }
 
   const Transform* transformComp = entity->getComponent<Transform>();
+  if (transformComp) {
+    glm::mat4 modelMatrix = transformComp->getMatrix();
+  }
 
-  meshComp->render(commandBuffer, pipeline, pipelineLayout, descriptorSet);
+  meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex);
 }

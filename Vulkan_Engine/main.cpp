@@ -7,7 +7,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
-#include "scene/SceneManager.h"
+#include "managers/SceneManager.h"
 #include "ui/SceneUi.h"
 
 // GLOBAL VARIABLES
@@ -20,6 +20,9 @@ class VulkanEngine {
     // Initialize Vulkan
     engineCore.initWindow();
     engineCore.initVulkan();
+    TextureManager::loadDefaults();
+    MaterialManager::init();
+    MaterialManager::loadDefault();
     SceneRenderer::init(&engineCore);
     viewPort.init(&engineCore);
     editorCamera.init(&engineCore);
@@ -35,13 +38,13 @@ class VulkanEngine {
 
   void drawFrame() {
     vkWaitForFences(
-        engineCore.getDevice(), 1,
-        &engineCore.getInFlightFences()[engineCore.getCurrentFrame()], VK_TRUE,
+	    VulkanCore::getDevice(), 1,
+        &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()], VK_TRUE,
         UINT64_MAX);
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
-        engineCore.getDevice(), engineCore.getSwapChain(), UINT64_MAX,
-        engineCore.getImageAvailableSemaphores()[engineCore.getCurrentFrame()],
+	    VulkanCore::getDevice(), engineCore.getSwapChain(), UINT64_MAX,
+        engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
         VK_NULL_HANDLE, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -52,35 +55,35 @@ class VulkanEngine {
     }
 
     vkResetFences(
-        engineCore.getDevice(), 1,
-        &engineCore.getInFlightFences()[engineCore.getCurrentFrame()]);
+	    VulkanCore::getDevice(), 1,
+        &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
 
     vkResetCommandBuffer(
-        engineCore.getCommandBuffers()[engineCore.getCurrentFrame()], 0);
+        engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
 
     engineCore.recordCommandBuffer(
-        engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],
+        engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
         imageIndex);
 
     viewPort.recordViewportCommandBuffer(
-        viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()],
+        viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
         imageIndex);
 
-    recordImguiCommandBuffer(imGuiCommandBuffers[engineCore.getCurrentFrame()],
+    recordImguiCommandBuffer(imGuiCommandBuffers[VulkanCore::getCurrentFrame()],
                              imageIndex);
 
-    editorCamera.updateUniformBuffer(engineCore.getCurrentFrame());
+    editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
 
     std::array<VkCommandBuffer, 3> submitCommandBuffers = {
-        engineCore.getCommandBuffers()[engineCore.getCurrentFrame()],
-        viewPort.m_ViewportCommandBuffers[engineCore.getCurrentFrame()],
-        imGuiCommandBuffers[engineCore.getCurrentFrame()]};
+        engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
+        viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
+        imGuiCommandBuffers[VulkanCore::getCurrentFrame()]};
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     VkSemaphore waitSemaphores[] = {
-        engineCore.getImageAvailableSemaphores()[engineCore.getCurrentFrame()]};
+        engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()]};
     VkPipelineStageFlags waitStages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
@@ -92,13 +95,13 @@ class VulkanEngine {
     submitInfo.pCommandBuffers = submitCommandBuffers.data();
 
     VkSemaphore signalSemaphores[] = {
-        engineCore.getRenderFinishedSemaphores()[engineCore.getCurrentFrame()]};
+        engineCore.getRenderFinishedSemaphores()[VulkanCore::getCurrentFrame()]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     if (vkQueueSubmit(
-            engineCore.getGraphicsQueue(), 1, &submitInfo,
-            engineCore.getInFlightFences()[engineCore.getCurrentFrame()]) !=
+		    VulkanCore::getGraphicsQueue(), 1, &submitInfo,
+            engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]) !=
         VK_SUCCESS) {
       throw std::runtime_error("failed to submit draw command buffer!");
     }
@@ -115,7 +118,7 @@ class VulkanEngine {
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr;  // Optional
 
-    result = vkQueuePresentKHR(engineCore.getPresentQueue(), &presentInfo);
+    result = vkQueuePresentKHR(VulkanCore::getPresentQueue(), &presentInfo);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
         engineCore.getFramebufferResized()) {
@@ -125,7 +128,7 @@ class VulkanEngine {
       throw std::runtime_error("failed to present swap chain image!");
     }
 
-    engineCore.setCurrentFrame((engineCore.getCurrentFrame() + 1) %
+    engineCore.setCurrentFrame((VulkanCore::getCurrentFrame() + 1) %
                                MAX_FRAMES_IN_FLIGHT);
   }
 
@@ -179,16 +182,11 @@ class VulkanEngine {
 
       ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
-      ImGui::Image((ImTextureID)m_Dset[engineCore.getCurrentFrame()],
+      ImGui::Image((ImTextureID)m_Dset[VulkanCore::getCurrentFrame()],
                    ImVec2{viewportPanelSize.x, viewportPanelSize.y});
 
       ImGui::End();
       ImGui::PopStyleVar(2);
-
-      ImGui::Begin("Settings");
-      ImGui::Text("Viewport Size: %dx%d", (int)viewportPanelSize.x,
-                  (int)viewportPanelSize.y);
-      ImGui::End();
 
       SceneUi::render();
 
@@ -292,12 +290,12 @@ class VulkanEngine {
       pool_info.maxSets += pool_size.descriptorCount;
     pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
     pool_info.pPoolSizes = pool_sizes;
-    err = vkCreateDescriptorPool(engineCore.getDevice(), &pool_info, nullptr,
+    err = vkCreateDescriptorPool(VulkanCore::getDevice(), &pool_info, nullptr,
                                  &imguiDescriptorPool);
     check_vk_result(err);
 
     SwapChainSupportDetails swapChainSupport =
-        engineCore.querySwapChainSupport(engineCore.getPhysicalDevice());
+        engineCore.querySwapChainSupport(VulkanCore::getPhysicalDevice());
 
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 
@@ -342,7 +340,7 @@ class VulkanEngine {
     info.dependencyCount = 1;
     info.pDependencies = &dependency;
 
-    if (vkCreateRenderPass(engineCore.getDevice(), &info, nullptr,
+    if (vkCreateRenderPass(VulkanCore::getDevice(), &info, nullptr,
                            &imGuiRenderPass) != VK_SUCCESS) {
       throw std::runtime_error("Could not create Dear ImGui's render pass");
     }
@@ -360,10 +358,10 @@ class VulkanEngine {
     ImGui_ImplGlfw_InitForVulkan(engineCore.getWindow(), true);
     ImGui_ImplVulkan_InitInfo init_info{};
     init_info.Instance = engineCore.getInstance();
-    init_info.PhysicalDevice = engineCore.getPhysicalDevice();
-    init_info.Device = engineCore.getDevice();
+    init_info.PhysicalDevice = VulkanCore::getPhysicalDevice();
+    init_info.Device = VulkanCore::getDevice();
     init_info.QueueFamily = engineCore.getGraphicsQueueFamily();
-    init_info.Queue = engineCore.getGraphicsQueue();
+    init_info.Queue = VulkanCore::getGraphicsQueue();
     init_info.PipelineCache = VK_NULL_HANDLE;
     init_info.DescriptorPool = imguiDescriptorPool;
     init_info.RenderPass = imGuiRenderPass;
@@ -420,7 +418,7 @@ class VulkanEngine {
     frameBufferCreateInfo.layers = 1;
     for (uint32_t i = 0; i < engineCore.getSwapChainImageViews().size(); i++) {
       attachment[0] = engineCore.getSwapChainImageViews()[i];
-      err = vkCreateFramebuffer(engineCore.getDevice(), &frameBufferCreateInfo,
+      err = vkCreateFramebuffer(VulkanCore::getDevice(), &frameBufferCreateInfo,
                                 nullptr, &imGuiFramebuffers[i]);
       check_vk_result(err);
     }
@@ -428,7 +426,7 @@ class VulkanEngine {
 
   void cleanupFramebuffers() {
     for (size_t i = 0; i < imGuiFramebuffers.size(); i++) {
-      vkDestroyFramebuffer(engineCore.getDevice(), imGuiFramebuffers[i],
+      vkDestroyFramebuffer(VulkanCore::getDevice(), imGuiFramebuffers[i],
                            nullptr);
     }
   }
@@ -441,7 +439,7 @@ class VulkanEngine {
         engineCore.getGraphicsQueueFamily();
     commandPoolCreateInfo.flags = flags;
 
-    if (vkCreateCommandPool(engineCore.getDevice(), &commandPoolCreateInfo,
+    if (vkCreateCommandPool(VulkanCore::getDevice(), &commandPoolCreateInfo,
                             nullptr, commandPool) != VK_SUCCESS) {
       throw std::runtime_error("Could not create graphics command pool");
     }
@@ -456,27 +454,27 @@ class VulkanEngine {
     commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     commandBufferAllocateInfo.commandPool = commandPool;
     commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
-    vkAllocateCommandBuffers(engineCore.getDevice(), &commandBufferAllocateInfo,
+    vkAllocateCommandBuffers(VulkanCore::getDevice(), &commandBufferAllocateInfo,
                              commandBuffer);
   }
 
   void cleanup() {
     for (auto framebuffer : imGuiFramebuffers) {
-      vkDestroyFramebuffer(engineCore.getDevice(), framebuffer, nullptr);
+      vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
     }
 
-    vkDestroyRenderPass(engineCore.getDevice(), imGuiRenderPass, nullptr);
+    vkDestroyRenderPass(VulkanCore::getDevice(), imGuiRenderPass, nullptr);
 
-    vkFreeCommandBuffers(engineCore.getDevice(), imGuiCommandPool,
+    vkFreeCommandBuffers(VulkanCore::getDevice(), imGuiCommandPool,
                          static_cast<uint32_t>(imGuiCommandBuffers.size()),
                          imGuiCommandBuffers.data());
-    vkDestroyCommandPool(engineCore.getDevice(), imGuiCommandPool, nullptr);
+    vkDestroyCommandPool(VulkanCore::getDevice(), imGuiCommandPool, nullptr);
 
     // Resources to destroy when the program ends
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-    vkDestroyDescriptorPool(engineCore.getDevice(), imguiDescriptorPool,
+    vkDestroyDescriptorPool(VulkanCore::getDevice(), imguiDescriptorPool,
                             nullptr);
   }
 

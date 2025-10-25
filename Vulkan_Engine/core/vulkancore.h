@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "core/utils/Utils.h"
-#include "mesh/MeshManager.h"
+#include "managers/MeshManager.h"
 
 extern const int MAX_FRAMES_IN_FLIGHT;
 
@@ -82,8 +82,6 @@ class VulkanCore {
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-  void updateUniformBuffer(uint32_t currentImage);
-
   void recreateSwapChain();
 
   VkFormat findDepthFormat();
@@ -120,6 +118,8 @@ class VulkanCore {
 
   void setFramebufferResized(bool value);
 
+  static VkDescriptorSetLayout getDescriptorSetLayout();
+
   void setSwapChainRecreated(bool value);
 
   std::vector<VkImageView> getSwapChainImageViews();
@@ -136,7 +136,7 @@ class VulkanCore {
 
   std::vector<VkFence> getInFlightFences();
 
-  uint32_t getCurrentFrame();
+  static uint32_t getCurrentFrame();
 
   void setCurrentFrame(uint32_t frame);
 
@@ -154,6 +154,8 @@ class VulkanCore {
 
   static VkCommandPool getCommandPool();
 
+  static std::vector<VkBuffer> getUniformBuffers();
+
  private:
   GLFWwindow* window;
   VkInstance instance;
@@ -169,7 +171,7 @@ class VulkanCore {
   VkExtent2D swapChainExtent;
   std::vector<VkImageView> swapChainImageViews;
   VkRenderPass renderPass;
-  VkDescriptorSetLayout descriptorSetLayout;
+  static VkDescriptorSetLayout descriptorSetLayout;
   VkPipelineLayout pipelineLayout;
   VkPipeline graphicsPipeline;
   std::vector<VkFramebuffer> swapChainFramebuffers;
@@ -178,14 +180,14 @@ class VulkanCore {
   std::vector<VkSemaphore> imageAvailableSemaphores;
   std::vector<VkSemaphore> renderFinishedSemaphores;
   std::vector<VkFence> inFlightFences;
-  uint32_t currentFrame;
+  static uint32_t currentFrame;
   bool framebufferResized;
   bool swapChainRecreated;
   VkBuffer vertexBuffer;
   VkDeviceMemory vertexBufferMemory;
   VkBuffer indexBuffer;
   VkDeviceMemory indexBufferMemory;
-  std::vector<VkBuffer> uniformBuffers;
+  static std::vector<VkBuffer> uniformBuffers;
   std::vector<VkDeviceMemory> uniformBuffersMemory;
   std::vector<void*> uniformBuffersMapped;
   VkDescriptorPool descriptorPool;
@@ -202,8 +204,7 @@ class VulkanCore {
   VkImage colorImage;
   VkDeviceMemory colorImageMemory;
   VkImageView colorImageView;
-
- private:
+	
   static VKAPI_ATTR VkBool32 VKAPI_CALL
   debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                 VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -228,21 +229,8 @@ class VulkanCore {
 
   void createDepthResources();
 
-  void generateMipmaps(VkImage image,
-                       VkFormat imageFormat,
-                       int32_t texWidth,
-                       int32_t texHeight,
-                       uint32_t mipLevels);
-
-  void createTextureImage();
-
-  void createDescriptorSets();
-
-  void createDescriptorPool();
-
   void createUniformBuffers();
-
-  void createDescriptorSetLayout();
+  void createTextureSampler();
 
   void createSyncObjects();
 
@@ -253,6 +241,8 @@ class VulkanCore {
   void createFramebuffers();
 
   void createRenderPass();
+
+  void createDescriptorSetLayout();
 
   void createGraphicsPipeline();
 

@@ -19,12 +19,13 @@
     <ClCompile Include="Editor\EditorCamera.cpp" />
     <ClCompile Include="core\Vertices.cpp" />
     <ClCompile Include="core\utils\Utils.cpp" />
-    <ClCompile Include="mesh\MeshManager.cpp" />
+    <ClCompile Include="managers\MeshManager.cpp" />
     <ClCompile Include="components\MeshComponent.cpp" />
-    <ClCompile Include="scene\SceneManager.cpp" />
+    <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="SceneRenderer.cpp" />
-    <ClCompile Include="texture\TextureManager.cpp" />
+    <ClCompile Include="managers\TextureManager.cpp" />
+    <ClCompile Include="managers\MaterialManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -45,12 +46,13 @@
     <ClInclude Include="Editor\EditorCamera.h" />
     <ClInclude Include="core\Vertices.h" />
     <ClInclude Include="core\utils\Utils.h" />
-    <ClInclude Include="mesh\MeshManager.h" />
+    <ClInclude Include="managers\MeshManager.h" />
     <ClInclude Include="components\MeshComponent.h" />
-    <ClInclude Include="scene\SceneManager.h" />
+    <ClInclude Include="managers\SceneManager.h" />
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="SceneRenderer.h" />
-    <ClInclude Include="texture\TextureManager.h" />
+    <ClInclude Include="managers\TextureManager.h" />
+    <ClInclude Include="managers\MaterialManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

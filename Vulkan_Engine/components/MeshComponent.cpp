@@ -2,11 +2,17 @@
 
 MeshComponent::MeshComponent(Entity* owner,
                              const std::string& meshName)
-    : Component(), owner(owner), meshManager(meshManager), visible(true) {
+    : Component(), owner(owner), visible(true) {
   mesh = MeshManager::getMesh(
       meshName);
+
+  this->material = MaterialManager::getMaterial("default");
+
   if (!mesh) {
     throw std::runtime_error("Mesh not found: " + meshName);
+  }
+  if (!material) {
+    throw std::runtime_error("Material not found: default");
   }
 }
 
@@ -18,7 +24,7 @@ MeshComponent::~MeshComponent() {
 void MeshComponent::render(VkCommandBuffer commandBuffer,
                            VkPipeline pipeline,
                            VkPipelineLayout pipelineLayout,
-                           VkDescriptorSet descriptorSet) const {
+                           uint32_t imageIndex) const {
   if (!visible || !mesh)
     return;
 
@@ -36,7 +42,7 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 
   // Bind descriptor sets (for uniforms/textures)
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+                          pipelineLayout, 0, 1, &material->descriptorSets[VulkanCore::getCurrentFrame()], 0, nullptr);
 
   // Issue draw call
   vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);

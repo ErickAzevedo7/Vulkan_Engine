@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "Entity.h"
+#include "managers/MaterialManager.h"
 
 class MeshComponent : public Component {
  public:
@@ -10,8 +11,7 @@ class MeshComponent : public Component {
 
   void render(VkCommandBuffer commandBuffer,
               VkPipeline pipeline,
-              VkPipelineLayout pipelineLayout,
-              VkDescriptorSet descriptorSet) const;
+              VkPipelineLayout pipelineLayout, uint32_t imageIndex) const;
 	
   // Accessors
   Mesh* GetMesh() const;
@@ -20,6 +20,6 @@ class MeshComponent : public Component {
  private:
   Entity* owner;
   Mesh* mesh;
-  MeshManager* meshManager;
+  Material* material;
   bool visible;
 };

@@ -2,7 +2,7 @@
 #include "Entity.h"
 #include "core/vulkancore.h"
 #include <stdexcept>
-#include "scene/SceneManager.h"
+#include "managers/SceneManager.h"
 
 #include "components/MeshComponent.h"
 #include "components/Transform.h"
@@ -15,13 +15,12 @@ class SceneRenderer {
 	  VkCommandBuffer commandBuffer,
 	  VkPipeline pipeline,
 	  VkPipelineLayout pipelineLayout,
-	  VkDescriptorSet descriptorSet);
+	  uint32_t imageIndex);
 
   static void RenderEntity(const Entity* entity,
                            VkCommandBuffer commandBuffer,
                            VkPipeline pipeline,
-                           VkPipelineLayout pipelineLayout,
-                           VkDescriptorSet descriptorSet);
+                           VkPipelineLayout pipelineLayout, uint32_t imageIndex);
 
  private:
   static VulkanCore* engineCore;
