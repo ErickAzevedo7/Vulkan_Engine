@@ -39,10 +39,19 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
   // Bind index buffer
   vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer, 0,
                        VK_INDEX_TYPE_UINT32);
+	
+  uint32_t id = owner->getID();
+  uint32_t maxEntities = 1000;
+  std::cout << "Rendering Entity ID: " << id << std::endl;
+  if (id >= maxEntities) {
+    throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
+  }
+  uint32_t dynamicOffset = id * VulkanCore::getDynamicAlignment();
+  
 
   // Bind descriptor sets (for uniforms/textures)
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          pipelineLayout, 0, 1, &material->descriptorSets[VulkanCore::getCurrentFrame()], 0, nullptr);
+                          pipelineLayout, 0, 1, &material->descriptorSets[VulkanCore::getCurrentFrame()], 1, &dynamicOffset);
 
   // Issue draw call
   vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);

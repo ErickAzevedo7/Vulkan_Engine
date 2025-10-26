@@ -18,7 +18,7 @@ Entity& Scene::createEntity(const std::string& name) {
   while (nameExists) {
 	  nameExists = false;
     for (const auto& entity : entities) {
-      if (entity.getName() == uniqueName) {
+      if (entity->getName() == uniqueName) {
         nameExists = true;
         uniqueName = name + "(" + std::to_string(counter++) + ")";
         break;
@@ -26,8 +26,8 @@ Entity& Scene::createEntity(const std::string& name) {
     }
   }
 
-  entities.emplace_back(uniqueName);
-  return entities.back();
+  entities.push_back(std::make_unique<Entity>(uniqueName));
+  return *entities.back();
 }
 
 void Scene::removeEntity(size_t index) {
@@ -41,7 +41,7 @@ Entity& Scene::getEntity(size_t index) {
   if (index >= entities.size()) {
     throw std::out_of_range("Entity index out of range");
   }
-  return entities[index];
+  return *entities[index];
 }
 
 size_t Scene::getEntityCount() const {
@@ -50,4 +50,8 @@ size_t Scene::getEntityCount() const {
 
 void Scene::clear() {
   entities.clear();
+}
+
+std::vector<std::unique_ptr<Entity>>* Scene::getEntities() {
+  return &entities;
 }

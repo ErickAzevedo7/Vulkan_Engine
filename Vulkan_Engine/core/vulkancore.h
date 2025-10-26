@@ -156,6 +156,8 @@ class VulkanCore {
 
   static std::vector<VkBuffer> getUniformBuffers();
 
+  static VkDeviceSize getDynamicAlignment();
+
  private:
   GLFWwindow* window;
   VkInstance instance;
@@ -204,6 +206,7 @@ class VulkanCore {
   VkImage colorImage;
   VkDeviceMemory colorImageMemory;
   VkImageView colorImageView;
+  static VkDeviceSize dynamicAlignment;
 	
   static VKAPI_ATTR VkBool32 VKAPI_CALL
   debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -230,6 +233,7 @@ class VulkanCore {
   void createDepthResources();
 
   void createUniformBuffers();
+
   void createTextureSampler();
 
   void createSyncObjects();

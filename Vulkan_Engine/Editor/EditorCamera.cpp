@@ -1,5 +1,9 @@
 #include "EditorCamera.h"  
 
+#include "Entity.h"
+#include "components/Transform.h"
+#include "managers/SceneManager.h"
+
 //initialize static variables
 glm::vec3 EditorCamera::cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);  
 glm::vec3 EditorCamera::cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);  
@@ -18,22 +22,42 @@ void EditorCamera::init(VulkanCore* core) {
 	EditorCamera::lastY = height/2.0f;
 }  
 
-void EditorCamera::updateUniformBuffer(uint32_t currentImage) {  
-	static auto startTime = std::chrono::high_resolution_clock::now();  
+void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
+  static auto startTime = std::chrono::high_resolution_clock::now();
 
-	auto currentTime = std::chrono::high_resolution_clock::now();  
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();  
+  auto currentTime = std::chrono::high_resolution_clock::now();
+  float time = std::chrono::duration<float, std::chrono::seconds::period>(
+                   currentTime - startTime)
+                   .count();
 
-	UniformBufferObject ubo{};  
-	ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));  
+  Scene* scene = SceneManager::getActiveScene();
 
-	ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);  
+  std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
+  
+  for (const auto& entityPtr : *entities) {
+    const Entity& entity = *entityPtr;
 
-	ubo.proj = glm::perspective(glm::radians(45.0f), engineCore->getSwapChainExtent().width / (float)engineCore->getSwapChainExtent().height, 0.1f, 10.0f);  
+    UniformBufferObject ubo{};
+    
+    ubo.model = entity.getComponent<Transform>()->getMatrix();
 
-	ubo.proj[1][1] *= -1;  
+    ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
-	memcpy(engineCore->getUniformBuffersMapped()[currentImage], &ubo, sizeof(ubo));  
+    ubo.proj =
+        glm::perspective(glm::radians(45.0f),
+                         engineCore->getSwapChainExtent().width /
+                             (float)engineCore->getSwapChainExtent().height,
+                         0.1f, 10.0f);
+
+    ubo.proj[1][1] *= -1;
+
+  	size_t offset = entity.getID() * VulkanCore::getDynamicAlignment();
+    char* base =
+        static_cast<char*>(engineCore->getUniformBuffersMapped()[currentImage]);
+
+		memcpy(base + offset, &ubo,
+           sizeof(ubo));  
+  }
 }  
 
 void EditorCamera::mousePosHandler() {

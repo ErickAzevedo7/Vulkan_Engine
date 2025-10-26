@@ -23,7 +23,9 @@ class Scene {
   // Clear all entities from the scene
   void clear();
 
+  std::vector<std::unique_ptr<Entity>>* getEntities();
+
 private:
-  std::vector<Entity> entities;
+  std::vector<std::unique_ptr<Entity>> entities;
   std::string name;
 };

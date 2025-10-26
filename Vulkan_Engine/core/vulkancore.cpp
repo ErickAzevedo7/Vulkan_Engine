@@ -17,6 +17,7 @@ VkCommandPool VulkanCore::commandPool = VK_NULL_HANDLE;
 std::vector<VkBuffer> VulkanCore::uniformBuffers;
 VkDescriptorSetLayout VulkanCore::descriptorSetLayout = VK_NULL_HANDLE;
 uint32_t VulkanCore::currentFrame = 0;
+VkDeviceSize VulkanCore::dynamicAlignment;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -322,6 +323,10 @@ std::vector<VkBuffer> VulkanCore::getUniformBuffers() {
 	return uniformBuffers;
 }
 
+VkDeviceSize VulkanCore::getDynamicAlignment() {
+  return dynamicAlignment;
+}
+
 VkBool32 VKAPI_CALL VulkanCore::debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -452,8 +457,17 @@ void VulkanCore::createDepthResources() {
 }
 
 void VulkanCore::createUniformBuffers() {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+  VkPhysicalDeviceProperties properties{};
+  vkGetPhysicalDeviceProperties(VulkanCore::getPhysicalDevice(), &properties);
 
+  size_t minUboAlignment = properties.limits.minUniformBufferOffsetAlignment;
+  dynamicAlignment = sizeof(UniformBufferObject);
+  if (minUboAlignment > 0) {
+    dynamicAlignment =
+        (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
+  }
+
+  size_t bufferSize = 1000 * dynamicAlignment; 
     uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
     uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
@@ -645,7 +659,7 @@ void VulkanCore::createRenderPass() {
 void VulkanCore::createDescriptorSetLayout() {
   VkDescriptorSetLayoutBinding uboLayoutBinding{};
   uboLayoutBinding.binding = 0;
-  uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
   uboLayoutBinding.descriptorCount = 1;
   uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
   uboLayoutBinding.pImmutableSamplers = nullptr;  // Optional

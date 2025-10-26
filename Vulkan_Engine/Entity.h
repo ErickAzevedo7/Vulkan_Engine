@@ -8,12 +8,12 @@
 class Entity {
  public:
   Entity(std::string name);
-  Entity(std::vector<Vertex> vertices,
-         std::vector<uint32_t> indices,
-         VulkanCore* engineCore);
+
   ~Entity();
 
   std::string getName() const;
+
+  uint32_t getID() const { return id; }
 
   template <typename T>
   T* getComponent() const {
@@ -29,7 +29,11 @@ class Entity {
 
   void addComponent(Component* component);
 
- private:
+  void setName(char* str);
+
+private:
+  static std::atomic<uint32_t> nextID;
   std::vector<Component*> components;
   std::string name;
+  uint32_t id;
 };

@@ -19,6 +19,8 @@ Texture* TextureManager::loadTexture(const std::string& path,
                                      VkCommandPool commandPool,
                                      VkQueue graphicsQueue) {
   int texWidth, texHeight, texChannels;
+  stbi_set_flip_vertically_on_load(true);
+
   stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels,
                               STBI_rgb_alpha);
   VkDeviceSize imageSize = texWidth * texHeight * 4;
