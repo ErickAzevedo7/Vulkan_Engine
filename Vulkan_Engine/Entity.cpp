@@ -4,7 +4,6 @@ std::atomic<uint32_t> Entity::nextID{0};
 
 Entity::Entity(std::string name): id(nextID++) {
   this->name = name;
-  std::cout << "Created Entity: " << name << " with ID: " << id << std::endl;
 }
 
 Entity::~Entity() {
