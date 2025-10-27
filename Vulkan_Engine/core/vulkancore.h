@@ -214,8 +214,6 @@ class VulkanCore {
                 const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                 void* pUserData);
 
-  static std::vector<char> readFile(const std::string& filename);
-
   static void framebufferResizeCallback(GLFWwindow* window,
                                         int width,
                                         int height);

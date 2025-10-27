@@ -1,9 +1,13 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <fstream>
 #include <stdexcept>
+#include <vector>
 
 namespace Utils {
 bool hasStencilComponent(VkFormat format);
+
+std::vector<char> readFile(const std::string& filename);
 
 void copyBuffer(VkCommandPool commandPool,
                 VkBuffer srcBuffer,
