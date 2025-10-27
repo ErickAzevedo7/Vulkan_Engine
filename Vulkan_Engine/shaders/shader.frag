@@ -6,6 +6,14 @@ layout(binding = 1) uniform sampler2D texSampler;
 
 layout(location = 0) out vec4 outColor;
 
+layout(push_constant) uniform PushConstants {
+    vec3 pickColor;
+    int usePickColor;
+} pc;
+
 void main() {
-    outColor = texture(texSampler, fragTexCoord);
+    if (pc.usePickColor == 1) 
+        outColor = vec4(pc.pickColor, 1.0);
+    else
+        outColor = texture(texSampler, fragTexCoord);
 }
