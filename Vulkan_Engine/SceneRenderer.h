@@ -11,17 +11,19 @@ class SceneRenderer {
  public:
   static void init(VulkanCore* engineCore);
 
-  static void RenderScene(
+  static void renderScene(
 	  VkCommandBuffer commandBuffer,
 	  VkPipeline pipeline,
 	  VkPipelineLayout pipelineLayout,
 	  uint32_t imageIndex);
 
-  static void RenderEntity(const Entity* entity,
+  static void renderEntity(const Entity* entity,
                            VkCommandBuffer commandBuffer,
                            VkPipeline pipeline,
-                           VkPipelineLayout pipelineLayout, uint32_t imageIndex);
+                           VkPipelineLayout pipelineLayout, uint32_t imageIndex, int useMousePick);
+  static void renderMousePick(VkCommandBuffer commandBuffer, VkPipeline pipeline,
+                       VkPipelineLayout pipelineLayout, uint32_t imageIndex);
 
- private:
+private:
   static VulkanCore* engineCore;
 };

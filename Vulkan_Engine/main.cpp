@@ -1,8 +1,9 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define GLM_ENABLE_EXPERIMENTAL
 #include "Editor/EditorCamera.h"
+#include "Editor/MousePick.h"
+#include "Editor/ViewPort.h"
 #include "SceneRenderer.h"
-#include "ViewPort.h"
 #include "core/vulkancore.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -24,6 +25,7 @@ class VulkanEngine {
     MaterialManager::init();
     MaterialManager::loadDefault();
     SceneRenderer::init(&engineCore);
+    mousePick.init(&engineCore);
     viewPort.init(&engineCore);
     editorCamera.init(&engineCore);
     SceneManager::loadDefaults();
@@ -38,12 +40,12 @@ class VulkanEngine {
 
   void drawFrame() {
     vkWaitForFences(
-	    VulkanCore::getDevice(), 1,
+        VulkanCore::getDevice(), 1,
         &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()], VK_TRUE,
         UINT64_MAX);
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
-	    VulkanCore::getDevice(), engineCore.getSwapChain(), UINT64_MAX,
+        VulkanCore::getDevice(), engineCore.getSwapChain(), UINT64_MAX,
         engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
         VK_NULL_HANDLE, &imageIndex);
 
@@ -55,7 +57,7 @@ class VulkanEngine {
     }
 
     vkResetFences(
-	    VulkanCore::getDevice(), 1,
+        VulkanCore::getDevice(), 1,
         &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
 
     vkResetCommandBuffer(
@@ -64,6 +66,10 @@ class VulkanEngine {
     engineCore.recordCommandBuffer(
         engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
         imageIndex);
+
+    mousePick.recordMousePickCommandBuffer(
+        mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
+        imageIndex, viewportExtent);
 
     viewPort.recordViewportCommandBuffer(
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
@@ -74,8 +80,9 @@ class VulkanEngine {
 
     editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
 
-    std::array<VkCommandBuffer, 3> submitCommandBuffers = {
+    std::array<VkCommandBuffer, 4> submitCommandBuffers = {
         engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
+        mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
         imGuiCommandBuffers[VulkanCore::getCurrentFrame()]};
 
@@ -83,7 +90,8 @@ class VulkanEngine {
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     VkSemaphore waitSemaphores[] = {
-        engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()]};
+        engineCore
+            .getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()]};
     VkPipelineStageFlags waitStages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
@@ -95,12 +103,13 @@ class VulkanEngine {
     submitInfo.pCommandBuffers = submitCommandBuffers.data();
 
     VkSemaphore signalSemaphores[] = {
-        engineCore.getRenderFinishedSemaphores()[VulkanCore::getCurrentFrame()]};
+        engineCore
+            .getRenderFinishedSemaphores()[VulkanCore::getCurrentFrame()]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     if (vkQueueSubmit(
-		    VulkanCore::getGraphicsQueue(), 1, &submitInfo,
+            VulkanCore::getGraphicsQueue(), 1, &submitInfo,
             engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]) !=
         VK_SUCCESS) {
       throw std::runtime_error("failed to submit draw command buffer!");
@@ -173,6 +182,27 @@ class VulkanEngine {
       ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
       ImGui::Begin("Viewport");
 
+      ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+      this->viewportExtent =
+          VkExtent2D{(uint32_t)viewportSize.x, (uint32_t)viewportSize.y};
+
+      if (viewportExtent.width != mousePick.mousePickExtent.width &&
+          viewportExtent.height != mousePick.mousePickExtent.height) {
+        mousePick.mousePickExtent = viewportExtent;
+        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+          ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
+
+        vkDeviceWaitIdle(VulkanCore::getDevice());
+        mousePick.cleanupFramebuffers();
+        mousePick.recreateMousePick();
+
+        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+          m_Dset[i] = ImGui_ImplVulkan_AddTexture(
+              engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
+              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      }
+
       inputProcess();
 
       ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -243,6 +273,8 @@ class VulkanEngine {
   VulkanCore engineCore;
   EditorCamera editorCamera;
   ViewPort viewPort;
+  MousePick mousePick;
+  VkExtent2D viewportExtent;
   VkCommandPool imGuiCommandPool;
   std::vector<VkCommandBuffer> imGuiCommandBuffers;
   VkRenderPass imGuiRenderPass;
@@ -454,8 +486,8 @@ class VulkanEngine {
     commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     commandBufferAllocateInfo.commandPool = commandPool;
     commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
-    vkAllocateCommandBuffers(VulkanCore::getDevice(), &commandBufferAllocateInfo,
-                             commandBuffer);
+    vkAllocateCommandBuffers(VulkanCore::getDevice(),
+                             &commandBufferAllocateInfo, commandBuffer);
   }
 
   void cleanup() {
@@ -478,7 +510,7 @@ class VulkanEngine {
                             nullptr);
   }
 
-  void inputProcess() { editorCamera.inputProcess(); }
+  void inputProcess() { editorCamera.inputProcess(mousePick); }
 };
 
 int main() {

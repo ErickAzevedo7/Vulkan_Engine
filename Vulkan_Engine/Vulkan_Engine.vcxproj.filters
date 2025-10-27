@@ -6,7 +6,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="components\Transform.cpp" />
-    <ClCompile Include="ViewPort.cpp" />
+    <ClCompile Include="Editor\ViewPort.cpp" />
     <ClCompile Include="core\vulkancore.cpp" />
     <ClCompile Include="imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -26,13 +26,14 @@
     <ClCompile Include="SceneRenderer.cpp" />
     <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
+    <ClCompile Include="Editor\MousePick.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="components\Transform.h" />
-    <ClInclude Include="ViewPort.h" />
+    <ClInclude Include="Editor\ViewPort.h" />
     <ClInclude Include="core\vulkancore.h" />
     <ClInclude Include="imgui\misc\cpp\imgui_stdlib.h" />
     <ClInclude Include="imgui\imconfig.h" />
@@ -53,6 +54,7 @@
     <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
+    <ClInclude Include="Editor\MousePick.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

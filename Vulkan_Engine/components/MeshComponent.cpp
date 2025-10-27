@@ -1,10 +1,8 @@
 #include "MeshComponent.h"
 
-MeshComponent::MeshComponent(Entity* owner,
-                             const std::string& meshName)
+MeshComponent::MeshComponent(Entity* owner, const std::string& meshName)
     : Component(), owner(owner), visible(true) {
-  mesh = MeshManager::getMesh(
-      meshName);
+  mesh = MeshManager::getMesh(meshName);
 
   this->material = MaterialManager::getMaterial("default");
 
@@ -24,34 +22,54 @@ MeshComponent::~MeshComponent() {
 void MeshComponent::render(VkCommandBuffer commandBuffer,
                            VkPipeline pipeline,
                            VkPipelineLayout pipelineLayout,
-                           uint32_t imageIndex) const {
+                           uint32_t imageIndex,
+                           int useMousePick) const {
   if (!visible || !mesh)
     return;
 
-  // Bind pipeline
-  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+  uint32_t id = owner->getID();
 
-  // Bind vertex buffer
+  struct alignas(16) {
+    glm::vec3 pickColor;
+    int usePickColor;
+  } pushConstants;
+
+  if (useMousePick) {
+    uint32_t id = owner->getID();
+    pushConstants.pickColor = glm::vec3(((id & 0x000000FF) >> 0) / 255.0f,
+                                        ((id & 0x0000FF00) >> 8) / 255.0f,
+                                        ((id & 0x00FF0000) >> 16) / 255.0f);
+    pushConstants.usePickColor = 1;
+  } else {
+    pushConstants.pickColor = glm::vec3(0.0f);
+    pushConstants.usePickColor = 0;
+  }
+  pushConstants.usePickColor = useMousePick;
+
+  vkCmdPushConstants(commandBuffer, pipelineLayout,
+                     VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants),
+                     &pushConstants);
+	
+  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	
   VkBuffer vertexBuffers[] = {mesh->vertexBuffer};
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-  // Bind index buffer
+	
   vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer, 0,
                        VK_INDEX_TYPE_UINT32);
-	
-  uint32_t id = owner->getID();
+
   uint32_t maxEntities = 1000;
-  std::cout << "Rendering Entity ID: " << id << std::endl;
   if (id >= maxEntities) {
     throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
   }
   uint32_t dynamicOffset = id * VulkanCore::getDynamicAlignment();
-  
 
   // Bind descriptor sets (for uniforms/textures)
-  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          pipelineLayout, 0, 1, &material->descriptorSets[VulkanCore::getCurrentFrame()], 1, &dynamicOffset);
+  vkCmdBindDescriptorSets(
+      commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+      &material->descriptorSets[VulkanCore::getCurrentFrame()], 1,
+      &dynamicOffset);
 
   // Issue draw call
   vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);

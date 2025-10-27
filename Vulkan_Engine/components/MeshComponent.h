@@ -11,7 +11,7 @@ class MeshComponent : public Component {
 
   void render(VkCommandBuffer commandBuffer,
               VkPipeline pipeline,
-              VkPipelineLayout pipelineLayout, uint32_t imageIndex) const;
+              VkPipelineLayout pipelineLayout, uint32_t imageIndex, int useMousePick) const;
 	
   // Accessors
   Mesh* GetMesh() const;

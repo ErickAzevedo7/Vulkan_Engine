@@ -6,7 +6,7 @@ void SceneRenderer::init(VulkanCore* engineCore) {
   SceneRenderer::engineCore = engineCore;
 }
 
-void SceneRenderer::RenderScene(VkCommandBuffer commandBuffer,
+void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
                                 VkPipeline pipeline,
                                 VkPipelineLayout pipelineLayout,
                                 uint32_t imageIndex) {
@@ -16,16 +16,16 @@ void SceneRenderer::RenderScene(VkCommandBuffer commandBuffer,
   for (int i = 0; i < entities; ++i) {
     Entity* entity = &scene->getEntity(i);
 
-    RenderEntity(entity, commandBuffer, pipeline, pipelineLayout,
-                 imageIndex);
+    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 0);
   }
 }
 
-void SceneRenderer::RenderEntity(const Entity* entity,
+void SceneRenderer::renderEntity(const Entity* entity,
                                  VkCommandBuffer commandBuffer,
                                  VkPipeline pipeline,
                                  VkPipelineLayout pipelineLayout,
-                                 uint32_t imageIndex) {
+                                 uint32_t imageIndex,
+																	int useMousePick) {
   const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
   if (!meshComp) {
@@ -37,5 +37,19 @@ void SceneRenderer::RenderEntity(const Entity* entity,
     glm::mat4 modelMatrix = transformComp->getMatrix();
   }
 
-  meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex);
+  meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex, useMousePick);
+}
+
+void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
+                                    VkPipeline pipeline,
+                                    VkPipelineLayout pipelineLayout,
+                                    uint32_t imageIndex) {
+  Scene* scene = SceneManager::getActiveScene();
+
+  size_t entities = scene->getEntityCount();
+  for (int i = 0; i < entities; ++i) {
+    Entity* entity = &scene->getEntity(i);
+
+    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 1);
+  }
 }

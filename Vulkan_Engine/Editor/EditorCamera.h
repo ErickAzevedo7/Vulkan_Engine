@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h" 
+#include "MousePick.h"
 
 
 extern float deltaTime;
@@ -24,7 +25,7 @@ public:
 
 	void updateUniformBuffer(uint32_t currentImage);  
 	static void mousePosHandler();
-	void inputProcess();
+	void inputProcess(MousePick& mousePick);
 private:  
 	VulkanCore* engineCore;
 	static bool isDragging;
