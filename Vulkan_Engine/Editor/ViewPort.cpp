@@ -341,7 +341,7 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   VkBuffer vertexBuffers[] = {engineCore->getVertexBuffer()};
   VkDeviceSize offsets[] = {0};
 
-  SceneRenderer::RenderScene(commandBuffer, engineCore->getPipeline(),
+  SceneRenderer::renderScene(commandBuffer, engineCore->getPipeline(),
                              engineCore->getPipelineLayout(), imageIndex);
 
   vkCmdEndRenderPass(commandBuffer);
