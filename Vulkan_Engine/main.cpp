@@ -69,7 +69,7 @@ class VulkanEngine {
 
     mousePick.recordMousePickCommandBuffer(
         mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
-        imageIndex, viewportExtent);
+        imageIndex);
 
     viewPort.recordViewportCommandBuffer(
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
@@ -142,11 +142,9 @@ class VulkanEngine {
   }
 
   void mainLoop() {
-    std::vector<VkDescriptorSet> m_Dset;
-
-    m_Dset.resize(viewPort.m_ViewportImageViews.size());
+    sceneTexture.resize(viewPort.m_ViewportImageViews.size());
     for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-      m_Dset[i] = ImGui_ImplVulkan_AddTexture(
+      sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
           engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
@@ -157,18 +155,8 @@ class VulkanEngine {
       glfwPollEvents();
 
       if (engineCore.getSwapChainRecreated()) {
-        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-          ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
+        recreateRenderPasses();
 
-        cleanupFramebuffers();
-        createframebuffers();
-        viewPort.cleanupFramebuffers();
-        viewPort.recreateViewport();
-
-        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-          m_Dset[i] = ImGui_ImplVulkan_AddTexture(
-              engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
-              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         engineCore.setSwapChainRecreated(false);
       }
 
@@ -187,20 +175,11 @@ class VulkanEngine {
       this->viewportExtent =
           VkExtent2D{(uint32_t)viewportSize.x, (uint32_t)viewportSize.y};
 
-      if (viewportExtent.width != mousePick.mousePickExtent.width &&
+      if (viewportExtent.width != mousePick.mousePickExtent.width ||
           viewportExtent.height != mousePick.mousePickExtent.height) {
         mousePick.mousePickExtent = viewportExtent;
-        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-          ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
 
-        vkDeviceWaitIdle(VulkanCore::getDevice());
-        mousePick.cleanupFramebuffers();
-        mousePick.recreateMousePick();
-
-        for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-          m_Dset[i] = ImGui_ImplVulkan_AddTexture(
-              engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
-              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        recreateRenderPasses();
       }
 
       inputProcess();
@@ -212,7 +191,7 @@ class VulkanEngine {
 
       ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
-      ImGui::Image((ImTextureID)m_Dset[VulkanCore::getCurrentFrame()],
+      ImGui::Image((ImTextureID)sceneTexture[VulkanCore::getCurrentFrame()],
                    ImVec2{viewportPanelSize.x, viewportPanelSize.y});
 
       ImGui::End();
@@ -265,7 +244,7 @@ class VulkanEngine {
     vkDeviceWaitIdle(VulkanCore::getDevice());
 
     for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-      ImGui_ImplVulkan_RemoveTexture(m_Dset[i]);
+      ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
   }
 
  private:
@@ -280,6 +259,7 @@ class VulkanEngine {
   VkRenderPass imGuiRenderPass;
   std::vector<VkFramebuffer> imGuiFramebuffers;
   VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+  std::vector<VkDescriptorSet> sceneTexture;
 
   static void check_vk_result(VkResult err) {
     if (err == 0)
@@ -488,6 +468,24 @@ class VulkanEngine {
     commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
     vkAllocateCommandBuffers(VulkanCore::getDevice(),
                              &commandBufferAllocateInfo, commandBuffer);
+  }
+
+  void recreateRenderPasses() {
+    vkDeviceWaitIdle(VulkanCore::getDevice());
+    for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+      ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
+
+    cleanupFramebuffers();
+    createframebuffers();
+    mousePick.cleanupFramebuffers();
+    mousePick.recreateMousePick();
+    viewPort.cleanupFramebuffers();
+    viewPort.recreateViewport();
+
+    for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+      sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
+          engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   }
 
   void cleanup() {

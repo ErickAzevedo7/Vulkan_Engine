@@ -113,6 +113,7 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
   	
     int id = mousePick.getEntityIDAt(mouseInViewport.x, mouseInViewport.y);
   	
+    std::cout << "Clicked Entity ID: " << id << std::endl;
   }
 
   if (ImGui::IsMouseReleased(1)) {
