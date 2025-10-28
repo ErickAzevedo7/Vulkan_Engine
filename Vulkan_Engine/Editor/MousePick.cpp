@@ -253,8 +253,7 @@ void MousePick::createMousePickFramebuffers() {
 }
 
 void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
-                                             uint32_t imageIndex,
-                                             VkExtent2D viewportExtent) {
+                                             uint32_t imageIndex) {
   this->imageIndex = imageIndex;
 
   VkCommandBufferBeginInfo beginInfo{};
@@ -271,7 +270,7 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
   renderPassInfo.renderPass = mousePickRenderPass;
   renderPassInfo.framebuffer = mousePickFramebuffers[imageIndex];
   renderPassInfo.renderArea.offset = {0, 0};
-  renderPassInfo.renderArea.extent = viewportExtent;
+  renderPassInfo.renderArea.extent = mousePickExtent;
 
   std::array<VkClearValue, 1> clearValues{};
   clearValues[0].color = {{0.0f, 0.0f, 0.0f, 0.0f}};
@@ -285,8 +284,8 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
-  viewport.width = (float)viewportExtent.width;
-  viewport.height = (float)viewportExtent.height;
+  viewport.width = (float)mousePickExtent.width;
+  viewport.height = (float)mousePickExtent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   vkCmdSetViewport(commandBuffer, 0, 1, &viewport);

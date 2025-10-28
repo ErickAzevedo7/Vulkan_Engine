@@ -10,7 +10,7 @@ class MousePick {
 
   void init(VulkanCore* core);
   void recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
-                                   uint32_t imageIndex, VkExtent2D viewportExtent);
+                                    uint32_t imageIndex);
   void cleanupFramebuffers();
   void recreateMousePick();
 
