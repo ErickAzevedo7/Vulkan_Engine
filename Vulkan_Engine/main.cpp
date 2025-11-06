@@ -70,10 +70,6 @@ class VulkanEngine {
     vkResetCommandBuffer(
         engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
 
-    engineCore.recordCommandBuffer(
-        engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
-        imageIndex);
-
     mousePick.recordMousePickCommandBuffer(
         mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
         imageIndex);
@@ -91,8 +87,7 @@ class VulkanEngine {
 
     editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
 
-    std::array<VkCommandBuffer, 5> submitCommandBuffers = {
-        engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
+    std::array<VkCommandBuffer, 4> submitCommandBuffers = {
         mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
         outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
@@ -333,11 +328,11 @@ class VulkanEngine {
     VkAttachmentDescription attachment{};
     attachment.format = engineCore.getSwapChainImageFormat();
     attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference color_attachment{};

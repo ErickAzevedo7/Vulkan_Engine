@@ -79,8 +79,7 @@ class VulkanCore {
   void cleanup();
 
   SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-
-  void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	
 
   void recreateSwapChain();
 
@@ -91,10 +90,6 @@ class VulkanCore {
   VkPipeline getPipeline();
 
   VkInstance getInstance();
-
-  VkBuffer getVertexBuffer();
-
-  VkBuffer getIndexBuffer();
 
   static VkPhysicalDevice getPhysicalDevice();
 
