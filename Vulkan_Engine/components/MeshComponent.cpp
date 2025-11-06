@@ -39,11 +39,10 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
     pushConstants.pickColor = glm::vec3(((id & 0x000000FF) >> 0) / 255.0f,
                                         ((id & 0x0000FF00) >> 8) / 255.0f,
                                         ((id & 0x00FF0000) >> 16) / 255.0f);
-    pushConstants.usePickColor = 1;
   } else {
     pushConstants.pickColor = glm::vec3(0.0f);
-    pushConstants.usePickColor = 0;
   }
+
   pushConstants.usePickColor = useMousePick;
 
   vkCmdPushConstants(commandBuffer, pipelineLayout,

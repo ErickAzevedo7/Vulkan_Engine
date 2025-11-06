@@ -8,10 +8,11 @@
 class ViewPort
 {
 public:
+  VkExtent2D viewportExtent;
 	std::vector<VkImageView> m_ViewportImageViews;
 	std::vector<VkCommandBuffer> m_ViewportCommandBuffers;
 
-	void init(VulkanCore* core);
+	void init(VulkanCore* core, VkExtent2D viewportExtent);
 
 	void createViewportImage();
 	
@@ -19,7 +20,7 @@ public:
 
 	void recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-	void recreateViewport();
+	void recreateViewport(VkExtent2D viewportExtent);
 
 	void cleanup();
 		

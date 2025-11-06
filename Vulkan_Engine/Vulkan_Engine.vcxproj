@@ -152,6 +152,7 @@
     <ClCompile Include="managers\MeshManager.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Editor\MousePick.cpp" />
+    <ClCompile Include="postprocess\outline.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="components\Transform.cpp" />
     <ClCompile Include="core\Vertices.cpp" />
@@ -180,6 +181,7 @@
     <ClInclude Include="managers\MeshManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
     <ClInclude Include="Editor\MousePick.h" />
+    <ClInclude Include="postprocess\outline.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="core\Vertices.h" />
@@ -194,6 +196,8 @@
     <None Include="imgui.ini" />
     <None Include="shaders\compile.bat" />
     <None Include="shaders\frag.spv" />
+    <None Include="shaders\postprocess_edge.frag" />
+    <None Include="shaders\postprocess_edge.vert" />
     <None Include="shaders\shader.frag" />
     <None Include="shaders\shader.vert" />
     <None Include="shaders\vert.spv" />

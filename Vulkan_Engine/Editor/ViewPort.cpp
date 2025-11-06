@@ -1,8 +1,9 @@
 #include "ViewPort.h"
 
-void ViewPort::init(VulkanCore* core) {
+void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
   engineCore = core;
-
+  this->viewportExtent = viewportExtent;
+	
   VkCommandPoolCreateInfo commandPoolCreateInfo{};
   commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   commandPoolCreateInfo.queueFamilyIndex = engineCore->getGraphicsQueueFamily();
@@ -55,7 +56,8 @@ void ViewPort::cleanupFramebuffers() {
   }
 }
 
-void ViewPort::recreateViewport() {
+void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
+  this->viewportExtent = viewportExtent;
   createViewportImage();
   createViewportImageViews();
   createViewportFramebuffers();
@@ -98,8 +100,8 @@ void ViewPort::createViewportImage() {
     // Note that vkCmdBlitImage (if supported) will also do format conversions
     // if the swapchain color format would differ
     imageCreateCI.format = VK_FORMAT_B8G8R8A8_SRGB;
-    imageCreateCI.extent.width = engineCore->getSwapChainExtent().width;
-    imageCreateCI.extent.height = engineCore->getSwapChainExtent().height;
+    imageCreateCI.extent.width = viewportExtent.width;
+    imageCreateCI.extent.height = viewportExtent.height;
     imageCreateCI.extent.depth = 1;
     imageCreateCI.arrayLayers = 1;
     imageCreateCI.mipLevels = 1;
@@ -218,7 +220,7 @@ void ViewPort::createViewportRenderPass() {
   colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
   VkAttachmentReference colorAttachmentRef{};
   colorAttachmentRef.attachment = 0;
@@ -283,8 +285,8 @@ void ViewPort::createViewportFramebuffers() {
     framebufferInfo.renderPass = m_ViewportRenderPass;
     framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
     framebufferInfo.pAttachments = attachments.data();
-    framebufferInfo.width = engineCore->getSwapChainExtent().width;
-    framebufferInfo.height = engineCore->getSwapChainExtent().height;
+    framebufferInfo.width = viewportExtent.width;
+    framebufferInfo.height = viewportExtent.height;
     framebufferInfo.layers = 1;
 
     if (vkCreateFramebuffer(VulkanCore::getDevice(), &framebufferInfo, nullptr,
@@ -312,7 +314,7 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   renderPassInfo.renderPass = m_ViewportRenderPass;
   renderPassInfo.framebuffer = m_ViewportFramebuffers[imageIndex];
   renderPassInfo.renderArea.offset = {0, 0};
-  renderPassInfo.renderArea.extent = engineCore->getSwapChainExtent();
+  renderPassInfo.renderArea.extent = viewportExtent;
 
   std::array<VkClearValue, 2> clearValues{};
   clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -327,15 +329,15 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
-  viewport.width = (float)engineCore->getSwapChainExtent().width;
-  viewport.height = (float)engineCore->getSwapChainExtent().height;
+  viewport.width = (float)viewportExtent.width;
+  viewport.height = (float)viewportExtent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
   VkRect2D scissor{};
   scissor.offset = {0, 0};
-  scissor.extent = engineCore->getSwapChainExtent();
+  scissor.extent = viewportExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
   VkBuffer vertexBuffers[] = {engineCore->getVertexBuffer()};

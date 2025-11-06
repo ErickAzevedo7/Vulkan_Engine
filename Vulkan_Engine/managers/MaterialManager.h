@@ -14,9 +14,10 @@ class MaterialManager {
   static Material* createMaterial(const std::string& name,
                                   const std::string& albedoTexturePath);
   static Material* getMaterial(const std::string& name);
-  static void createDescriptorPool();
+  
 
  private:
+  static void createDescriptorPool();
   static std::unordered_map<std::string, Material*> materials;
   static VkDescriptorPool descriptorPool;
   static void createDescriptorSets(std::string path, std::string name);

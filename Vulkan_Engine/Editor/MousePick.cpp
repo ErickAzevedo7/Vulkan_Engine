@@ -1,7 +1,5 @@
 #include "MousePick.h"
 
-#include <inttypes.h>
-
 void MousePick::init(VulkanCore* core) {
   engineCore = core;
   mousePickExtent = engineCore->getSwapChainExtent();

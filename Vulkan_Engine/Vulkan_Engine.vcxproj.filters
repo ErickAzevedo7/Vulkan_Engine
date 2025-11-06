@@ -27,6 +27,7 @@
     <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Editor\MousePick.cpp" />
+    <ClCompile Include="postprocess\outline.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -55,6 +56,7 @@
     <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
     <ClInclude Include="Editor\MousePick.h" />
+    <ClInclude Include="postprocess\outline.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">
@@ -68,6 +70,8 @@
     <None Include="shaders\shader.frag" />
     <None Include="shaders\frag.spv" />
     <None Include="shaders\compile.bat" />
+    <None Include="shaders\postprocess_edge.frag" />
+    <None Include="shaders\postprocess_edge.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="textures\texture.jpg" />
