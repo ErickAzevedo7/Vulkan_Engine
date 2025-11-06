@@ -35,7 +35,7 @@ class TextureManager {
 
   static void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
-  static void cleanup(VkDevice device);
+  static void cleanup();
 
  private:
   static std::unordered_map<std::string, Texture> textures;

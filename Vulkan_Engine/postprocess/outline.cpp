@@ -74,9 +74,9 @@ void Outline::recordOutlineCommandBuffer(VkCommandBuffer commandBuffer,
   scissor.extent = viewportExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-  SceneRenderer::renderOutlineSelected(commandBuffer, outlinePipeline,
-                                       outlinePipelineLayout,
-                                       outlineDescriptorSets[VulkanCore::getCurrentFrame()]);
+  SceneRenderer::renderOutlineSelected(
+      commandBuffer, outlinePipeline, outlinePipelineLayout,
+      outlineDescriptorSets[VulkanCore::getCurrentFrame()]);
 
   vkCmdEndRenderPass(commandBuffer);
 
@@ -86,11 +86,6 @@ void Outline::recordOutlineCommandBuffer(VkCommandBuffer commandBuffer,
 }
 
 void Outline::cleanupFramebuffers() {
-  for (auto descriptorset : outlineDescriptorSets) {
-    vkFreeDescriptorSets(VulkanCore::getDevice(), outlineDescriptorPool, 1,
-                         &descriptorset);
-  }
-
   for (auto framebuffer : outlineFramebuffers) {
     vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
   }
@@ -103,7 +98,27 @@ void Outline::recreateOutline(std::vector<VkImageView> IDimageViews,
   this->viewportExtent = viewportExtent;
   this->outlineColorImageViews = outlineColorImageViews;
   createOutlineFramebuffers();
-  createOutlineDescriptorSets();
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    // 3. Descriptor set update
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView =
+        IDimageViews[i];  // Set this before calling this function
+    imageInfo.sampler = outlineSampler;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = outlineDescriptorSets[i];
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &descriptorWrite, 0,
+                           nullptr);
+  }
 }
 
 void Outline::cleanup() {
@@ -112,6 +127,13 @@ void Outline::cleanup() {
   }
   vkDestroyPipeline(VulkanCore::getDevice(), outlinePipeline, nullptr);
   vkDestroyRenderPass(VulkanCore::getDevice(), outlineRenderPass, nullptr);
+  vkDestroyPipelineLayout(VulkanCore::getDevice(), outlinePipelineLayout,
+                          nullptr);
+  vkDestroyDescriptorSetLayout(VulkanCore::getDevice(),
+                               outlineDescriptorSetLayout, nullptr);
+  vkDestroyDescriptorPool(VulkanCore::getDevice(), outlineDescriptorPool,
+                          nullptr);
+  vkDestroySampler(VulkanCore::getDevice(), outlineSampler, nullptr);
 }
 
 void Outline::createOutlineRenderPass() {
@@ -265,18 +287,18 @@ void Outline::createGraphicsPipeline() {
   depthStencil.depthTestEnable = VK_FALSE;
   depthStencil.depthWriteEnable = VK_FALSE;
 
-
   VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-     colorBlendAttachment.blendEnable = VK_TRUE;
-     colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-     colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-     colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-     colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-     colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-     colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                           VK_COLOR_COMPONENT_G_BIT |
-                                           VK_COLOR_COMPONENT_B_BIT;
+  colorBlendAttachment.blendEnable = VK_TRUE;
+  colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+  colorBlendAttachment.dstColorBlendFactor =
+      VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+  colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+  colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+  colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+  colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                        VK_COLOR_COMPONENT_G_BIT |
+                                        VK_COLOR_COMPONENT_B_BIT;
 
   VkPipelineColorBlendStateCreateInfo colorBlending{};
   colorBlending.sType =
@@ -382,7 +404,8 @@ void Outline::createOutlineDescriptorSets() {
     // 3. Descriptor set update
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = IDimageViews[i];  // Set this before calling this function
+    imageInfo.imageView =
+        IDimageViews[i];  // Set this before calling this function
     imageInfo.sampler = outlineSampler;
 
     VkWriteDescriptorSet descriptorWrite{};

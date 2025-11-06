@@ -185,10 +185,6 @@ class VulkanCore {
   static uint32_t currentFrame;
   bool framebufferResized;
   bool swapChainRecreated;
-  VkBuffer vertexBuffer;
-  VkDeviceMemory vertexBufferMemory;
-  VkBuffer indexBuffer;
-  VkDeviceMemory indexBufferMemory;
   static std::vector<VkBuffer> uniformBuffers;
   std::vector<VkDeviceMemory> uniformBuffersMemory;
   std::vector<void*> uniformBuffersMapped;

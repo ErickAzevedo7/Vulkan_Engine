@@ -14,6 +14,7 @@ class MaterialManager {
   static Material* createMaterial(const std::string& name,
                                   const std::string& albedoTexturePath);
   static Material* getMaterial(const std::string& name);
+  static void cleanup();
   
 
  private:

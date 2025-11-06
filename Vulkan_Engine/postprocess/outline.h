@@ -15,6 +15,8 @@ class Outline {
 
   void recreateOutline(std::vector<VkImageView> IDimageViews, std::vector<VkImageView> outlineColorImageViews, VkExtent2D viewportExtent);
 
+	void cleanup();
+
  private:
   VkPipeline outlinePipeline;
   VkPipelineLayout outlinePipelineLayout;
@@ -28,9 +30,7 @@ class Outline {
   std::vector<VkImageView> IDimageViews;
   VkDescriptorPool outlineDescriptorPool;
   VkExtent2D viewportExtent;
-  
-
-  void cleanup();
+	
   void createOutlineRenderPass();
   void createOutlineFramebuffers();
   void createGraphicsPipeline();

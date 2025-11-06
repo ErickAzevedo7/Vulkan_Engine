@@ -192,14 +192,6 @@ VkInstance VulkanCore::getInstance() {
 	return instance;
 }
 
-VkBuffer VulkanCore::getVertexBuffer() {
-	return vertexBuffer;
-}
-
-VkBuffer VulkanCore::getIndexBuffer() {
-	return indexBuffer;
-}
-
 VkPhysicalDevice VulkanCore::getPhysicalDevice() {
 	return physicalDevice;
 }
@@ -1044,11 +1036,6 @@ void VulkanCore::cleanup() {
 
     vkDestroySampler(device, textureSampler, nullptr);
 
-    vkDestroyImageView(device, textureImageView, nullptr);
-
-    vkDestroyImage(device, textureImage, nullptr);
-    vkFreeMemory(device, textureImageMemory, nullptr);
-
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroyBuffer(device, uniformBuffers[i], nullptr);
         vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
@@ -1057,12 +1044,6 @@ void VulkanCore::cleanup() {
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-
-    vkDestroyBuffer(device, indexBuffer, nullptr);
-    vkFreeMemory(device, indexBufferMemory, nullptr);
-
-    vkDestroyBuffer(device, vertexBuffer, nullptr);
-    vkFreeMemory(device, vertexBufferMemory, nullptr);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);

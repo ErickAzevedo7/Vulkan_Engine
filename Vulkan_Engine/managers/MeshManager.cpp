@@ -106,20 +106,34 @@ Mesh MeshManager::createMesh(std::vector<Vertex> vertices,
   return mesh;
 }
 
-void MeshManager::cleanup(VkDevice device) {
-  vkDestroyBuffer(device, quad.vertexBuffer, nullptr);
-  vkFreeMemory(device, quad.vertexMemory, nullptr);
-  vkDestroyBuffer(device, quad.indexBuffer, nullptr);
-  vkFreeMemory(device, quad.indexMemory, nullptr);
-  vkDestroyBuffer(device, cube.vertexBuffer, nullptr);
-  vkFreeMemory(device, cube.vertexMemory, nullptr);
-  vkDestroyBuffer(device, cube.indexBuffer, nullptr);
-  vkFreeMemory(device, cube.indexMemory, nullptr);
-  vkDestroyBuffer(device, sphere.vertexBuffer, nullptr);
-  vkFreeMemory(device, sphere.vertexMemory, nullptr);
-  vkDestroyBuffer(device, sphere.indexBuffer, nullptr);
-  vkFreeMemory(device, sphere.indexMemory, nullptr);
+
+void MeshManager::cleanup() {
+  VkDevice device = VulkanCore::getDevice();
+
+  auto destroyMesh = [device](Mesh& mesh) {
+    if (mesh.vertexBuffer) {
+      vkDestroyBuffer(device, mesh.vertexBuffer, nullptr);
+      mesh.vertexBuffer = VK_NULL_HANDLE;
+    }
+    if (mesh.vertexMemory) {
+      vkFreeMemory(device, mesh.vertexMemory, nullptr);
+      mesh.vertexMemory = VK_NULL_HANDLE;
+    }
+    if (mesh.indexBuffer) {
+      vkDestroyBuffer(device, mesh.indexBuffer, nullptr);
+      mesh.indexBuffer = VK_NULL_HANDLE;
+    }
+    if (mesh.indexMemory) {
+      vkFreeMemory(device, mesh.indexMemory, nullptr);
+      mesh.indexMemory = VK_NULL_HANDLE;
+    }
+  };
+
+  destroyMesh(quad);
+  destroyMesh(cube);
+  destroyMesh(sphere);
 }
+
 
 void MeshManager::createVertexBuffer(std::vector<Vertex> vertices,
                                      VkCommandPool commandPool,

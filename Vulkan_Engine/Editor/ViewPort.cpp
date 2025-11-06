@@ -30,9 +30,6 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
     throw std::runtime_error("failed to allocate command buffers!");
   }
 
-  MeshManager::loadDefaults(m_ViewportCommandPool,
-                            VulkanCore::getGraphicsQueue());
-
   createViewportRenderPass();
 
   createViewportFramebuffers();
@@ -64,7 +61,6 @@ void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
 }
 
 void ViewPort::cleanup() {
-  MeshManager::cleanup(VulkanCore::getDevice());
 
   for (auto framebuffer : m_ViewportFramebuffers) {
     vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
@@ -339,9 +335,6 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   scissor.offset = {0, 0};
   scissor.extent = viewportExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-  VkBuffer vertexBuffers[] = {engineCore->getVertexBuffer()};
-  VkDeviceSize offsets[] = {0};
 
   SceneRenderer::renderScene(commandBuffer, engineCore->getPipeline(),
                              engineCore->getPipelineLayout(), imageIndex);

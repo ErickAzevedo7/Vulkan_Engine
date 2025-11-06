@@ -19,7 +19,9 @@ class MousePick {
 
   VkExtent2D getMousePickExtent() const;
 
-private:
+	void cleanup();
+
+ private:
   VkPipeline mousePickPipeline;
   uint32_t imageIndex;
   std::vector<VkImage> mousePickImages;
@@ -27,10 +29,7 @@ private:
   VulkanCore* engineCore;
   VkRenderPass mousePickRenderPass;
   std::vector<VkFramebuffer> mousePickFramebuffers;
-  
 	
-  
-  void cleanup();
   void createMousePickImage();
   void createMousePickImageViews();
   void createMousePickRenderPass();

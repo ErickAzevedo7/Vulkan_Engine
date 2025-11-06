@@ -57,7 +57,7 @@ void MousePick::recreateMousePick() {
 }
 
 void MousePick::cleanup() {
-  MeshManager::cleanup(VulkanCore::getDevice());
+  MeshManager::cleanup();
 
   for (auto framebuffer : mousePickFramebuffers) {
     vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
@@ -76,6 +76,8 @@ void MousePick::cleanup() {
   }
 
   vkDestroyRenderPass(VulkanCore::getDevice(), mousePickRenderPass, nullptr);
+
+  vkDestroyPipeline(VulkanCore::getDevice(), mousePickPipeline, nullptr);
 }
 
 void MousePick::createMousePickImage() {
@@ -292,9 +294,6 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
   scissor.offset = {0, 0};
   scissor.extent = mousePickExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-  VkBuffer vertexBuffers[] = {engineCore->getVertexBuffer()};
-  VkDeviceSize offsets[] = {0};
 
   SceneRenderer::renderMousePick(commandBuffer, mousePickPipeline,
                                  engineCore->getPipelineLayout(), imageIndex);
@@ -538,7 +537,7 @@ void MousePick::createGraphicsPipeline() {
   rasterizer.rasterizerDiscardEnable = VK_FALSE;
   rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
   rasterizer.lineWidth = 1.0f;
-  rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+  rasterizer.cullMode = VK_CULL_MODE_NONE;
   rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
   rasterizer.depthBiasEnable = VK_FALSE;
 

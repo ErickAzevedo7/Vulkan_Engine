@@ -20,6 +20,14 @@ Material* MaterialManager::getMaterial(const std::string& name) {
   }
 }
 
+void MaterialManager::cleanup() {
+  for (auto& pair : materials) {
+    delete pair.second;
+  }
+  materials.clear();
+  vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
+}
+
 void MaterialManager::createDescriptorPool() {
   std::array<VkDescriptorPoolSize, 2> poolSizes{};
   poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;

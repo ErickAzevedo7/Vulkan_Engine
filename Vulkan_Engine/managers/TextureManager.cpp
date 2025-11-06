@@ -206,3 +206,13 @@ void TextureManager::generateMipmaps(VkImage image,
 
   Utils::endSingleTimeCommands(VulkanCore::getCommandPool(), commandBuffer);
 }
+
+void TextureManager::cleanup() {
+  for (auto& pair : textures) {
+    vkDestroySampler(VulkanCore::getDevice(), pair.second.sampler, nullptr);
+    vkDestroyImageView(VulkanCore::getDevice(), pair.second.imageView, nullptr);
+    vkDestroyImage(VulkanCore::getDevice(), pair.second.image, nullptr);
+    vkFreeMemory(VulkanCore::getDevice(), pair.second.memory, nullptr);
+  }
+  textures.clear();
+}

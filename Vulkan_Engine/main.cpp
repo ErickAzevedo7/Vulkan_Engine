@@ -35,7 +35,11 @@ class VulkanEngine {
     init();
     mainLoop();
 
+    outline.cleanup();
     viewPort.cleanup();
+    mousePick.cleanup();
+    MaterialManager::cleanup();
+    TextureManager::cleanup();
 
     cleanup();
     engineCore.cleanup();

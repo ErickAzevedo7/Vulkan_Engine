@@ -111,7 +111,7 @@ class MeshManager {
 
   static Mesh* getMesh(std::string name);
 
-  static void cleanup(VkDevice device);
+  static void cleanup();
 
  private:
   static void createVertexBuffer(std::vector<Vertex> vertices,
