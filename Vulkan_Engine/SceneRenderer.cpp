@@ -13,10 +13,11 @@ void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
   Scene* scene = SceneManager::getActiveScene();
 
   size_t entities = scene->getEntityCount();
-  for (int i = 0; i < entities; ++i) {
+  for (int i = 1; i <= entities; ++i) {
     Entity* entity = &scene->getEntity(i);
 
-    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 0);
+    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex,
+                 0);
   }
 }
 
@@ -25,19 +26,40 @@ void SceneRenderer::renderEntity(const Entity* entity,
                                  VkPipeline pipeline,
                                  VkPipelineLayout pipelineLayout,
                                  uint32_t imageIndex,
-																	int useMousePick) {
+                                 int useMousePick) {
   const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
   if (!meshComp) {
     throw std::runtime_error("Entity does not have a MeshComponent.");
   }
 
-  const Transform* transformComp = entity->getComponent<Transform>();
-  if (transformComp) {
-    glm::mat4 modelMatrix = transformComp->getMatrix();
-  }
+  meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex,
+                   useMousePick);
+}
 
-  meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex, useMousePick);
+void SceneRenderer::renderOutlineSelected(
+    VkCommandBuffer commandBuffer,
+    VkPipeline outlinePipeline,
+    VkPipelineLayout outlinePipelineLayout,
+    VkDescriptorSet outlineDescriptorSet) {
+  Scene* scene = SceneManager::getActiveScene();
+  size_t entities = scene->getEntityCount();
+  for (int i = 1; i <= entities; ++i) {
+    Entity* entity = &scene->getEntity(i);
+    if (entity->isSelected) {
+      int selectedID = entity->getID();
+      vkCmdPushConstants(commandBuffer, outlinePipelineLayout,
+                         VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(int),
+                         &selectedID);
+
+      vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        outlinePipeline);
+      vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              outlinePipelineLayout, 0, 1,
+                              &outlineDescriptorSet, 0, nullptr);
+      vkCmdDraw(commandBuffer, 3, 1, 0, 0);  // Full-screen triangle
+    }
+  }
 }
 
 void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
@@ -47,9 +69,10 @@ void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
   Scene* scene = SceneManager::getActiveScene();
 
   size_t entities = scene->getEntityCount();
-  for (int i = 0; i < entities; ++i) {
+  for (int i = 1; i <= entities; ++i) {
     Entity* entity = &scene->getEntity(i);
 
-    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 1);
+    renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex,
+                 1);
   }
 }

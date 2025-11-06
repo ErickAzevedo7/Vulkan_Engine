@@ -31,17 +31,17 @@ Entity& Scene::createEntity(const std::string& name) {
 }
 
 void Scene::removeEntity(size_t index) {
-  if (index >= entities.size()) {
+  if (index == 0 || index > entities.size()) {
     throw std::out_of_range("Entity index out of range");
   }
-  entities.erase(entities.begin() + index);
+  entities.erase(entities.begin() + (index - 1));
 }
 
 Entity& Scene::getEntity(size_t index) {
-  if (index >= entities.size()) {
+  if (index == 0 || index > entities.size()) {
     throw std::out_of_range("Entity index out of range");
   }
-  return *entities[index];
+  return *entities[index - 1];
 }
 
 size_t Scene::getEntityCount() const {

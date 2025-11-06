@@ -9,6 +9,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include "managers/SceneManager.h"
+#include "postprocess/outline.h"
 #include "ui/SceneUi.h"
 
 // GLOBAL VARIABLES
@@ -26,7 +27,9 @@ class VulkanEngine {
     MaterialManager::loadDefault();
     SceneRenderer::init(&engineCore);
     mousePick.init(&engineCore);
-    viewPort.init(&engineCore);
+    viewPort.init(&engineCore, mousePick.getMousePickExtent());
+    outline.init(&engineCore, mousePick.getMousePickImageViews(),
+                 viewPort.m_ViewportImageViews, mousePick.getMousePickExtent());
     editorCamera.init(&engineCore);
     SceneManager::loadDefaults();
     init();
@@ -75,16 +78,22 @@ class VulkanEngine {
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
         imageIndex);
 
+    outline.recordOutlineCommandBuffer(
+        outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
+        imageIndex);
+
     recordImguiCommandBuffer(imGuiCommandBuffers[VulkanCore::getCurrentFrame()],
                              imageIndex);
 
     editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
 
-    std::array<VkCommandBuffer, 4> submitCommandBuffers = {
+    std::array<VkCommandBuffer, 5> submitCommandBuffers = {
         engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()],
         mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
         viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
-        imGuiCommandBuffers[VulkanCore::getCurrentFrame()]};
+        outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
+        imGuiCommandBuffers[VulkanCore::getCurrentFrame()],
+    };
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -145,7 +154,7 @@ class VulkanEngine {
     sceneTexture.resize(viewPort.m_ViewportImageViews.size());
     for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
       sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
-          engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
+          engineCore.getTextureSampler(), outline.outlineColorImageViews[i],
           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     while (!glfwWindowShouldClose(engineCore.getWindow())) {
@@ -253,6 +262,7 @@ class VulkanEngine {
   EditorCamera editorCamera;
   ViewPort viewPort;
   MousePick mousePick;
+  Outline outline;
   VkExtent2D viewportExtent;
   VkCommandPool imGuiCommandPool;
   std::vector<VkCommandBuffer> imGuiCommandBuffers;
@@ -480,11 +490,15 @@ class VulkanEngine {
     mousePick.cleanupFramebuffers();
     mousePick.recreateMousePick();
     viewPort.cleanupFramebuffers();
-    viewPort.recreateViewport();
+    viewPort.recreateViewport(mousePick.getMousePickExtent());
+    outline.cleanupFramebuffers();
+    outline.recreateOutline(mousePick.getMousePickImageViews(),
+                            viewPort.m_ViewportImageViews,
+                            mousePick.getMousePickExtent());
 
     for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
       sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
-          engineCore.getTextureSampler(), viewPort.m_ViewportImageViews[i],
+          engineCore.getTextureSampler(), outline.outlineColorImageViews[i],
           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   }
 
