@@ -7,6 +7,8 @@
 
 class Entity {
  public:
+  bool isSelected = false;
+
   Entity(std::string name);
 
   ~Entity();

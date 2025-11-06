@@ -6,6 +6,8 @@
 class SceneUi {
  public:
   static void render();
-private:
+
   static int selectedEntity;
+
+ private:
 };

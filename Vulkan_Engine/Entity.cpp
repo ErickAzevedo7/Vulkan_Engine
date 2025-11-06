@@ -1,6 +1,6 @@
 #include "Entity.h"
 
-std::atomic<uint32_t> Entity::nextID{0};
+std::atomic<uint32_t> Entity::nextID{1};
 
 Entity::Entity(std::string name): id(nextID++) {
   this->name = name;
