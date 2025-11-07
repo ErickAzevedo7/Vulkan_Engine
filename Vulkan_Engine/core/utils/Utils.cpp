@@ -180,7 +180,8 @@ void Utils::transitionImageLayout(VkImage image,
                                   VkImageLayout oldLayout,
                                   VkImageLayout newLayout,
                                   uint32_t mipLevels,
-																	VkCommandPool commandPool) {
+																	VkCommandPool commandPool,
+																	uint32_t layerCount) {
   VkCommandBuffer commandBuffer = Utils::beginSingleTimeCommands(commandPool);
 
   VkImageMemoryBarrier barrier{};
@@ -193,7 +194,7 @@ void Utils::transitionImageLayout(VkImage image,
   barrier.subresourceRange.baseMipLevel = 0;
   barrier.subresourceRange.levelCount = mipLevels;
   barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
+  barrier.subresourceRange.layerCount = layerCount;
 
   if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;

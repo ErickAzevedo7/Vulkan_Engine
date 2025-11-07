@@ -43,7 +43,7 @@ void transitionImageLayout(VkImage image,
                            VkImageLayout oldLayout,
                            VkImageLayout newLayout,
                            uint32_t mipLevels,
-                           VkCommandPool commandPool);
+                           VkCommandPool commandPool, uint32_t layerCount = 1);
 void copyBufferToImage(VkBuffer buffer,
                        VkImage image,
                        uint32_t width,
