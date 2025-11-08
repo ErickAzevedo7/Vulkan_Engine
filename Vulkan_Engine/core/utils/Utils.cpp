@@ -126,6 +126,19 @@ uint32_t Utils::findMemoryType(uint32_t typeFilter,
   throw std::runtime_error("failed to find suitable memory type!");
 }
 
+void Utils::createShaderModule(const std::vector<char>& code, VkShaderModule& shaderModule) {
+
+  VkShaderModuleCreateInfo createInfo{};
+  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize = code.size();
+  createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+  if (vkCreateShaderModule(VulkanCore::getDevice(), &createInfo, nullptr,
+                           &shaderModule) != VK_SUCCESS) {
+    throw std::runtime_error("failed to create shader module!");
+  }
+}
+
 void Utils::createImage(uint32_t width,
                         uint32_t height,
                         uint32_t mipLevels,

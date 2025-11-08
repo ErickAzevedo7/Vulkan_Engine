@@ -27,6 +27,9 @@ void endSingleTimeCommands(VkCommandPool commandPool,
 
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
+void createShaderModule(const std::vector<char>& code,
+                        VkShaderModule& shaderModule);
+
 void createImage(uint32_t width,
                  uint32_t height,
                  uint32_t mipLevels,
