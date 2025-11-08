@@ -158,6 +158,7 @@
     <ClCompile Include="core\Vertices.cpp" />
     <ClCompile Include="SceneRenderer.cpp" />
     <ClCompile Include="managers\TextureManager.cpp" />
+    <ClCompile Include="skybox\Skybox.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="Editor\ViewPort.cpp" />
@@ -187,6 +188,7 @@
     <ClInclude Include="core\Vertices.h" />
     <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="managers\TextureManager.h" />
+    <ClInclude Include="skybox\Skybox.h" />
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="managers\SceneManager.h" />
     <ClInclude Include="Editor\ViewPort.h" />
@@ -200,6 +202,8 @@
     <None Include="shaders\postprocess_edge.vert" />
     <None Include="shaders\shader.frag" />
     <None Include="shaders\shader.vert" />
+    <None Include="shaders\skybox.frag" />
+    <None Include="shaders\skybox.vert" />
     <None Include="shaders\vert.spv" />
   </ItemGroup>
   <ItemGroup>

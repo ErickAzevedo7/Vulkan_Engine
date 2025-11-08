@@ -60,8 +60,8 @@ Texture* TextureManager::loadTexture(const std::string& path,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture->image, texture->memory);
 
   Utils::transitionImageLayout(
-      texture->image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture->mipLevels, commandPool);
+	  texture->image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
+	  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture->mipLevels, commandPool);
   Utils::copyBufferToImage(stagingBuffer, texture->image,
                            static_cast<uint32_t>(texWidth),
                            static_cast<uint32_t>(texHeight), commandPool);

@@ -13,7 +13,6 @@ struct Texture {
   VkSampler sampler;
   uint32_t width;
   uint32_t height;
-  VkDescriptorSet descriptorSet;
   uint32_t mipLevels;
 };
 

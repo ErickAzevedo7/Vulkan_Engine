@@ -34,22 +34,22 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 
   std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
+	UniformBufferObject ubo{};
+
+	ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+  ubo.proj =
+      glm::perspective(glm::radians(45.0f),
+                       engineCore->getSwapChainExtent().width /
+                           (float)engineCore->getSwapChainExtent().height,
+                       0.1f, 10.0f);
+
+  ubo.proj[1][1] *= -1;
+
   for (const auto& entityPtr : *entities) {
     const Entity& entity = *entityPtr;
 
-    UniformBufferObject ubo{};
-
     ubo.model = entity.getComponent<Transform>()->getMatrix();
-
-    ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-
-    ubo.proj =
-        glm::perspective(glm::radians(45.0f),
-                         engineCore->getSwapChainExtent().width /
-                             (float)engineCore->getSwapChainExtent().height,
-                         0.1f, 10.0f);
-
-    ubo.proj[1][1] *= -1;
 
     size_t offset = entity.getID() * VulkanCore::getDynamicAlignment();
     char* base =
@@ -57,6 +57,11 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 
     memcpy(base + offset, &ubo, sizeof(ubo));
   }
+
+  glm::mat4 view = glm::mat4(
+      glm::mat3(ubo.view));
+
+  Skybox::updateSkyboxUniformBuffer(currentImage, view, ubo.proj);
 }
 
 void EditorCamera::mousePosHandler() {

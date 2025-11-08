@@ -33,6 +33,8 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
   createViewportRenderPass();
 
   createViewportFramebuffers();
+
+  Skybox::init(m_ViewportCommandPool, m_ViewportRenderPass);
 }
 
 void ViewPort::cleanupFramebuffers() {
@@ -61,6 +63,8 @@ void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
 }
 
 void ViewPort::cleanup() {
+
+  Skybox::cleanup();
 
   for (auto framebuffer : m_ViewportFramebuffers) {
     vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
@@ -335,6 +339,21 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   scissor.offset = {0, 0};
   scissor.extent = viewportExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+  VkDeviceSize offsets[] = {0};
+
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &Skybox::getSkyboxVertexBuffer(), offsets);
+
+  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    Skybox::getSkyboxPipeline());
+
+  uint32_t dynamicOffsets[] = {0};
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          Skybox::getSkyboxPipelineLayout(), 0, 1,
+                          Skybox::getSkyboxDescriptorSet().data(), 1,
+                          dynamicOffsets);
+
+  vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
   SceneRenderer::renderScene(commandBuffer, engineCore->getPipeline(),
                              engineCore->getPipelineLayout(), imageIndex);
