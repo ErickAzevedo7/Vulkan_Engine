@@ -18,6 +18,11 @@ std::vector<VkBuffer> VulkanCore::uniformBuffers;
 VkDescriptorSetLayout VulkanCore::descriptorSetLayout = VK_NULL_HANDLE;
 uint32_t VulkanCore::currentFrame = 0;
 VkDeviceSize VulkanCore::dynamicAlignment;
+VkExtent2D VulkanCore::swapChainExtent;
+VkSampleCountFlagBits VulkanCore::msaaSamples;
+std::vector<VkImageView> VulkanCore::swapChainImageViews;
+
+
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 

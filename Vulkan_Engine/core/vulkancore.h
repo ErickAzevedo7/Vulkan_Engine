@@ -105,7 +105,7 @@ class VulkanCore {
 
   VkFormat getSwapChainImageFormat();
 
-  VkSampleCountFlagBits getmsaaSamples();
+  static VkSampleCountFlagBits getmsaaSamples();
 
   bool getSwapChainRecreated();
 
@@ -117,13 +117,13 @@ class VulkanCore {
 
   void setSwapChainRecreated(bool value);
 
-  std::vector<VkImageView> getSwapChainImageViews();
+  static std::vector<VkImageView> getSwapChainImageViews();
 
   VkImageView getDepthImageView();
 
   VkImageView getColorResolveImageView();
 
-  VkExtent2D getSwapChainExtent();
+  static VkExtent2D getSwapChainExtent();
 
   std::vector<VkSemaphore> getImageAvailableSemaphores();
 
@@ -165,8 +165,8 @@ class VulkanCore {
   VkSwapchainKHR swapChain;
   std::vector<VkImage> swapChainImages;
   VkFormat swapChainImageFormat;
-  VkExtent2D swapChainExtent;
-  std::vector<VkImageView> swapChainImageViews;
+  static VkExtent2D swapChainExtent;
+  static std::vector<VkImageView> swapChainImageViews;
   VkRenderPass renderPass;
   static VkDescriptorSetLayout descriptorSetLayout;
   VkPipelineLayout pipelineLayout;
@@ -193,7 +193,7 @@ class VulkanCore {
   VkImage depthImage;
   VkDeviceMemory depthImageMemory;
   VkImageView depthImageView;
-  VkSampleCountFlagBits msaaSamples;
+  static VkSampleCountFlagBits msaaSamples;
   VkImage colorImage;
   VkDeviceMemory colorImageMemory;
   VkImageView colorImageView;
