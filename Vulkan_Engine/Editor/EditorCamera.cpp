@@ -5,7 +5,7 @@
 #include "managers/SceneManager.h"
 
 // initialize static variables
-glm::vec3 EditorCamera::cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 EditorCamera::cameraPos = glm::vec3(0.0f, 1.0f, 3.0f);
 glm::vec3 EditorCamera::cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 EditorCamera::cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 float EditorCamera::yaw = -90.0f;
@@ -34,15 +34,15 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 
   std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
-	UniformBufferObject ubo{};
+  UniformBufferObject ubo{};
 
-	ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
   ubo.proj =
       glm::perspective(glm::radians(45.0f),
                        engineCore->getSwapChainExtent().width /
                            (float)engineCore->getSwapChainExtent().height,
-                       0.1f, 10.0f);
+                       0.1f, 1000.0f);
 
   ubo.proj[1][1] *= -1;
 
@@ -58,10 +58,16 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
     memcpy(base + offset, &ubo, sizeof(ubo));
   }
 
-  glm::mat4 view = glm::mat4(
-      glm::mat3(ubo.view));
+  glm::mat4 view = glm::mat4(glm::mat3(ubo.view));
 
   Skybox::updateSkyboxUniformBuffer(currentImage, view, ubo.proj);
+
+  GridPlane::updateUniformBuffer(currentImage, glm::mat4(1.0f), ubo.view,
+                                 ubo.proj);
+
+  GridPlane::updateGridParamsBuffer(currentImage, cameraPos, 100.0f, 2.0f,
+                                    0.5f, glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),
+                                    glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
 }
 
 void EditorCamera::mousePosHandler() {
@@ -115,10 +121,10 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 
     ImVec2 mouseInViewport = ImVec2(mouseScreenPos.x - viewportScreenPos.x,
                                     mouseScreenPos.y - viewportScreenPos.y);
-  	
+
     int id = mousePick.getEntityIDAt(mouseInViewport.x, mouseInViewport.y);
 
-    if (id >= 0){
+    if (id >= 0) {
       SceneUi::selectedEntity = id;
     }
   }

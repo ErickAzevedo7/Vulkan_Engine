@@ -3,7 +3,7 @@
 void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
   engineCore = core;
   this->viewportExtent = viewportExtent;
-	
+
   VkCommandPoolCreateInfo commandPoolCreateInfo{};
   commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   commandPoolCreateInfo.queueFamilyIndex = engineCore->getGraphicsQueueFamily();
@@ -34,6 +34,7 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
 
   createViewportFramebuffers();
 
+  GridPlane::init(m_ViewportCommandPool, m_ViewportRenderPass);
   Skybox::init(m_ViewportCommandPool, m_ViewportRenderPass);
 }
 
@@ -63,6 +64,7 @@ void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
 }
 
 void ViewPort::cleanup() {
+  GridPlane::cleanup();
 
   Skybox::cleanup();
 
@@ -341,22 +343,34 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
   VkDeviceSize offsets[] = {0};
+  uint32_t skyboxDynamicOffset[] = {0};
+  uint32_t gridPlaneDynamicOffset[] = {0, 0};
 
-  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &Skybox::getSkyboxVertexBuffer(), offsets);
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &Skybox::getSkyboxVertexBuffer(),
+                         offsets);
 
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     Skybox::getSkyboxPipeline());
 
-  uint32_t dynamicOffsets[] = {0};
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           Skybox::getSkyboxPipelineLayout(), 0, 1,
                           Skybox::getSkyboxDescriptorSet().data(), 1,
-                          dynamicOffsets);
+                          skyboxDynamicOffset);
 
   vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
   SceneRenderer::renderScene(commandBuffer, engineCore->getPipeline(),
                              engineCore->getPipelineLayout(), imageIndex);
+
+  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    GridPlane::getGridPlanePipeline());
+
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          GridPlane::getGridPlanePipelineLayout(), 0, 1,
+                          GridPlane::getGridPlaneDescriptorSets().data(), 2,
+                          gridPlaneDynamicOffset);
+
+  vkCmdDraw(commandBuffer, 4, 1, 0, 0);
 
   vkCmdEndRenderPass(commandBuffer);
 

@@ -139,6 +139,7 @@
     <ClCompile Include="core\utils\Utils.cpp" />
     <ClCompile Include="Editor\EditorCamera.cpp" />
     <ClCompile Include="Entity.cpp" />
+    <ClCompile Include="gridPlane\GridPlane.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
@@ -169,6 +170,7 @@
     <ClInclude Include="core\utils\Utils.h" />
     <ClInclude Include="Editor\EditorCamera.h" />
     <ClInclude Include="Entity.h" />
+    <ClInclude Include="gridPlane\GridPlane.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imgui_impl_glfw.h" />
@@ -198,6 +200,8 @@
     <None Include="imgui.ini" />
     <None Include="shaders\compile.bat" />
     <None Include="shaders\frag.spv" />
+    <None Include="shaders\gridplane.frag" />
+    <None Include="shaders\gridplane.vert" />
     <None Include="shaders\postprocess_edge.frag" />
     <None Include="shaders\postprocess_edge.vert" />
     <None Include="shaders\shader.frag" />

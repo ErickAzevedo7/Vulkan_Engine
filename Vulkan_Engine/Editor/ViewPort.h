@@ -6,6 +6,7 @@
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "skybox/Skybox.h"
+#include "gridPlane/GridPlane.h"
 
 class ViewPort {
  public:
