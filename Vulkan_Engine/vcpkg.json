@@ -1,0 +1,15 @@
+{
+  "name": "vulkan-engine",
+  "version": "1.0.0",
+  "dependencies": [
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental",
+        "glfw-binding",
+        "vulkan-binding"
+      ]
+    },
+    "imguizmo"
+  ]
+}

@@ -366,3 +366,4 @@ FodyWeavers.xsd
 
 vcpckg_instaled/
 /Vulkan_Engine/vcpkg_installed
+/Vulkan_Engine/textures
