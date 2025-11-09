@@ -51,6 +51,10 @@ void MousePick::cleanupFramebuffers() {
 }
 
 void MousePick::recreateMousePick() {
+  if (mousePickExtent.width == 0 || mousePickExtent.height == 0)
+    return;
+
+  cleanupFramebuffers();
   createMousePickImage();
   createMousePickImageViews();
   createMousePickFramebuffers();

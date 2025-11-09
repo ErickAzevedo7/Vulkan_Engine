@@ -14,6 +14,8 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
     throw std::runtime_error("Could not create graphics command pool");
   }
 
+  createColorResources();
+  createDepthResources();
   createViewportImage();
   createViewportImageViews();
 
@@ -54,10 +56,24 @@ void ViewPort::cleanupFramebuffers() {
   for (auto memory : m_DstImageMemory) {
     vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
   }
+
+	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
+  vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
+  vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+
+  vkDestroyImageView(VulkanCore::getDevice(), colorImageView, nullptr);
+  vkDestroyImage(VulkanCore::getDevice(), colorImage, nullptr);
+  vkFreeMemory(VulkanCore::getDevice(), colorImageMemory, nullptr);
 }
 
 void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
+  if (viewportExtent.width == 0 || viewportExtent.height == 0)
+    return;
+
+  cleanupFramebuffers();
   this->viewportExtent = viewportExtent;
+  createColorResources();
+  createDepthResources();
   createViewportImage();
   createViewportImageViews();
   createViewportFramebuffers();
@@ -84,9 +100,47 @@ void ViewPort::cleanup() {
     vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
   }
 
+  vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
+  vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
+  vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+
+  vkDestroyImageView(VulkanCore::getDevice(), colorImageView, nullptr);
+  vkDestroyImage(VulkanCore::getDevice(), colorImage, nullptr);
+  vkFreeMemory(VulkanCore::getDevice(), colorImageMemory, nullptr);
+
   vkDestroyCommandPool(VulkanCore::getDevice(), m_ViewportCommandPool, nullptr);
 
   vkDestroyRenderPass(VulkanCore::getDevice(), m_ViewportRenderPass, nullptr);
+}
+
+void ViewPort::createColorResources() {
+  VkFormat colorFormat = engineCore->getSwapChainImageFormat();
+
+  Utils::createImage(viewportExtent.width, viewportExtent.height, 1,
+                     VulkanCore::getmsaaSamples(), colorFormat, VK_IMAGE_TILING_OPTIMAL,
+                     VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage,
+                     colorImageMemory);
+  colorImageView = Utils::createImageView(colorImage, colorFormat,
+                                          VK_IMAGE_ASPECT_COLOR_BIT, 1);
+}
+
+void ViewPort::createDepthResources() {
+  VkFormat depthFormat = engineCore->findDepthFormat();
+
+  Utils::createImage(
+      viewportExtent.width, viewportExtent.height, 1,
+                     VulkanCore::getmsaaSamples(), depthFormat, VK_IMAGE_TILING_OPTIMAL,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage,
+                     depthImageMemory);
+  depthImageView = Utils::createImageView(depthImage, depthFormat,
+                                          VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+
+  Utils::transitionImageLayout(
+      depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1, m_ViewportCommandPool);
 }
 
 void ViewPort::createViewportImage() {
@@ -277,8 +331,8 @@ void ViewPort::createViewportFramebuffers() {
 
   for (size_t i = 0; i < m_ViewportImageViews.size(); i++) {
     std::array<VkImageView, 3> attachments = {
-        engineCore->getColorResolveImageView(),
-        engineCore->getDepthImageView(),
+        colorImageView,
+        depthImageView,
         m_ViewportImageViews[i],
     };
 

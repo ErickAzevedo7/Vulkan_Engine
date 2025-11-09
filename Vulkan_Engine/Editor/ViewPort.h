@@ -26,6 +26,8 @@ class ViewPort {
   void recreateViewport(VkExtent2D viewportExtent);
 
   void cleanup();
+  void createColorResources();
+  void createDepthResources();
 
   void cleanupFramebuffers();
 
@@ -36,6 +38,13 @@ class ViewPort {
   VkRenderPass m_ViewportRenderPass;
   VkCommandPool m_ViewportCommandPool;
   std::vector<VkFramebuffer> m_ViewportFramebuffers;
+  VkImage colorImage;
+  VkDeviceMemory colorImageMemory;
+  VkImageView colorImageView;
+  VkImage depthImage;
+  VkDeviceMemory depthImageMemory;
+  VkImageView depthImageView;
+	
 
   void createViewportRenderPass();
 

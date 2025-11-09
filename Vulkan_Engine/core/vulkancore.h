@@ -118,11 +118,7 @@ class VulkanCore {
   void setSwapChainRecreated(bool value);
 
   static std::vector<VkImageView> getSwapChainImageViews();
-
-  VkImageView getDepthImageView();
-
-  VkImageView getColorResolveImageView();
-
+	
   static VkExtent2D getSwapChainExtent();
 
   std::vector<VkSemaphore> getImageAvailableSemaphores();
@@ -190,13 +186,9 @@ class VulkanCore {
   VkDeviceMemory textureImageMemory;
   VkImageView textureImageView;
   VkSampler textureSampler;
-  VkImage depthImage;
-  VkDeviceMemory depthImageMemory;
-  VkImageView depthImageView;
+
   static VkSampleCountFlagBits msaaSamples;
-  VkImage colorImage;
-  VkDeviceMemory colorImageMemory;
-  VkImageView colorImageView;
+
   static VkDeviceSize dynamicAlignment;
 	
   static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -208,8 +200,7 @@ class VulkanCore {
   static void framebufferResizeCallback(GLFWwindow* window,
                                         int width,
                                         int height);
-
-  void createColorResources();
+	
 
   VkSampleCountFlagBits getMaxUsableSampleCount();
 
@@ -218,8 +209,7 @@ class VulkanCore {
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates,
                                VkImageTiling tiling,
                                VkFormatFeatureFlags features);
-
-  void createDepthResources();
+	
 
   void createUniformBuffers();
 
@@ -230,8 +220,6 @@ class VulkanCore {
   void createCommandBuffers();
 
   void createCommandPool();
-
-  void createFramebuffers();
 
   void createRenderPass();
 

@@ -94,6 +94,9 @@ void Outline::cleanupFramebuffers() {
 void Outline::recreateOutline(std::vector<VkImageView> IDimageViews,
                               std::vector<VkImageView> outlineColorImageViews,
                               VkExtent2D viewportExtent) {
+  if (viewportExtent.width == 0 || viewportExtent.height == 0)
+    return;
+  cleanupFramebuffers();
   this->IDimageViews = IDimageViews;
   this->viewportExtent = viewportExtent;
   this->outlineColorImageViews = outlineColorImageViews;

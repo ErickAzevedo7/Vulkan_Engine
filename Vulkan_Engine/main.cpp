@@ -46,6 +46,13 @@ class VulkanEngine {
   }
 
   void drawFrame() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(engineCore.getWindow(), &width, &height);
+    while (width == 0 || height == 0) {
+      glfwWaitEvents();
+      return;
+    }
+
     vkWaitForFences(
         VulkanCore::getDevice(), 1,
         &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()], VK_TRUE,
@@ -486,11 +493,8 @@ class VulkanEngine {
 
     cleanupFramebuffers();
     createframebuffers();
-    mousePick.cleanupFramebuffers();
     mousePick.recreateMousePick();
-    viewPort.cleanupFramebuffers();
     viewPort.recreateViewport(mousePick.getMousePickExtent());
-    outline.cleanupFramebuffers();
     outline.recreateOutline(mousePick.getMousePickImageViews(),
                             viewPort.m_ViewportImageViews,
                             mousePick.getMousePickExtent());
