@@ -13,6 +13,7 @@ float EditorCamera::pitch = 0.0f;
 float EditorCamera::lastX = 0.0f;
 float EditorCamera::lastY = 0.0f;
 bool EditorCamera::isDragging = false;
+VkExtent2D EditorCamera::extent;
 
 void EditorCamera::init(VulkanCore* core) {
   engineCore = core;
@@ -20,6 +21,11 @@ void EditorCamera::init(VulkanCore* core) {
   glfwGetFramebufferSize(engineCore->getWindow(), &width, &height);
   EditorCamera::lastX = width / 2.0f;
   EditorCamera::lastY = height / 2.0f;
+  EditorCamera::extent = engineCore->getSwapChainExtent();
+}
+
+void EditorCamera::setExtent(VkExtent2D newExtent) {
+  extent = newExtent;
 }
 
 void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
@@ -40,8 +46,8 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 
   ubo.proj =
       glm::perspective(glm::radians(45.0f),
-                       engineCore->getSwapChainExtent().width /
-                           (float)engineCore->getSwapChainExtent().height,
+                       static_cast<float>(extent.width) /
+                           static_cast<float>(extent.height),
                        0.1f, 1000.0f);
 
   ubo.proj[1][1] *= -1;

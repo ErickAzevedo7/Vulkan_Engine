@@ -23,6 +23,8 @@ class EditorCamera
   static float lastY;
   void init(VulkanCore* core);
 
+  static void setExtent(VkExtent2D newExtent);
+
   void updateUniformBuffer(uint32_t currentImage);
   static void mousePosHandler();
   void inputProcess(MousePick& mousePick);
@@ -32,4 +34,5 @@ class EditorCamera
   VulkanCore* engineCore;
   static bool isDragging;
   static void updateCursorLoop();
+  static VkExtent2D extent;
 };

@@ -193,6 +193,7 @@ class VulkanEngine {
       if (viewportExtent.width != mousePick.mousePickExtent.width ||
           viewportExtent.height != mousePick.mousePickExtent.height) {
         mousePick.mousePickExtent = viewportExtent;
+        EditorCamera::setExtent(viewportExtent);
 
         recreateRenderPasses();
       }
