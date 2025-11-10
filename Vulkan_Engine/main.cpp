@@ -1,5 +1,4 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
-#define GLM_ENABLE_EXPERIMENTAL
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
 #include "Editor/ViewPort.h"
@@ -178,6 +177,8 @@ class VulkanEngine {
       ImGui_ImplVulkan_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
+      ImGuizmo::BeginFrame();
+      ImGuizmo::Enable(true);
       ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
                                    ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -209,6 +210,10 @@ class VulkanEngine {
 
       ImGui::Image((ImTextureID)sceneTexture[VulkanCore::getCurrentFrame()],
                    ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+
+      ImGui::SetCursorScreenPos(p);
+
+      EditorCamera::drawGuizmo();
 
       ImGui::End();
       ImGui::PopStyleVar(2);

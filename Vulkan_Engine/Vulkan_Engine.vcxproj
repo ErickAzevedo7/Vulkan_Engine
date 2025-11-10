@@ -70,6 +70,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -104,14 +107,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glfw-3.4.bin.WIN64\include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glfw-3.4.bin.WIN64\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glfw-3.4.bin.WIN64\include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -130,8 +133,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glfw-3.4.bin.WIN64\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -140,14 +143,6 @@
     <ClCompile Include="Editor\EditorCamera.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="gridPlane\GridPlane.cpp" />
-    <ClCompile Include="imgui\imgui.cpp" />
-    <ClCompile Include="imgui\imgui_demo.cpp" />
-    <ClCompile Include="imgui\imgui_draw.cpp" />
-    <ClCompile Include="imgui\imgui_impl_glfw.cpp" />
-    <ClCompile Include="imgui\imgui_impl_vulkan.cpp" />
-    <ClCompile Include="imgui\imgui_tables.cpp" />
-    <ClCompile Include="imgui\imgui_widgets.cpp" />
-    <ClCompile Include="imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="components\MeshComponent.cpp" />
     <ClCompile Include="managers\MeshManager.cpp" />
@@ -171,15 +166,6 @@
     <ClInclude Include="Editor\EditorCamera.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="gridPlane\GridPlane.h" />
-    <ClInclude Include="imgui\imconfig.h" />
-    <ClInclude Include="imgui\imgui.h" />
-    <ClInclude Include="imgui\imgui_impl_glfw.h" />
-    <ClInclude Include="imgui\imgui_impl_vulkan.h" />
-    <ClInclude Include="imgui\imgui_internal.h" />
-    <ClInclude Include="imgui\imstb_rectpack.h" />
-    <ClInclude Include="imgui\imstb_textedit.h" />
-    <ClInclude Include="imgui\imstb_truetype.h" />
-    <ClInclude Include="imgui\misc\cpp\imgui_stdlib.h" />
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="managers\MeshManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
