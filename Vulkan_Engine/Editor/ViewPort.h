@@ -1,5 +1,4 @@
 #pragma once
-#define GLM_ENABLE_EXPERIMENTAL
 #include <Entity.h>
 #include <vulkan/vulkan.h>
 #include "SceneRenderer.h"

@@ -22,6 +22,7 @@
     <ClCompile Include="postprocess\outline.cpp" />
     <ClCompile Include="skybox\Skybox.cpp" />
     <ClCompile Include="gridPlane\GridPlane.cpp" />
+    <ClCompile Include="gizmos\ImGuizmo.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -40,10 +41,10 @@
     <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
-    <ClInclude Include="Editor\MousePick.h" />
     <ClInclude Include="postprocess\outline.h" />
     <ClInclude Include="skybox\Skybox.h" />
     <ClInclude Include="gridPlane\GridPlane.h" />
+    <ClInclude Include="gizmos\ImGuizmo.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

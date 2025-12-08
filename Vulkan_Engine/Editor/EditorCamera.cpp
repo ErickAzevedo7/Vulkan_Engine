@@ -176,6 +176,8 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
       currentGizmoOperation = ImGuizmo::ROTATE;
     if (ImGui::IsKeyPressed(ImGuiKey_R))
       currentGizmoOperation = ImGuizmo::SCALE;
+    if (ImGui::IsKeyPressed(ImGuiKey_T))
+      currentGizmoOperation = ImGuizmo::BOUNDS;
   }
 }
 
@@ -204,8 +206,6 @@ void EditorCamera::drawGuizmo() {
     // Set the ImGuizmo rect to match your viewport
     ImGuizmo::SetRect(viewportScreenPos.x, viewportScreenPos.y,
                       viewportScreenSize.x, viewportScreenSize.y);
-
-    std::cout << currentGizmoOperation << std::endl;
 
     // Manipulate
     if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj),

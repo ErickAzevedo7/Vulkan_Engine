@@ -32,6 +32,8 @@ class VulkanEngine {
     editorCamera.init(&engineCore);
     SceneManager::loadDefaults();
     init();
+
+    changeImGuizmoStyle();
     mainLoop();
 
     outline.cleanup();
@@ -532,6 +534,13 @@ class VulkanEngine {
   }
 
   void inputProcess() { editorCamera.inputProcess(mousePick); }
+
+  void changeImGuizmoStyle() {
+    ImGuizmo::Style& style = ImGuizmo::GetStyle();
+    style.HatchedAxisLineThickness = 0.0f;
+    style.CenterCircleSize = 7.0f;
+    ImGuizmo::AllowAxisFlip(false);
+  }
 };
 
 int main() {

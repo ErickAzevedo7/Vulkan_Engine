@@ -10,6 +10,7 @@
         "vulkan-binding"
       ]
     },
-    "imguizmo"
+    "imguizmo",
+    "glfw3"
   ]
 }
