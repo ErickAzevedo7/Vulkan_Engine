@@ -10,6 +10,10 @@
         "vulkan-binding"
       ]
     },
-    "glfw3"
+    "glfw3",
+    "stb",
+    "tinyobjloader",
+    "glm",
+    "vulkan"
   ]
 }

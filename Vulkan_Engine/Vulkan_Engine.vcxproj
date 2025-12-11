@@ -107,13 +107,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
