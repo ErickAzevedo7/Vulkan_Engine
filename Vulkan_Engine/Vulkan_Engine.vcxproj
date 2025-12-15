@@ -198,8 +198,7 @@
     <None Include="shaders\vert.spv" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="textures\texture.jpg" />
-    <Image Include="textures\viking_room.png" />
+    <Image Include="textures\texture.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -5,7 +5,7 @@ std::unordered_map<std::string, Texture> TextureManager::textures;
 
 void TextureManager::loadDefaults() {
   Texture* texture =
-      loadTexture("textures/texture.jpg", VulkanCore::getDevice(),
+      loadTexture("textures/texture.png", VulkanCore::getDevice(),
                   VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
                   VulkanCore::getGraphicsQueue());
   createTextureImageView(texture);

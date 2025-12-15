@@ -66,7 +66,6 @@
     <None Include="shaders\gridplane.frag" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="textures\texture.jpg" />
-    <Image Include="textures\viking_room.png" />
+    <Image Include="textures\texture.png" />
   </ItemGroup>
 </Project>

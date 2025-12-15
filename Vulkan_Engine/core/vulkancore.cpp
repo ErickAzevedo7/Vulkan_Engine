@@ -101,7 +101,6 @@ void VulkanCore::initVulkan() {
   createGraphicsPipeline();
   createCommandPool();
   createTextureSampler();
-  loadModel();
   createUniformBuffers();
   createCommandBuffers();
   createSyncObjects();
