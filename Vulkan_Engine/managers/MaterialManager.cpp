@@ -20,6 +20,10 @@ Material* MaterialManager::getMaterial(const std::string& name) {
   }
 }
 
+const std::unordered_map<std::string, Material*>& MaterialManager::getAllMaterials() {
+  return materials;
+}
+
 void MaterialManager::cleanup() {
   for (auto& pair : materials) {
     delete pair.second;

@@ -1,4 +1,6 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
+#define fontPath "C:\\Windows\\Fonts\\segoeuisl.ttf" // Windows UI font
+
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
 #include "Editor/ViewPort.h"
@@ -9,6 +11,7 @@
 #include "imgui_impl_vulkan.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
+#include "ui/AssetBrowser.h"
 #include "ui/SceneUi.h"
 
 // GLOBAL VARIABLES
@@ -185,7 +188,7 @@ class VulkanEngine {
       ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
 
       ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-      ImGui::DockSpaceOverViewport(dockspaceFlags);
+      ImGui::DockSpaceOverViewport(0, nullptr, dockspaceFlags);
       ImGui::PopStyleVar();
     	
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
@@ -227,8 +230,7 @@ class VulkanEngine {
 
       SceneUi::render();
 
-      ImGui::Begin("Assets");
-      ImGui::End();
+      AssetBrowser::render();
 
       if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("Entities")) {
@@ -311,6 +313,22 @@ class VulkanEngine {
         ImGuiConfigFlags_DockingEnable;  // IF using Docking Branch
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
+    FILE* f = nullptr;
+    if (fopen_s(&f, fontPath, "rb") != 0 || !f) {
+      io.Fonts->AddFontDefault();
+    } else {
+      fclose(f);
+
+      ImFontConfig fontCfg;
+      fontCfg.SizePixels = 16.0f;
+
+      io.Fonts->AddFontFromFileTTF(
+          fontPath, fontCfg.SizePixels, &fontCfg,
+          io.Fonts->GetGlyphRangesDefault() 
+      );
+    }
+
+
 		ImGuiStyle& style = ImGui::GetStyle();
     ImVec4* colors = style.Colors;
 
@@ -353,8 +371,7 @@ class VulkanEngine {
     colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.13f, 0.78f, 0.07f, 1.00f);
     colors[ImGuiCol_TabDimmed] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
     colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
-    colors[ImGuiCol_TabDimmedSelectedOverline] =
-        ImVec4(0.10f, 0.60f, 0.12f, 1.00f);
+    //colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.10f, 0.60f, 0.12f, 1.00f);
     colors[ImGuiCol_DockingPreview] = ImVec4(0.26f, 0.59f, 0.98f, 0.70f);
     colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
     colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
@@ -378,7 +395,7 @@ class VulkanEngine {
     style.FrameRounding = 4.0f;
     style.GrabRounding = 3.0f;
     style.PopupRounding = 4.0f;
-    style.TabRounding = 4.0f;
+    style.TabRounding = 2.0f;
     style.WindowMenuButtonPosition = ImGuiDir_Right;
     style.ScrollbarSize = 10.0f;
     style.GrabMinSize = 10.0f;
