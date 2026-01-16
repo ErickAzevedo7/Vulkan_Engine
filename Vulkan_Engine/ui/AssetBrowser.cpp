@@ -1,4 +1,5 @@
 #include "AssetBrowser.h"
+#include "InspectorUi.h"
 
 // initialize static members
 bool AssetBrowser::firstFrame = true;
@@ -7,8 +8,6 @@ FileIcon AssetBrowser::defaultFileIcon;
 FileIcon AssetBrowser::textureFileIcon;
 FileIcon AssetBrowser::meshFileIcon;
 FileIcon AssetBrowser::folderIcon;
-int AssetBrowser::selectedItemIndex = -1;
-std::string AssetBrowser::selectedAssetPath = "";
 FolderNode AssetBrowser::s_RootFolder;
 bool AssetBrowser::s_FolderTreeInitialized = false;
 std::string AssetBrowser::s_SelectedFolderPath;
@@ -191,7 +190,7 @@ void AssetBrowser::ScanCurrentFolderContents() {
 			ImVec2 cursor = ImGui::GetCursorScreenPos();
 			ImVec2 size(itemWidth, itemHeight);
 
-			bool selected = (itemIndex == AssetBrowser::selectedItemIndex);
+      bool selected = false;  // visual selection handled by InspectorUi
 
 			if (selected) {
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -244,10 +243,10 @@ void AssetBrowser::ScanCurrentFolderContents() {
 
 			const ImGuiSelectableFlags flags = ImGuiSelectableFlags_AllowDoubleClick;
 
-			if (ImGui::Selectable("##AssetTile", selected,
-			                      flags, size)) {
-				AssetBrowser::selectedItemIndex = itemIndex;
-				AssetBrowser::selectedAssetPath = fe.fullPath;
+            if (ImGui::Selectable("##AssetTile", selected,
+                                  flags, size)) {
+				// Let inspector know this asset is now the active selection
+				InspectorUi::selectAsset(fe.fullPath);
 
 				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 					if (fe.isDirectory) {

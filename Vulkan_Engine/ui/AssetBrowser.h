@@ -52,8 +52,6 @@ class AssetBrowser {
 
  public:
   static const FileIcon& GetIconForEntry(const FileEntry& fe);
-  static int selectedItemIndex;
-  static std::string selectedAssetPath;
 	static void render();
 
 

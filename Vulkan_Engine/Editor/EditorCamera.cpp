@@ -3,6 +3,7 @@
 #include "Entity.h"
 #include "components/Transform.h"
 #include "managers/SceneManager.h"
+#include "ui/InspectorUi.h"
 
 // initialize static variables
 glm::vec3 EditorCamera::cameraPos = glm::vec3(0.0f, 1.0f, 3.0f);
@@ -127,8 +128,12 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
   }
 
   if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0)) {
-    ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
+    // If gizmo is hovered or being used, do not change selection
+    if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) {
+      return;
+    }
 
+    ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
     ImVec2 mouseScreenPos = ImGui::GetIO().MousePos;
 
     ImVec2 mouseInViewport = ImVec2(mouseScreenPos.x - viewportScreenPos.x,
@@ -140,7 +145,7 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
       id = -1;
 
     if (id >= 0) {
-      SceneUi::selectedEntity = id;
+      InspectorUi::selectEntity(id);
     }
   }
 
@@ -183,45 +188,59 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 
 void EditorCamera::drawGuizmo() {
   Scene* scene = SceneManager::getActiveScene();
-  std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
-  if (SceneUi::selectedEntity > 0 &&
-      SceneUi::selectedEntity <= static_cast<int>(entities->size())) {
-    Entity& entity = scene->getEntity(SceneUi::selectedEntity);
-    auto* transform = entity.getComponent<Transform>();
+  if (!scene) return;
 
-    // Get matrices (replace with your actual camera access)
-    glm::mat4 view = viewMatrix;
-    glm::mat4 proj = projMatrix;
-    glm::mat4 model = transform->getMatrix();
+  auto* entities = scene->getEntities();
+  if (!entities || entities->empty()) return;
 
-    proj[1][1] *= -1;  // Invert Y for ImGuizmo
+  const int selectedId = InspectorUi::getSelectedEntityId();
+  if (selectedId <= 0) return;
 
-    // Set up ImGuizmo
-    ImGuizmo::SetOrthographic(false);  // Set true if using orthographic camera
-    ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
-
-    ImVec2 viewportScreenSize = ImGui::GetWindowSize();
-    ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
-
-    // Set the ImGuizmo rect to match your viewport
-    ImGuizmo::SetRect(viewportScreenPos.x, viewportScreenPos.y,
-                      viewportScreenSize.x, viewportScreenSize.y);
-
-    // Manipulate
-    if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj),
-                             currentGizmoOperation, ImGuizmo::LOCAL,
-                             glm::value_ptr(model))) {
-      // If the gizmo is used, decompose the matrix back to
-      // position/rotation/scale
-      glm::vec3 translation, scale, skew;
-      glm::vec4 perspective;
-      glm::quat rotation;
-      glm::decompose(model, scale, rotation, translation, skew, perspective);
-
-      transform->position = translation;
-      transform->rotation = rotation;
-      transform->scale = scale;
+  // Resolve selected entity by its ID, not by index
+  Entity* selectedEntity = nullptr;
+  for (const auto& ePtr : *entities) {
+    if (static_cast<int>(ePtr->getID()) == selectedId) {
+      selectedEntity = ePtr.get();
+      break;
     }
+  }
+  if (!selectedEntity) return;
+
+  auto* transform = selectedEntity->getComponent<Transform>();
+  if (!transform) return;
+
+  // Get matrices
+  glm::mat4 view = viewMatrix;
+  glm::mat4 proj = projMatrix;
+  glm::mat4 model = transform->getMatrix();
+
+  proj[1][1] *= -1;  // Invert Y for ImGuizmo
+
+  // Set up ImGuizmo
+  ImGuizmo::SetOrthographic(false);  // Set true if using orthographic camera
+  ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+
+  ImVec2 viewportScreenSize = ImGui::GetWindowSize();
+  ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
+
+  // Set the ImGuizmo rect to match your viewport
+  ImGuizmo::SetRect(viewportScreenPos.x, viewportScreenPos.y,
+                    viewportScreenSize.x, viewportScreenSize.y);
+
+  // Manipulate
+  if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj),
+                           currentGizmoOperation, ImGuizmo::LOCAL,
+                           glm::value_ptr(model))) {
+    // If the gizmo is used, decompose the matrix back to
+    // position/rotation/scale
+    glm::vec3 translation, scale, skew;
+    glm::vec4 perspective;
+    glm::quat rotation;
+    glm::decompose(model, scale, rotation, translation, skew, perspective);
+
+    transform->position = translation;
+    transform->rotation = rotation;
+    transform->scale = scale;
   }
 }
 

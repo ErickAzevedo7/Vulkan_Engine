@@ -31,6 +31,7 @@
     <ClCompile Include="external\imgui\imgui_impl_vulkan.cpp" />
     <ClCompile Include="external\imgui\imgui_tables.cpp" />
     <ClCompile Include="external\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="ui\InspectorUi.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -62,6 +63,7 @@
     <ClInclude Include="external\imgui\imgui_internal.h" />
     <ClInclude Include="external\imgui\imstb_rectpack.h" />
     <ClInclude Include="external\imgui\imstb_textedit.h" />
+    <ClInclude Include="ui\InspectorUi.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

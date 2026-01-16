@@ -13,6 +13,7 @@
 #include "postprocess/outline.h"
 #include "ui/AssetBrowser.h"
 #include "ui/SceneUi.h"
+#include "ui/InspectorUi.h"
 
 // GLOBAL VARIABLES
 float deltaTime = 0.0f;  // Time between current frame and last frame
@@ -229,6 +230,8 @@ class VulkanEngine {
       ImGui::PopStyleVar(2);
 
       SceneUi::render();
+
+      InspectorUi::render();
 
       AssetBrowser::render();
 

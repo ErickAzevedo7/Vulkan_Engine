@@ -1,42 +1,36 @@
 #include "SceneUi.h"
 
-int SceneUi::selectedEntity = 0;
+#include <cstring>
+#include <string>
+
+#include "Entity.h"
+#include "imgui.h"
+#include "ui/InspectorUi.h"
 
 void SceneUi::render() {
-  auto* scene = SceneManager::getActiveScene();
-  const auto& entities = scene->getEntities();
+  Scene* scene = SceneManager::getActiveScene();
 
   ImGui::Begin("scene");
   if (scene) {
+    const int selectedId = InspectorUi::getSelectedEntityId();
+
     for (size_t i = 1; i <= scene->getEntityCount(); ++i) {
       Entity& entity = scene->getEntity(i);
-
-      if (selectedEntity == 0) {
-        entity.isSelected = false;
-      } else if (selectedEntity == static_cast<int>(entity.getID())) {
-        entity.isSelected = true;
-      } else {
-        entity.isSelected = false;
-      }
 
       std::string label = entity.getName().empty()
                               ? ("Entity " + std::to_string(i))
                               : entity.getName();
 
-      // Selectable entity
-      if (ImGui::Selectable(
-              label.c_str(),
-              selectedEntity == static_cast<int>(entity.getID()))) {
-        selectedEntity = static_cast<int>(entity.getID());
-        entity.isSelected = true;
+      const int thisId = static_cast<int>(entity.getID());
+      bool isSelected = (selectedId == thisId);
+      if (ImGui::Selectable(label.c_str(), isSelected)) {
+        InspectorUi::selectEntity(thisId);
       }
 
       // Right-click context menu for each entity
       if (ImGui::BeginPopupContextItem()) {
         if (ImGui::MenuItem("Remove")) {
           scene->removeEntity(i);
-          if (selectedEntity == static_cast<int>(entity.getID()))
-            selectedEntity = 0;
           ImGui::EndPopup();
           break;  // Entities list changed, break out of loop
         }
@@ -44,53 +38,9 @@ void SceneUi::render() {
       }
     }
 
-    // If an entity is selected, show editing options
-    if (selectedEntity > 0 &&
-        selectedEntity <= static_cast<int>(scene->getEntityCount())) {
-      ImGui::Separator();
-      Entity& entity = scene->getEntity(selectedEntity);
-      char nameBuffer[128];
-      strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
-      nameBuffer[sizeof(nameBuffer) - 1] = 0;
-      // Add more component editing here as needed
-    }
+    // SceneUi no longer owns selection or per-entity editing
   } else {
     ImGui::Text("No active scene.");
-  }
-  ImGui::End();
-  // --- Inspector Window ---
-  ImGui::Begin("Inspector");
-  if (selectedEntity > 0 &&
-      selectedEntity <= static_cast<int>(entities->size())) {
-    Entity& entity = scene->getEntity(selectedEntity);
-    char nameBuffer[256];
-    strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
-    nameBuffer[sizeof(nameBuffer) - 1] = 0;
-    if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
-      entity.setName(nameBuffer);
-    }
-
-    // --- TransformComponent Editing ---
-    // if (entity.hasComponent<TransformComponent>()) {
-    auto* transform = entity.getComponent<Transform>();
-    ImGui::Separator();
-    ImGui::Text("Transform");
-
-    // Position
-    ImGui::DragFloat3("Position", &transform->position.x, 0.1f);
-
-    // Rotation
-    glm::vec3 euler = glm::degrees(glm::eulerAngles(transform->rotation));
-    if (ImGui::DragFloat3("Rotation", &euler.x, 0.5f)) {
-      // Convert back to quaternion (expects radians)
-      transform->rotation = glm::quat(glm::radians(euler));
-    }
-
-    // Scale
-    ImGui::DragFloat3("Scale", &transform->scale.x, 0.1f);
-    //}
-  } else {
-    ImGui::Text("No entity selected.");
   }
   ImGui::End();
 }

@@ -164,6 +164,7 @@
     <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="skybox\Skybox.cpp" />
     <ClCompile Include="gizmos\ImGuizmo.cpp" />
+    <ClCompile Include="ui\InspectorUi.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="Editor\ViewPort.cpp" />
@@ -195,6 +196,7 @@
     <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="skybox\Skybox.h" />
     <ClInclude Include="gizmos\ImGuizmo.h" />
+    <ClInclude Include="ui\InspectorUi.h" />
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="managers\SceneManager.h" />
     <ClInclude Include="Editor\ViewPort.h" />
