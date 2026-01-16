@@ -34,6 +34,7 @@ class InspectorUi {
 
   // Query helpers
   static int getSelectedEntityId();  // returns -1 if no entity selected
+  static const std::string& getSelectedAssetPath();
 
  private:
   static InspectorSelection selection;

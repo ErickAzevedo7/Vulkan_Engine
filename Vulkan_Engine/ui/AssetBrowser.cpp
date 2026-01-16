@@ -190,7 +190,8 @@ void AssetBrowser::ScanCurrentFolderContents() {
 			ImVec2 cursor = ImGui::GetCursorScreenPos();
 			ImVec2 size(itemWidth, itemHeight);
 
-      bool selected = false;  // visual selection handled by InspectorUi
+	      const std::string& selectedAssetPath = InspectorUi::getSelectedAssetPath();
+	      bool selected = (selectedAssetPath == fe.fullPath);
 
 			if (selected) {
 				ImDrawList* drawList = ImGui::GetWindowDrawList();

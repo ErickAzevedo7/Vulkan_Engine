@@ -65,6 +65,10 @@ int InspectorUi::getSelectedEntityId() {
   return -1;
 }
 
+const std::string& InspectorUi::getSelectedAssetPath() {
+	return selection.assetPath;
+}
+
 void InspectorUi::render() {
   Scene* scene = SceneManager::getActiveScene();
 
