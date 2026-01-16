@@ -29,9 +29,13 @@ class MousePick {
   VulkanCore* engineCore;
   VkRenderPass mousePickRenderPass;
   std::vector<VkFramebuffer> mousePickFramebuffers;
+	VkImage depthImage;
+	VkDeviceMemory depthImageMemory;
+	VkImageView depthImageView;
 	
   void createMousePickImage();
   void createMousePickImageViews();
+  void createDepthResources();
   void createMousePickRenderPass();
   void createMousePickFramebuffers();
   void createMousePickCommandBuffers();

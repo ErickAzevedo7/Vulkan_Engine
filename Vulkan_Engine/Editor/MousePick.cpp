@@ -8,6 +8,8 @@ void MousePick::init(VulkanCore* core) {
 
   createMousePickImageViews();
 
+  createDepthResources();
+
   mousePickCommandBuffers.resize(mousePickImageViews.size());
 
   VkCommandBufferAllocateInfo allocInfo{};
@@ -48,6 +50,10 @@ void MousePick::cleanupFramebuffers() {
   for (auto memory : mousePickImageMemory) {
     vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
   }
+
+	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
+	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
+	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
 }
 
 void MousePick::recreateMousePick() {
@@ -57,6 +63,7 @@ void MousePick::recreateMousePick() {
   cleanupFramebuffers();
   createMousePickImage();
   createMousePickImageViews();
+  createDepthResources();
   createMousePickFramebuffers();
 }
 
@@ -78,6 +85,10 @@ void MousePick::cleanup() {
   for (auto memory : mousePickImageMemory) {
     vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
   }
+
+	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
+	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
+	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
 
   vkDestroyRenderPass(VulkanCore::getDevice(), mousePickRenderPass, nullptr);
 
@@ -187,6 +198,24 @@ void MousePick::createMousePickImageViews() {
   }
 }
 
+void MousePick::createDepthResources() {
+	VkFormat depthFormat = engineCore->findDepthFormat();
+
+	Utils::createImage(
+		mousePickExtent.width, mousePickExtent.height, 1,
+    VK_SAMPLE_COUNT_1_BIT, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage,
+		depthImageMemory);
+	depthImageView = Utils::createImageView(depthImage, depthFormat,
+		VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+
+	Utils::transitionImageLayout(
+		depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1,
+		VulkanCore::getCommandPool());
+}
+
 void MousePick::createMousePickRenderPass() {
   VkAttachmentDescription colorAttachment{};
   colorAttachment.format = VK_FORMAT_B8G8R8A8_UNORM;
@@ -198,14 +227,29 @@ void MousePick::createMousePickRenderPass() {
   colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+	VkAttachmentDescription depthAttachment{};
+	depthAttachment.format = engineCore->findDepthFormat();
+	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
   VkAttachmentReference colorAttachmentRef{};
   colorAttachmentRef.attachment = 0;
   colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthAttachmentRef{};
+	depthAttachmentRef.attachment = 1;
+	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
   VkSubpassDescription subpass{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colorAttachmentRef;
+	subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
   VkSubpassDependency dependency{};
   dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -219,10 +263,12 @@ void MousePick::createMousePickRenderPass() {
   dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
+  std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+
   VkRenderPassCreateInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  renderPassInfo.attachmentCount = 1;
-  renderPassInfo.pAttachments = &colorAttachment;
+  renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+  renderPassInfo.pAttachments = attachments.data();
   renderPassInfo.subpassCount = 1;
   renderPassInfo.pSubpasses = &subpass;
   renderPassInfo.dependencyCount = 1;
@@ -238,13 +284,13 @@ void MousePick::createMousePickFramebuffers() {
   mousePickFramebuffers.resize(mousePickImageViews.size());
 
   for (size_t i = 0; i < mousePickImageViews.size(); i++) {
-    VkImageView attachment = mousePickImageViews[i];
+    std::array<VkImageView, 2> attachments = {mousePickImageViews[i], depthImageView};
 
     VkFramebufferCreateInfo framebufferInfo{};
     framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     framebufferInfo.renderPass = mousePickRenderPass;
-    framebufferInfo.attachmentCount = 1;
-    framebufferInfo.pAttachments = &attachment;
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
     framebufferInfo.width = mousePickExtent.width;
     framebufferInfo.height = mousePickExtent.height;
     framebufferInfo.layers = 1;
@@ -276,10 +322,14 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer,
   renderPassInfo.renderArea.offset = {0, 0};
   renderPassInfo.renderArea.extent = mousePickExtent;
 
-  std::array<VkClearValue, 1> clearValues{};
+  std::array<VkClearValue, 2> clearValues{};
+  // Clear color attachment to transparent black (no entity)
   clearValues[0].color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+  // Clear depth to far plane so closest fragments pass depth test
+  clearValues[1].depthStencil.depth = 1.0f;
+  clearValues[1].depthStencil.stencil = 0;
 
-  renderPassInfo.clearValueCount = 1;
+  renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
   renderPassInfo.pClearValues = clearValues.data();
 
   vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
