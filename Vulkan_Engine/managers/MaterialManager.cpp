@@ -31,6 +31,56 @@ const std::unordered_map<std::string, Material*>& MaterialManager::getAllMateria
   return materials;
 }
 
+Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		return nullptr;
+	}
+
+	try {
+		nlohmann::json j;
+		file >> j;
+		file.close();
+
+		if (!j.contains("name") || !j.contains("albedoTextureKey")) {
+			return nullptr;
+		}
+
+		std::string name = j["name"].get<std::string>();
+		std::string albedoKey = j["albedoTextureKey"].get<std::string>();
+
+		if (name.empty() || albedoKey.empty()) {
+			return nullptr;
+		}
+
+		// If already loaded, just return existing
+		Material* existing = getMaterial(name);
+		if (existing) {
+			return existing;
+		}
+
+		return createMaterial(name, albedoKey);
+	} catch (...) {
+		return nullptr;
+	}
+}
+
+void MaterialManager::saveMaterialToFile(const std::string& path,
+	                                       const std::string& name,
+	                                       const std::string& albedoTextureKey) {
+	std::ofstream file(path, std::ios::trunc);
+	if (!file.is_open()) {
+		return;
+	}
+
+	nlohmann::json j;
+	j["name"] = name;
+	j["albedoTextureKey"] = albedoTextureKey;
+
+	file << j.dump(4) << std::endl;
+	file.close();
+}
+
 void MaterialManager::cleanup() {
   for (auto& pair : materials) {
     delete pair.second;

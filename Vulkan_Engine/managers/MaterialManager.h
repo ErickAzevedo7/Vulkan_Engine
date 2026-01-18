@@ -1,5 +1,7 @@
 #pragma once
 #include "managers/TextureManager.h"
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 struct Material {
 	std::string name;
@@ -15,6 +17,12 @@ public:
 	                                const std::string& albedoTexturePath);
 	static Material* getMaterial(const std::string& name);
 	static const std::unordered_map<std::string, Material*>& getAllMaterials();
+
+	// TXT-based material asset IO (very simple key=value format)
+	static Material* loadMaterialFromFile(const std::string& path);
+	static void saveMaterialToFile(const std::string& path,
+	                               const std::string& name,
+	                               const std::string& albedoTextureKey = "default");
 	static void cleanup();
 
 private:

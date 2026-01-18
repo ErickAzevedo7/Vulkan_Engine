@@ -6,6 +6,8 @@
 #include <imgui_internal.h>
 #include <filesystem>
 #include <unordered_map>
+//#include <algorithm>
+#include "InspectorUi.h"
 
 struct FileIcon {
   Texture* texture = nullptr;
@@ -51,7 +53,7 @@ class AssetBrowser {
   static void DrawSidebar();
   static bool PassesFilter(const char* name, const char* filter);
   static void DrawFolderContents(const char* fileFilter);
-	static const ThumbnailTexture* GetThumbnailForEntry(const FileEntry& fe);
+	static const ThumbnailTexture* getThumbnailForEntry(const FileEntry& fe);
 
  public:
   static const FileIcon& GetIconForEntry(const FileEntry& fe);

@@ -1,5 +1,4 @@
 #include "AssetBrowser.h"
-#include "InspectorUi.h"
 
 // initialize static members
 bool AssetBrowser::firstFrame = true;
@@ -15,7 +14,7 @@ std::vector<FileEntry> AssetBrowser::currentFolderEntries;
 char AssetBrowser::fileFilter[128] = "";
 std::unordered_map<std::string, VkDescriptorSet> AssetBrowser::thumbnailDescriptorSets;
 
-std::string TruncateText(const std::string& p_text, float p_truncated_width) {
+std::string truncateText(const std::string& p_text, float p_truncated_width) {
 	std::string truncated_text = p_text;
 
 	const float text_width = ImGui::CalcTextSize(p_text.c_str(), nullptr, true).x;
@@ -166,14 +165,38 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 	float totalWidth = ImGui::GetContentRegionAvail().x;
 	int columns =
 		static_cast<int>(totalWidth / (itemWidth + cellPadding));
-	if (columns < 1) {
-		columns = 1;
-	}
+	columns = std::max(columns, 1);
 
 	int index = 0;
 	ImGui::BeginChild(
 		"FolderContentGrid",
 		ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2), false);
+
+	// Context menu (right-click) for current folder over the whole content area
+  if (ImGui::BeginPopupContextWindow("AssetBrowserFolderContext",
+                                      ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+    if (ImGui::MenuItem("Create Material")) {
+      std::string baseName = "NewMaterial";
+      std::string newPath;
+      int index = 0;
+      while (true) {
+        std::string fileName = baseName;
+        if (index > 0) {
+          fileName += "_" + std::to_string(index);
+        }
+        fileName += ".mat";
+        newPath = selectedFolderPath + "/" + fileName;
+        if (!std::filesystem::exists(newPath)) {
+          break;
+        }
+        ++index;
+      }
+
+      MaterialManager::saveMaterialToFile(newPath, baseName);
+      ScanCurrentFolderContents();
+    }
+    ImGui::EndPopup();
+  }
 
 	int itemIndex = 0;
 	for (const FileEntry& fe : currentFolderEntries) {
@@ -213,14 +236,15 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 
 		{
 			// Prefer real thumbnail texture if this is an image file already loaded
-			const ThumbnailTexture* thumbTex = GetThumbnailForEntry(fe);
+			const ThumbnailTexture* thumbTex = getThumbnailForEntry(fe);
 			if (thumbTex && thumbTex->imageView != VK_NULL_HANDLE &&
 				thumbTex->sampler != VK_NULL_HANDLE) {
 				VkDescriptorSet thumbSet = VK_NULL_HANDLE;
 				auto it = thumbnailDescriptorSets.find(fe.fullPath);
 				if (it != thumbnailDescriptorSets.end()) {
 					thumbSet = it->second;
-				} else {
+				}
+				else {
 					thumbSet = ImGui_ImplVulkan_AddTexture(
 						thumbTex->sampler, thumbTex->imageView,
 						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -228,7 +252,8 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 				}
 				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet),
 				             ImVec2(iconSize, iconSize));
-			} else {
+			}
+			else {
 				const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
 				if (icon.imguiTexture != VK_NULL_HANDLE) {
 					ImGui::Image(reinterpret_cast<ImTextureID>(icon.imguiTexture),
@@ -246,7 +271,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 
 		const float textWidth = size.x - 8.0f;
 		const std::string truncated =
-			TruncateText(fe.name.c_str(), textWidth);
+			truncateText(fe.name.c_str(), textWidth);
 		ImGui::TextUnformatted(truncated.c_str());
 
 		ImGui::SetCursorScreenPos(cursor);
@@ -273,7 +298,24 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 					ScanCurrentFolderContents();
 				}
 				else {
-					// TODO: open asset
+					// Open material assets when double-clicking .mat files
+					std::string ext;
+					const size_t dotPos = fe.name.find_last_of('.');
+					if (dotPos != std::string::npos && dotPos + 1 < fe.name.size()) {
+						ext = fe.name.substr(dotPos + 1);
+						for (char& c : ext) {
+							c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+						}
+					}
+
+					if (ext == "mat") {
+						Material* material = MaterialManager::loadMaterialFromFile(fe.fullPath);
+						if (material) {
+							// Here you can add a dedicated Inspector selection for materials
+							// For now we just select the asset path so user sees it in Inspector
+							InspectorUi::selectAsset(fe.fullPath);
+						}
+					}
 				}
 			}
 		}
@@ -360,7 +402,7 @@ const FileIcon& AssetBrowser::GetIconForEntry(const FileEntry& fe) {
 	return defaultFileIcon;
 }
 
-const ThumbnailTexture* AssetBrowser::GetThumbnailForEntry(const FileEntry& fe) {
+const ThumbnailTexture* AssetBrowser::getThumbnailForEntry(const FileEntry& fe) {
 	if (fe.isDirectory) {
 		return nullptr;
 	}
@@ -417,8 +459,8 @@ void AssetBrowser::render() {
 	DrawSidebar();
 
 	ImGui::NextColumn();
-
 	ImGui::BeginChild("AssetMainPanel", ImVec2(0.0f, 0.0f), false);
+
 	DrawFolderContents(fileFilter);
 
 	ImGui::EndChild();
