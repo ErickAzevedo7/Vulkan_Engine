@@ -6,6 +6,7 @@
 
 #include "Entity.h"
 #include "components/Transform.h"
+#include "components/MeshComponent.h"
 #include "imgui.h"
 #include "managers/SceneManager.h"
 #include "ui/AssetBrowser.h"
@@ -23,6 +24,13 @@ struct InspectorSelection {
   std::string assetPath;     // valid only if type == Asset
 };
 
+// When selecting an asset we may be "picking" something for the inspector
+// rather than just inspecting the asset itself.
+enum class InspectorPickTarget {
+	None,
+	MeshAlbedo
+};
+
 class InspectorUi {
  public:
   // Selection control API
@@ -38,4 +46,5 @@ class InspectorUi {
 
  private:
   static InspectorSelection selection;
+  static InspectorPickTarget pickTarget;
 };

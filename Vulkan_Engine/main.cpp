@@ -26,6 +26,7 @@ class VulkanEngine {
     engineCore.initWindow();
     engineCore.initVulkan();
     TextureManager::loadDefaults();
+	  TextureManager::loadAllFromAssets("assets");
     MaterialManager::init();
     MaterialManager::loadDefault();
     SceneRenderer::init(&engineCore);

@@ -5,6 +5,7 @@
 #include "imgui_impl_vulkan.h"
 #include <imgui_internal.h>
 #include <filesystem>
+#include <unordered_map>
 
 struct FileIcon {
   Texture* texture = nullptr;
@@ -33,11 +34,12 @@ class AssetBrowser {
   static bool iconsInitialized;
   static bool firstFrame;
 
-  static FolderNode s_RootFolder;
-  static bool s_FolderTreeInitialized;
-  static std::string s_SelectedFolderPath;
-  static std::vector<FileEntry> s_CurrentFolderEntries;
-  static char s_FileFilter[128];
+  static FolderNode rootFolder;
+  static bool folderTreeInitialized;
+  static std::string selectedFolderPath;
+  static std::vector<FileEntry> currentFolderEntries;
+  static char fileFilter[128];
+	static std::unordered_map<std::string, VkDescriptorSet> thumbnailDescriptorSets;
 
   static constexpr const char* kAssetsRootPath = "assets";
 
@@ -49,6 +51,7 @@ class AssetBrowser {
   static void DrawSidebar();
   static bool PassesFilter(const char* name, const char* filter);
   static void DrawFolderContents(const char* fileFilter);
+	static const ThumbnailTexture* GetThumbnailForEntry(const FileEntry& fe);
 
  public:
   static const FileIcon& GetIconForEntry(const FileEntry& fe);

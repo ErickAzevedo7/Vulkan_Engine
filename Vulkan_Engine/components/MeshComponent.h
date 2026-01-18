@@ -17,6 +17,10 @@ class MeshComponent : public Component {
   Mesh* GetMesh() const;
   Entity* GetOwner() const;
 
+	// Accessors for the material so the inspector can change it
+	Material* GetMaterial() const { return material; }
+	void SetMaterial(Material* m) { if (m) material = m; }
+
  private:
   Entity* owner;
   Mesh* mesh;
