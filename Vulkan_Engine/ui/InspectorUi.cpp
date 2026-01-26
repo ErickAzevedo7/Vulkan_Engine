@@ -41,7 +41,7 @@ void InspectorUi::selectEntity(int entityId) {
 		Entity& e = *ePtr;
 		e.isSelected = (static_cast<int>(e.getID()) == entityId);
 	}
-}
+			}
 
 void InspectorUi::selectAsset(const std::string& assetPath) {
 	// Decide selection type based on asset extension
@@ -72,51 +72,61 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 		ePtr->isSelected = false;
 	}
 
-	// If we are currently picking something for the inspector, apply it now.
-	if (pickTarget != InspectorPickTarget::None) {
-		const int selectedId = getSelectedEntityId();
-		if (selectedId > 0 && scene &&
-			selectedId <= static_cast<int>(scene->getEntityCount())) {
-			Entity& entity = scene->getEntity(static_cast<size_t>(selectedId));
-			if (pickTarget == InspectorPickTarget::MeshAlbedo) {
-				auto* meshComp = entity.getComponent<MeshComponent>();
-				if (meshComp) {
-					// Derive a logical name for the texture/material from the asset path
-					std::filesystem::path p(assetPath);
-					std::string stem = p.stem().string();
+    // If we are currently picking something for the inspector, apply it now.
+    if (pickTarget != InspectorPickTarget::None) {
+        const int selectedId = getSelectedEntityId();
+        if (selectedId > 0 && scene) {
+            Entity* entityPtr = nullptr;
+            auto* entities = scene->getEntities();
+            if (entities) {
+                for (const auto& ePtr : *entities) {
+                    if (static_cast<int>(ePtr->getID()) == selectedId) {
+                        entityPtr = ePtr.get();
+                        break;
+                    }
+                }
+            }
 
-					Texture* tex = nullptr;
-					// Try to get existing texture first
-					try {
-						tex = TextureManager::getTexture(stem);
-					}
-					catch (...) {
-						// Load new texture and register it in the manager map
-						Texture* loaded = TextureManager::loadTexture(
-							assetPath, VulkanCore::getDevice(),
-							VulkanCore::getPhysicalDevice(),
-							VulkanCore::getCommandPool(),
-							VulkanCore::getGraphicsQueue());
-						TextureManager::createTextureImageView(loaded);
-						TextureManager::createTextureSampler(loaded);
-						TextureManager::registerTexture(stem, *loaded);
-						tex = TextureManager::getTexture(stem);
-					}
+            if (entityPtr && pickTarget == InspectorPickTarget::MeshAlbedo) {
+                Entity& entity = *entityPtr;
+                auto* meshComp = entity.getComponent<MeshComponent>();
+                if (meshComp) {
+                    // Derive a logical name for the texture/material from the asset path
+                    std::filesystem::path p(assetPath);
+                    std::string stem = p.stem().string();
 
-					// Create or reuse a material that uses this texture
-					Material* mat = MaterialManager::getMaterial(stem);
-					if (!mat) {
-						mat = MaterialManager::createMaterial(stem, stem);
-					}
+                    Texture* tex = nullptr;
+                    // Try to get existing texture first
+                    try {
+                        tex = TextureManager::getTexture(stem);
+                    }
+                    catch (...) {
+                        // Load new texture and register it in the manager map
+                        Texture* loaded = TextureManager::loadTexture(
+                            assetPath, VulkanCore::getDevice(),
+                            VulkanCore::getPhysicalDevice(),
+                            VulkanCore::getCommandPool(),
+                            VulkanCore::getGraphicsQueue());
+                        TextureManager::createTextureImageView(loaded);
+                        TextureManager::createTextureSampler(loaded);
+                        TextureManager::registerTexture(stem, *loaded);
+                        tex = TextureManager::getTexture(stem);
+                    }
 
-					meshComp->SetMaterial(mat);
-				}
-			}
-		}
+                    // Create or reuse a material that uses this texture
+                    Material* mat = MaterialManager::getMaterial(stem);
+                    if (!mat) {
+                        mat = MaterialManager::createMaterial(stem, stem);
+                    }
 
-		// Reset pick state after handling
-		pickTarget = InspectorPickTarget::None;
-	}
+                    meshComp->SetMaterial(mat);
+                }
+            }
+        }
+
+        // Reset pick state after handling
+        pickTarget = InspectorPickTarget::None;
+    }
 }
 
 void InspectorUi::clearSelection() {
@@ -134,7 +144,7 @@ void InspectorUi::clearSelection() {
 	for (const auto& ePtr : *entities) {
 		ePtr->isSelected = false;
 	}
-}
+			}
 
 int InspectorUi::getSelectedEntityId() {
 	if (selection.type == InspectorSelectionType::Entity) {
@@ -368,11 +378,28 @@ void InspectorUi::render() {
 
 	const float kHeaderContentTopPadding = 6.0f;
 
-	if (selection.type == InspectorSelectionType::Entity && scene &&
-		selection.entityId > 0 &&
-		selection.entityId <= static_cast<int>(scene->getEntityCount())) {
-		Entity& entity =
-			scene->getEntity(static_cast<size_t>(selection.entityId));
+    if (selection.type == InspectorSelectionType::Entity && scene &&
+        selection.entityId > 0) {
+    Entity* entityPtr = nullptr;
+    auto* entities = scene->getEntities();
+    if (entities) {
+      for (const auto& ePtr : *entities) {
+        if (static_cast<int>(ePtr->getID()) == selection.entityId) {
+          entityPtr = ePtr.get();
+          break;
+        }
+      }
+    }
+
+    if (!entityPtr) {
+      // Selected entity id not found in scene; clear selection
+      clearSelection();
+      ImGui::PopStyleVar();
+      ImGui::End();
+      return;
+    }
+
+    Entity& entity = *entityPtr;
 		char nameBuffer[256];
 		strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
 		nameBuffer[sizeof(nameBuffer) - 1] = 0;
