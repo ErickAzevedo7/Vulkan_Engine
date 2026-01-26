@@ -5,35 +5,74 @@ std::unordered_map<std::string, Material*> MaterialManager::materials;
 VkDescriptorPool MaterialManager::descriptorPool = VK_NULL_HANDLE;
 
 void MaterialManager::init() {
-  createDescriptorPool();
+	createDescriptorPool();
+	loadAllFromAssets();
 }
 
-void MaterialManager::loadDefault(){
-  createDescriptorSets("default", "default");
+void MaterialManager::loadDefault() {
+	createDescriptorSets("default", "default");
 }
 
 Material* MaterialManager::createMaterial(const std::string& name,
-	                                        const std::string& albedoTexturePath) {
-	// albedoTexturePath is interpreted as a TextureManager key
+                                          const std::string& albedoTexturePath,
+                                          const std::string& path) {
 	createDescriptorSets(albedoTexturePath, name);
-	return getMaterial(name);
+	Material* mat = getMaterial(name);
+	if (mat) {
+		if (!path.empty()) {
+			mat->filePath = path;
+		}
+	}
+	return mat;
 }
 
 Material* MaterialManager::getMaterial(const std::string& name) {
-  if (materials.find(name) != materials.end()) {
-    return materials[name];
-  } else {
-    return nullptr;
-  }
+	if (materials.find(name) != materials.end()) {
+		return materials[name];
+	}
+	else {
+		return nullptr;
+	}
 }
 
 const std::unordered_map<std::string, Material*>& MaterialManager::getAllMaterials() {
-  return materials;
+	return materials;
+}
+
+void MaterialManager::loadAllFromAssets() {
+	namespace fs = std::filesystem;
+	const fs::path materialsRoot = fs::path("assets");
+
+	if (!fs::exists(materialsRoot) || !fs::is_directory(materialsRoot)) {
+		std::cerr << "MaterialManager::loadAllFromAssets: assets directory not found or not a directory: "
+			<< materialsRoot.string() << std::endl;
+		return;
+	}
+
+	for (const auto& entry : fs::recursive_directory_iterator(materialsRoot)) {
+		if (!entry.is_regular_file()) {
+			continue;
+		}
+
+		fs::path p = entry.path();
+		std::string ext = p.extension().string();
+		for (auto& c : ext) {
+			c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+		}
+
+		if (ext == ".mat") {
+			std::cerr << "MaterialManager::loadAllFromAssets: found material file: "
+				<< p.string() << std::endl;
+			loadMaterialFromFile(p.string());
+		}
+	}
 }
 
 Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 	std::ifstream file(path);
 	if (!file.is_open()) {
+		std::cerr << "MaterialManager::loadMaterialFromFile: failed to open file: "
+			<< path << std::endl;
 		return nullptr;
 	}
 
@@ -43,6 +82,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		file.close();
 
 		if (!j.contains("name") || !j.contains("albedoTextureKey")) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: missing 'name' or 'albedoTextureKey' in file: "
+				<< path << std::endl;
 			return nullptr;
 		}
 
@@ -50,24 +91,45 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		std::string albedoKey = j["albedoTextureKey"].get<std::string>();
 
 		if (name.empty() || albedoKey.empty()) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: empty name or albedoTextureKey in file: "
+				<< path << std::endl;
 			return nullptr;
 		}
 
-		// If already loaded, just return existing
+
 		Material* existing = getMaterial(name);
 		if (existing) {
+			existing->filePath = path;
 			return existing;
 		}
 
-		return createMaterial(name, albedoKey);
-	} catch (...) {
+		// Check that the texture exists before creating the material
+		try {
+			TextureManager::getTexture(albedoKey);
+		}
+		catch (...) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: texture key not found: '"
+				<< albedoKey << "' for material '" << name
+				<< "' in file: " << path << std::endl;
+			return nullptr;
+		}
+
+		std::cerr << "MaterialManager::loadMaterialFromFile: creating material '"
+			<< name << "' with albedoTextureKey '" << albedoKey
+			<< "' from file: " << path << std::endl;
+
+		return createMaterial(name, albedoKey, path);
+	}
+	catch (...) {
+		std::cerr << "MaterialManager::loadMaterialFromFile: exception while reading file: "
+			<< path << std::endl;
 		return nullptr;
 	}
 }
 
 void MaterialManager::saveMaterialToFile(const std::string& path,
-	                                       const std::string& name,
-	                                       const std::string& albedoTextureKey) {
+                                         const std::string& name,
+                                         const std::string& albedoTextureKey) {
 	std::ofstream file(path, std::ios::trunc);
 	if (!file.is_open()) {
 		return;
@@ -82,16 +144,36 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 }
 
 void MaterialManager::cleanup() {
-  for (auto& pair : materials) {
-    delete pair.second;
-  }
-  materials.clear();
-  vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
+	for (auto& pair : materials) {
+		delete pair.second;
+	}
+	materials.clear();
+	vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
+}
+
+void MaterialManager::destroyMaterialInternal(const std::string& name) {
+	auto it = materials.find(name);
+	if (it == materials.end()) {
+		return;
+	}
+
+	Material* mat = it->second;
+	if (mat) {
+		if (!mat->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
+			vkFreeDescriptorSets(
+				VulkanCore::getDevice(),
+				descriptorPool,
+				static_cast<uint32_t>(mat->descriptorSets.size()),
+				mat->descriptorSets.data());
+		}
+		delete mat;
+	}
+	materials.erase(it);
 }
 
 void MaterialManager::createDescriptorPool() {
 	// Allow many materials; each material needs MAX_FRAMES_IN_FLIGHT sets.
-	const uint32_t maxMaterials = 100;  // adjust as needed
+	const uint32_t maxMaterials = 100; // adjust as needed
 	const uint32_t totalSets = maxMaterials * MAX_FRAMES_IN_FLIGHT;
 
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
@@ -114,64 +196,72 @@ void MaterialManager::createDescriptorPool() {
 }
 
 void MaterialManager::createDescriptorSets(std::string textureName, std::string name) {
-  Texture* texture = TextureManager::getTexture(textureName);
+	Texture* texture = TextureManager::getTexture(textureName);
+
+	// Preserve existing filePath if this material name already exists
+	std::string existingPath;
+	auto itExisting = materials.find(name);
+	if (itExisting != materials.end() && itExisting->second) {
+		existingPath = itExisting->second->filePath;
+	}
+
+	Material* material = new Material();
+	material->name = name;
+	material->filePath = existingPath;
+	material->albedoTexture = texture;
+	material->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
 
-  Material* material = new Material();
-  material->name = name;
-  material->albedoTexture = texture;
-  material->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+	                                           VulkanCore::getDescriptorSetLayout());
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.pSetLayouts = layouts.data();
 
-  
+	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo,
+	                             material->descriptorSets.data()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate descriptor sets!");
+	}
 
-  std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
-                                             VulkanCore::getDescriptorSetLayout());
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = descriptorPool;
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-  allocInfo.pSetLayouts = layouts.data();
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(UniformBufferObject);
 
-  if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo,
-                               material->descriptorSets.data()) != VK_SUCCESS) {
-    throw std::runtime_error("failed to allocate descriptor sets!");
-  }
+		VkDescriptorImageInfo imageInfo{};
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageView = texture->imageView;
+		imageInfo.sampler = texture->sampler;
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(UniformBufferObject);
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = material->descriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &bufferInfo;
+		descriptorWrites[0].pImageInfo = nullptr; // Optional
+		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
 
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = texture->imageView;
-    imageInfo.sampler = texture->sampler;
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = material->descriptorSets[i];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType =
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pImageInfo = &imageInfo;
 
-    std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[0].dstSet = material->descriptorSets[i];
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].dstArrayElement = 0;
-    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].pBufferInfo = &bufferInfo;
-    descriptorWrites[0].pImageInfo = nullptr;        // Optional
-    descriptorWrites[0].pTexelBufferView = nullptr;  // Optional
+		vkUpdateDescriptorSets(VulkanCore::getDevice(),
+		                       static_cast<uint32_t>(descriptorWrites.size()),
+		                       descriptorWrites.data(), 0, nullptr);
+	}
 
-    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[1].dstSet = material->descriptorSets[i];
-    descriptorWrites[1].dstBinding = 1;
-    descriptorWrites[1].dstArrayElement = 0;
-    descriptorWrites[1].descriptorType =
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    descriptorWrites[1].descriptorCount = 1;
-    descriptorWrites[1].pImageInfo = &imageInfo;
-
-    vkUpdateDescriptorSets(VulkanCore::getDevice(),
-                           static_cast<uint32_t>(descriptorWrites.size()),
-                           descriptorWrites.data(), 0, nullptr);
-  }
-
-  materials[name] = material;
+	// If a material with this name already exists, free its descriptor sets and delete it
+	destroyMaterialInternal(name);
+	materials[name] = material;
 }

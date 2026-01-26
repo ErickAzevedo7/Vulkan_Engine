@@ -171,6 +171,7 @@
     <ClCompile Include="core\vulkancore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Editor\MousePick.h" />
     <ClInclude Include="external\imgui\imconfig.h" />
     <ClInclude Include="external\imgui\imgui.h" />
     <ClInclude Include="external\imgui\imgui_impl_glfw.h" />

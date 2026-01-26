@@ -5,6 +5,24 @@
 
 InspectorSelection InspectorUi::selection{};
 InspectorPickTarget InspectorUi::pickTarget = InspectorPickTarget::None;
+std::unordered_map<const Texture*, VkDescriptorSet> InspectorUi::imguiTextureCache{};
+const float InspectorUi::kContentIndent = 12.0f;
+const ImVec2 InspectorUi::kContentSpacing(0.0f, 6.0f);
+
+static bool Inspector_GetHeaderOpen(ImGuiID id, bool default_open) {
+	ImGuiStorage* storage = ImGui::GetStateStorage();
+	return storage->GetBool(id, default_open);
+}
+
+static void Inspector_SetHeaderOpen(ImGuiID id, bool is_open) {
+	ImGuiStorage* storage = ImGui::GetStateStorage();
+	storage->SetBool(id, is_open);
+}
+
+std::string InspectorUi::getMaterialNameFromPath(const std::string& fullPath) {
+	std::filesystem::path p(fullPath);
+	return p.stem().string();
+}
 
 void InspectorUi::selectEntity(int entityId) {
 	selection.type = InspectorSelectionType::Entity;
@@ -26,7 +44,20 @@ void InspectorUi::selectEntity(int entityId) {
 }
 
 void InspectorUi::selectAsset(const std::string& assetPath) {
-	selection.type = InspectorSelectionType::Asset;
+	// Decide selection type based on asset extension
+	std::filesystem::path p(assetPath);
+	std::string ext = p.extension().string();
+	for (auto& c : ext) {
+		c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+	}
+
+	if (ext == ".mat") {
+		selection.type = InspectorSelectionType::Material;
+	}
+	else {
+		selection.type = InspectorSelectionType::Asset;
+	}
+
 	selection.entityId = 0;
 	selection.assetPath = assetPath;
 
@@ -116,10 +147,227 @@ const std::string& InspectorUi::getSelectedAssetPath() {
 	return selection.assetPath;
 }
 
+VkDescriptorSet InspectorUi::getOrCreateImGuiTextureSet(Texture* texture) {
+	if (!texture)
+		return VK_NULL_HANDLE;
+
+	// Check cache first
+	auto it = imguiTextureCache.find(texture);
+	if (it != imguiTextureCache.end())
+		return it->second;
+
+	// Texture must have a valid image view and sampler
+	if (texture->imageView == VK_NULL_HANDLE || texture->sampler == VK_NULL_HANDLE)
+		return VK_NULL_HANDLE;
+
+	// Create a new ImGui texture descriptor set and cache it
+	VkDescriptorSet set = ImGui_ImplVulkan_AddTexture(
+		texture->sampler,
+		texture->imageView,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	imguiTextureCache.emplace(texture, set);
+	return set;
+}
+
+bool InspectorUi::drawIconCollapsingHeader(const char* id,
+                                           ImTextureID iconTex,
+                                           const char* label,
+                                           ImGuiTreeNodeFlags flags) {
+	flags |= ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems)
+		return false;
+
+	ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+	float fullWidth = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+	float iconSizePx = iconTex ? 48.0f : ImGui::GetFrameHeight();
+	float headerHeight = ImMax(ImGui::GetFrameHeight(), iconSizePx);
+	ImVec2 headerSize(fullWidth, headerHeight);
+	ImRect headerRect(cursor, ImVec2(cursor.x + headerSize.x,
+	                                 cursor.y + headerSize.y));
+
+	ImGuiID headerId = window->GetID(id);
+	// Manage open/close state ourselves using storage
+	bool default_open = (flags & ImGuiTreeNodeFlags_DefaultOpen) != 0;
+	bool isOpen = Inspector_GetHeaderOpen(headerId, default_open);
+
+	// React to click on the whole header rectangle
+	ImGui::ItemSize(headerRect);
+	if (ImGui::ItemAdd(headerRect, headerId)) {
+		bool hovered, held;
+		bool pressed = ImGui::ButtonBehavior(headerRect, headerId, &hovered, &held);
+		if (pressed) {
+			isOpen = !isOpen;
+			Inspector_SetHeaderOpen(headerId, isOpen);
+		}
+	}
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImU32 headerCol = ImGui::GetColorU32(
+		ImGui::IsItemHovered() ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+	drawList->AddRectFilled(headerRect.Min,
+	                        headerRect.Max,
+	                        headerCol, 0.0f);
+
+	// Draw a small triangle arrow on the left to signal open/closed state
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float arrowScale = 0.70f;
+	const float arrowSize = ImGui::GetFontSize() * arrowScale;
+	// Arrow position: left padding, vertically centered
+	ImVec2 arrowPos(headerRect.Min.x + style.FramePadding.x,
+	                headerRect.Min.y + (headerSize.y - arrowSize) * 0.5f);
+	ImRect arrowRect(arrowPos, ImVec2(arrowPos.x + arrowSize, arrowPos.y + arrowSize));
+	ImGuiID arrowId = window->GetID((std::string(id) + "##arrow").c_str());
+	if (ImGui::ItemAdd(arrowRect, arrowId)) {
+		bool arrowHovered, arrowHeld;
+		bool arrowPressed = ImGui::ButtonBehavior(arrowRect, arrowId, &arrowHovered, &arrowHeld);
+		if (arrowPressed) {
+			isOpen = !isOpen;
+			Inspector_SetHeaderOpen(headerId, isOpen);
+		}
+	}
+	ImU32 arrowCol = ImGui::GetColorU32(ImGuiCol_Text);
+	ImGui::RenderArrow(drawList, arrowPos, arrowCol, isOpen ? ImGuiDir_Down : ImGuiDir_Right);
+
+	ImVec2 textPos = cursor;
+
+	float tree_spacing = style.ItemInnerSpacing.x * 0.5f;
+
+	textPos.x += style.FramePadding.x + arrowSize + tree_spacing;
+	if (iconTex) {
+		ImVec2 iconSize(iconSizePx, iconSizePx);
+		ImVec2 iconPos(textPos.x,
+		               cursor.y + (headerSize.y - iconSize.y) * 0.5f);
+		drawList->AddImage(iconTex, iconPos,
+		                   ImVec2(iconPos.x + iconSize.x,
+		                          iconPos.y + iconSize.y));
+		textPos.x = iconPos.x + iconSize.x + tree_spacing;
+	}
+	else {
+		textPos.x = cursor.x + tree_spacing;
+	}
+
+	float textTopPadding = ImGui::GetStyle().FramePadding.y;
+	textPos.y = cursor.y + textTopPadding;
+	drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
+
+	// Move cursor below header for child content
+	ImGui::SetCursorScreenPos(ImVec2(cursor.x, cursor.y + headerSize.y));
+	return isOpen;
+}
+
+void InspectorUi::renderMaterialTab(std::string fullPath) {
+	ImGui::Indent(kContentIndent);
+	ImGui::TextUnformatted("Material");
+	ImGui::Spacing();
+
+	Material* material = MaterialManager::loadMaterialFromFile(fullPath);
+	if (!material) {
+		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+		                   "Failed to load material.");
+	}
+	else {
+		ImGui::Spacing();
+		const char* albedoLabel = "Albedo";
+		ImVec2 albedoSize = ImGui::CalcTextSize(albedoLabel);
+		ImVec2 squareSize(albedoSize.y, albedoSize.y);
+		ImGui::InvisibleButton("AlbedoTextureDropTarget", squareSize);
+		bool isHoveredTex = ImGui::IsItemHovered();
+		ImDrawList* dl2 = ImGui::GetWindowDrawList();
+		ImVec2 min2 = ImGui::GetItemRectMin();
+		ImVec2 max2 = ImGui::GetItemRectMax();
+		ImU32 col2 = ImGui::GetColorU32(isHoveredTex
+			                                ? ImGuiCol_ButtonHovered
+			                                : ImGuiCol_Border);
+		dl2->AddRect(min2, max2, col2, 3.0f);
+
+		// If material has an albedo texture, preview it inside the button
+		if (material->albedoTexture &&
+			material->albedoTexture->imageView != VK_NULL_HANDLE &&
+			material->albedoTexture->sampler != VK_NULL_HANDLE) {
+			ImVec2 innerMin2(min2.x + 2.0f, min2.y + 2.0f);
+			ImVec2 innerMax2(max2.x - 2.0f, max2.y - 2.0f);
+			VkDescriptorSet texSet2 =
+				getOrCreateImGuiTextureSet(material->albedoTexture);
+			if (texSet2 != VK_NULL_HANDLE) {
+				dl2->AddImage(reinterpret_cast<ImTextureID>(texSet2), innerMin2,
+				              innerMax2);
+			}
+		}
+		else {
+			// Fallback: inner shadow box for albedo drop target
+			float inset2 = 2.0f;
+			ImVec2 innerMin2(min2.x + inset2, min2.y + inset2);
+			ImVec2 innerMax2(max2.x - inset2, max2.y - inset2);
+			ImVec4 shadowBase2 = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+			shadowBase2.w *= 0.9f;
+			ImU32 shadowCol2 = ImGui::ColorConvertFloat4ToU32(shadowBase2);
+			dl2->AddRectFilled(innerMin2, innerMax2, shadowCol2, 2.0f);
+		}
+
+		// Attach drag-drop target to the square
+		if (ImGui::BeginDragDropTarget()) {
+			if (const ImGuiPayload* payload =
+				ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+				const char* droppedPath = static_cast<const char*>(payload->Data);
+				if (droppedPath && droppedPath[0] != '\0') {
+					std::filesystem::path texPath(droppedPath);
+					std::string texExt = texPath.extension().string();
+					for (auto& c : texExt)
+						c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+
+					if (texExt == ".png" || texExt == ".jpg" || texExt == ".jpeg" ||
+						texExt == ".tga" || texExt == ".bmp" || texExt == ".hdr") {
+						// Use full texture path as the key
+						std::string texKey = texPath.string();
+
+						Texture* tex = nullptr;
+						try {
+							tex = TextureManager::getTexture(texKey);
+						}
+						catch (...) {
+							Texture* loaded = TextureManager::loadTexture(
+								droppedPath, VulkanCore::getDevice(),
+								VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
+								VulkanCore::getGraphicsQueue());
+							TextureManager::createTextureImageView(loaded);
+							TextureManager::createTextureSampler(loaded);
+							TextureManager::registerTexture(texKey, *loaded);
+							tex = TextureManager::getTexture(texKey);
+						}
+
+						// Rebuild or create the material with new albedo texture
+						std::string matName = getMaterialNameFromPath(fullPath);
+						Material* mat = MaterialManager::getMaterial(matName);
+
+						mat = MaterialManager::createMaterial(matName, texKey);
+
+						// Save updated material back to JSON file
+						MaterialManager::saveMaterialToFile(fullPath, matName, texKey);
+					}
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		ImGui::SameLine();
+		ImGui::TextUnformatted(albedoLabel);
+	}
+}
+
+
 void InspectorUi::render() {
 	Scene* scene = SceneManager::getActiveScene();
 
+	ImGui::PushStyleVarX(ImGuiStyleVar_WindowPadding, 0.0f);
+
 	ImGui::Begin("Inspector");
+
+	const float kHeaderContentTopPadding = 6.0f;
+
 	if (selection.type == InspectorSelectionType::Entity && scene &&
 		selection.entityId > 0 &&
 		selection.entityId <= static_cast<int>(scene->getEntityCount())) {
@@ -129,23 +377,35 @@ void InspectorUi::render() {
 		strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
 		nameBuffer[sizeof(nameBuffer) - 1] = 0;
 
+		// Name row with padding
+		ImGui::Indent(kContentIndent);
 		ImGui::Text("Name");
 		ImGui::SameLine();
-		if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer))) {
+		if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer)))
 			entity.setName(nameBuffer);
-		}
 
+		ImGui::Unindent(kContentIndent);
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
+
+		// Transform section
 		auto* transform = entity.getComponent<Transform>();
+		// Make collapsing header more compact by reducing FramePadding vertically
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
 		if (transform && ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::PopStyleVar();
-			// Position/rotation/scale controls aligned in two columns
+			ImGui::PopStyleVar(3);
+
+
+			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+			ImGui::Indent(kContentIndent);
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, 60.0f);
 
-			ImVec2 oldPadding = ImGui::GetStyle().FramePadding;
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-			                    ImVec2(oldPadding.x, 0.0f));
 
 			// Position
 			ImGui::Text("Position");
@@ -168,17 +428,29 @@ void InspectorUi::render() {
 			ImGui::DragFloat3("##Scale", &transform->scale.x, 0.1f, 0, 0, "%.2f");
 			ImGui::Columns(1);
 
+			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();
 		}
 		else {
-			ImGui::PopStyleVar();
+			ImGui::PopStyleVar(3);
 		}
 
-		// Mesh / material component section as its own toggle
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
+
+		// Mesh / material section
 		auto* meshComp = entity.getComponent<MeshComponent>();
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
 		if (meshComp && ImGui::CollapsingHeader("Mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::PopStyleVar();
+			ImGui::PopStyleVar(3);
+
+			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+
+			ImGui::Indent(kContentIndent);
+
 			Material* material = meshComp->GetMaterial();
 			const char* currentMatName = material ? material->name.c_str() : "<none>";
 
@@ -200,41 +472,63 @@ void InspectorUi::render() {
 			}
 
 			if (material) {
-				ImGui::Text("Albedo Texture:");
-				ImGui::SameLine();
+				// Square drop target for material files (.mat) dragged from the AssetBrowser
+				const char* matLabel = "Material";
+				ImVec2 labelSize = ImGui::CalcTextSize(matLabel);
+				ImVec2 squareSize(labelSize.y, labelSize.y);
+				ImGui::InvisibleButton("MaterialDropTarget", squareSize);
+				bool isHovered = ImGui::IsItemHovered();
 
-				// Drop target area for texture files dragged from the AssetBrowser
-				ImGui::Button("Drop texture here");
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				ImVec2 min = ImGui::GetItemRectMin();
+				ImVec2 max = ImGui::GetItemRectMax();
+				ImU32 borderCol = ImGui::GetColorU32(isHovered ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
+				dl->AddRect(min, max, borderCol, 3.0f);
+
+				// If material has an albedo texture, preview it inside the button
+				if (material->albedoTexture && material->albedoTexture->imageView != VK_NULL_HANDLE &&
+					material->albedoTexture->sampler != VK_NULL_HANDLE) {
+					ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
+					ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
+					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(material->albedoTexture);
+					if (texSet != VK_NULL_HANDLE) {
+						dl->AddImage(
+							reinterpret_cast<ImTextureID>(texSet),
+							innerMin,
+							innerMax);
+					}
+				}
+				else {
+					// Fallback: simple inner shadow box
+					float inset = 2.0f;
+					ImVec2 innerMin(min.x + inset, min.y + inset);
+					ImVec2 innerMax(max.x - inset, max.y - inset);
+					ImVec4 shadowBase = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+					shadowBase.w *= 0.9f;
+					ImU32 shadowCol = ImGui::ColorConvertFloat4ToU32(shadowBase);
+					dl->AddRectFilled(innerMin, innerMax, shadowCol, 2.0f);
+				}
+
+				// Attach drag-drop target to the square
 				if (ImGui::BeginDragDropTarget()) {
 					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
 						const char* droppedPath = static_cast<const char*>(payload->Data);
 						if (droppedPath && droppedPath[0] != '\0') {
 							std::filesystem::path p(droppedPath);
-							// Only allow common image formats
 							std::string ext = p.extension().string();
-							for (auto& c : ext) c = static_cast<char>(::tolower(c));
-							if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
-								std::string stem = p.stem().string();
+							for (auto& c : ext) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 
-								Texture* tex = nullptr;
-								try {
-									tex = TextureManager::getTexture(stem);
-								}
-								catch (...) {
-									Texture* loaded = TextureManager::loadTexture(
-										droppedPath, VulkanCore::getDevice(),
-										VulkanCore::getPhysicalDevice(),
-										VulkanCore::getCommandPool(),
-										VulkanCore::getGraphicsQueue());
-									TextureManager::createTextureImageView(loaded);
-									TextureManager::createTextureSampler(loaded);
-									TextureManager::registerTexture(stem, *loaded);
-									tex = TextureManager::getTexture(stem);
-								}
+							// Only accept material assets here
+							if (ext == ".mat") {
+								// Derive material name from .mat filename
+								std::string matName = getMaterialNameFromPath(droppedPath);
 
-								Material* mat = MaterialManager::getMaterial(stem);
+								// Ensure material exists via MaterialManager
+								Material* mat = MaterialManager::loadMaterialFromFile(droppedPath);
 								if (!mat) {
-									mat = MaterialManager::createMaterial(stem, stem);
+									// Fallback: create with default albedo if file not valid yet
+									mat = MaterialManager::createMaterial(matName, "default");
+									MaterialManager::saveMaterialToFile(droppedPath, matName, "default");
 								}
 
 								meshComp->SetMaterial(mat);
@@ -243,21 +537,52 @@ void InspectorUi::render() {
 					}
 					ImGui::EndDragDropTarget();
 				}
+
+				ImGui::SameLine();
+				ImGui::TextUnformatted(matLabel);
+
+				if (!material->filePath.empty()) {
+					ImGui::Unindent(kContentIndent);
+
+					ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+					ImGui::Separator();
+					ImGui::PopStyleVar();
+
+					const FileEntry fe{material->name, material->filePath};
+					const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
+					ImTextureID iconTex = 0;
+					if (icon.imguiTexture != VK_NULL_HANDLE) {
+						iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+					}
+
+					ImGuiTreeNodeFlags matFlags = ImGuiTreeNodeFlags_DefaultOpen;
+					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+					if (InspectorUi::drawIconCollapsingHeader("MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
+						ImGui::Dummy(ImVec2(0.0f, 6.0f));
+						InspectorUi::renderMaterialTab(material->filePath);
+					}
+					ImGui::PopStyleVar();
+				}
 			}
+
+			ImGui::Unindent(kContentIndent);
 		}
 		else {
-			ImGui::PopStyleVar();
+			ImGui::PopStyleVar(3);
 		}
+
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
 	}
-	else if (selection.type == InspectorSelectionType::Asset &&
+	else if ((selection.type == InspectorSelectionType::Asset ||
+			selection.type == InspectorSelectionType::Material) &&
 		!selection.assetPath.empty()) {
 		const std::string& fullPath = selection.assetPath;
 		std::filesystem::path p(fullPath);
-
 		std::string fileName = p.filename().string();
 
 		ImGui::BeginGroup();
-		// Icon + name on the same line
 		const FileEntry fe{fileName, fullPath, std::filesystem::is_directory(p)};
 		const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
 		if (icon.imguiTexture != VK_NULL_HANDLE) {
@@ -266,7 +591,12 @@ void InspectorUi::render() {
 		}
 		ImGui::TextUnformatted(fileName.c_str());
 		ImGui::EndGroup();
+
+		if (selection.type == InspectorSelectionType::Material) {
+			InspectorUi::renderMaterialTab(fullPath);
+		}
 	}
 
+	ImGui::PopStyleVar();
 	ImGui::End();
 }
