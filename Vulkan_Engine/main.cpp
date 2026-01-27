@@ -205,11 +205,15 @@ public:
 
 			ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
-			this->viewportExtent =
-				VkExtent2D{(uint32_t)viewportSize.x, (uint32_t)viewportSize.y};
 
-			if (viewportExtent.width != mousePick.mousePickExtent.width ||
-				viewportExtent.height != mousePick.mousePickExtent.height) {
+			uint32_t viewportWidth = (viewportSize.x > 0.0f) ? static_cast<uint32_t>(viewportSize.x) : 0;
+			uint32_t viewportHeight = (viewportSize.y > 0.0f) ? static_cast<uint32_t>(viewportSize.y) : 0;
+
+			this->viewportExtent = VkExtent2D{viewportWidth, viewportHeight};
+
+			if (viewportExtent.width > 0 && viewportExtent.height > 0 &&
+				(viewportExtent.width != mousePick.mousePickExtent.width ||
+				 viewportExtent.height != mousePick.mousePickExtent.height)) {
 				mousePick.mousePickExtent = viewportExtent;
 				EditorCamera::setExtent(viewportExtent);
 

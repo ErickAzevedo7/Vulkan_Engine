@@ -431,11 +431,12 @@ void AssetBrowser::render() {
 
 	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar;
 
-	ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0.0f);
 	if (!ImGui::Begin("Assets", nullptr, windowFlags)) {
 		ImGui::End();
 		return;
 	}
+
+	ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0.0f);
 
 	// Top search bar (before columns)
 	ImGui::BeginMenuBar();
