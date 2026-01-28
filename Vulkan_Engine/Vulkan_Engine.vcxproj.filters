@@ -86,6 +86,6 @@
     <None Include="shaders\gridplane.frag" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="textures\texture.png" />
+    <Image Include="common\texture\default.png" />
   </ItemGroup>
 </Project>

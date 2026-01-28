@@ -173,30 +173,36 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2), false);
 
 	// Context menu (right-click) for current folder over the whole content area
-  if (ImGui::BeginPopupContextWindow("AssetBrowserFolderContext",
-                                      ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-    if (ImGui::MenuItem("Create Material")) {
-      std::string baseName = "NewMaterial";
-      std::string newPath;
-      int index = 0;
-      while (true) {
-        std::string fileName = baseName;
-        if (index > 0) {
-          fileName += "_" + std::to_string(index);
-        }
-        fileName += ".mat";
-        newPath = selectedFolderPath + "/" + fileName;
-        if (!std::filesystem::exists(newPath)) {
-          break;
-        }
-        ++index;
-      }
+	if (ImGui::BeginPopupContextWindow("AssetBrowserFolderContext",
+	                                   ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+		if (ImGui::MenuItem("Create Material")) {
+			std::string baseName = "NewMaterial";
+			std::string newPath;
+			int index = 0;
+			while (true) {
+				std::string fileName = baseName;
+				if (index > 0) {
+					fileName += "_" + std::to_string(index);
+				}
+				fileName += ".mat";
+				newPath = selectedFolderPath + "/" + fileName;
+				if (!std::filesystem::exists(newPath)) {
+					break;
+				}
+				++index;
+			}
 
-      MaterialManager::saveMaterialToFile(newPath, baseName);
-      ScanCurrentFolderContents();
-    }
-    ImGui::EndPopup();
-  }
+			// Determine material logical name from filename (ensure unique name)
+			std::filesystem::path newPathFs(newPath);
+			std::string materialName = newPathFs.stem().string();
+
+			// Save file and create material in memory immediately with default texture
+			MaterialManager::saveMaterialToFile(newPath, materialName, TextureManager::kDefaultTextureKey);
+			MaterialManager::createMaterial(materialName, TextureManager::kDefaultTextureKey, newPath);
+			ScanCurrentFolderContents();
+		}
+		ImGui::EndPopup();
+	}
 
 	int itemIndex = 0;
 	for (const FileEntry& fe : currentFolderEntries) {
@@ -240,7 +246,9 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 			if (thumbTex && thumbTex->imageView != VK_NULL_HANDLE &&
 				thumbTex->sampler != VK_NULL_HANDLE) {
 				VkDescriptorSet thumbSet = VK_NULL_HANDLE;
-				auto it = thumbnailDescriptorSets.find(fe.fullPath);
+				std::string thumbKey;
+				thumbKey = std::filesystem::path(fe.fullPath).generic_string();
+				auto it = thumbnailDescriptorSets.find(thumbKey);
 				if (it != thumbnailDescriptorSets.end()) {
 					thumbSet = it->second;
 				}
@@ -248,7 +256,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 					thumbSet = ImGui_ImplVulkan_AddTexture(
 						thumbTex->sampler, thumbTex->imageView,
 						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-					thumbnailDescriptorSets[fe.fullPath] = thumbSet;
+					thumbnailDescriptorSets[thumbKey] = thumbSet;
 				}
 				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet),
 				             ImVec2(iconSize, iconSize));

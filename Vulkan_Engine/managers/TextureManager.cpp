@@ -4,6 +4,9 @@
 std::unordered_map<std::string, Texture> TextureManager::textures;
 std::unordered_map<std::string, ThumbnailTexture> TextureManager::thumbnails;
 
+
+const std::string TextureManager::kDefaultTextureKey = "common/texture/default.png";
+
 void TextureManager::loadDefaults() {
 	// load icons textures
 	Texture* texture =
@@ -25,13 +28,12 @@ void TextureManager::loadDefaults() {
 	// load default object texture
 	stbi_set_flip_vertically_on_load(true);
 
-	texture =
-		loadTexture("textures/texture.png", VulkanCore::getDevice(),
-		            VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
-		            VulkanCore::getGraphicsQueue());
+	texture = loadTexture(kDefaultTextureKey, VulkanCore::getDevice(),
+	                      VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
+	                      VulkanCore::getGraphicsQueue());
 	createTextureImageView(texture);
 	createTextureSampler(texture);
-	textures["default"] = *texture;
+	textures[kDefaultTextureKey] = *texture;
 }
 
 void TextureManager::loadAllFromAssets(const std::string& assetsRoot) {
@@ -60,24 +62,29 @@ void TextureManager::loadAllFromAssets(const std::string& assetsRoot) {
 		}
 
 		const std::string fullPath = p.string();
-		if (textures.find(fullPath) != textures.end()) {
+		const std::string normFullPath = std::filesystem::path(fullPath).generic_string();
+		if (textures.find(normFullPath) != textures.end()) {
 			continue;
 		}
 
 		Texture* texture = loadTexture(fullPath, VulkanCore::getDevice(),
-			VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
-			VulkanCore::getGraphicsQueue());
+		                               VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
+		                               VulkanCore::getGraphicsQueue());
 		createTextureImageView(texture);
 		createTextureSampler(texture);
-		textures[fullPath] = *texture;
+		textures[normFullPath] = *texture;
 
 		// Also create a small thumbnail texture for UI from this source
-		createThumbnail(fullPath, *texture);
+		createThumbnail(normFullPath, *texture);
 	}
 }
 
 const ThumbnailTexture* TextureManager::getThumbnail(const std::string& key) {
-	auto it = thumbnails.find(key);
+	std::string k;
+
+	k = std::filesystem::path(key).generic_string();
+
+	auto it = thumbnails.find(k);
 	if (it != thumbnails.end()) {
 		return &it->second;
 	}
@@ -120,7 +127,7 @@ ThumbnailTexture& TextureManager::createThumbnail(const std::string& key, const 
 	barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	                     VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	// Ensure source is in TRANSFER_SRC_OPTIMAL
 	VkImageMemoryBarrier srcBarrier{};
@@ -138,8 +145,8 @@ ThumbnailTexture& TextureManager::createThumbnail(const std::string& key, const 
 	srcBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-		&srcBarrier);
+	                     VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+	                     &srcBarrier);
 
 	VkImageBlit blit{};
 	blit.srcOffsets[0] = {0, 0, 0};
@@ -156,9 +163,9 @@ ThumbnailTexture& TextureManager::createThumbnail(const std::string& key, const 
 	blit.dstSubresource.layerCount = 1;
 
 	vkCmdBlitImage(cmd,
-		 sourceTexture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		 thumb.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		 1, &blit, VK_FILTER_LINEAR);
+	               sourceTexture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	               thumb.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+	               1, &blit, VK_FILTER_LINEAR);
 
 	// Transition images back: source to SHADER_READ_ONLY_OPTIMAL, thumb to SHADER_READ_ONLY_OPTIMAL
 	srcBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -171,24 +178,28 @@ ThumbnailTexture& TextureManager::createThumbnail(const std::string& key, const 
 	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-	VkImageMemoryBarrier barriers[2] = { srcBarrier, barrier };
+	VkImageMemoryBarrier barriers[2] = {srcBarrier, barrier};
 	vkCmdPipelineBarrier(cmd,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0, 0, nullptr, 0, nullptr, 2, barriers);
+	                     VK_PIPELINE_STAGE_TRANSFER_BIT,
+	                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+	                     0, 0, nullptr, 0, nullptr, 2, barriers);
 
 	Utils::endSingleTimeCommands(VulkanCore::getCommandPool(), cmd);
 
 	// Create image view and sampler for thumbnail
 	thumb.imageView = Utils::createImageView(thumb.image, format,
-		VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	                                         VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
 	// Small, no-mipmap sampler tuned for UI
 	TextureManager::createThumbnailSampler(&thumb);
 
-	thumbnails[key] = thumb;
+	std::string k;
 
-	return thumbnails[key];
+	k = std::filesystem::path(key).generic_string();
+
+	thumbnails[k] = thumb;
+
+	return thumbnails[k];
 }
 
 Texture* TextureManager::loadTexture(const std::string& path,
@@ -285,25 +296,25 @@ void TextureManager::createTextureSampler(Texture* texture) {
 
 void TextureManager::createThumbnailSampler(ThumbnailTexture* texture) {
 	VkSamplerCreateInfo samplerInfo{};
-  samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  samplerInfo.magFilter = VK_FILTER_LINEAR;
-  samplerInfo.minFilter = VK_FILTER_LINEAR;
-  samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.anisotropyEnable = VK_FALSE;
-  samplerInfo.maxAnisotropy = 1.0f;
-  samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-  samplerInfo.unnormalizedCoordinates = VK_FALSE;
-  samplerInfo.compareEnable = VK_FALSE;
-  samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-  samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-  samplerInfo.mipLodBias = 0.0f;
-  samplerInfo.minLod = 0.0f;
-  samplerInfo.maxLod = 0.0f;
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 0.0f;
 
 	if (vkCreateSampler(VulkanCore::getDevice(), &samplerInfo, nullptr,
-											&texture->sampler) != VK_SUCCESS) {
+	                    &texture->sampler) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create thumbnail sampler!");
 	}
 }
@@ -313,21 +324,33 @@ void TextureManager::createTextureImageView(Texture* texture) {
 	                                            VK_IMAGE_ASPECT_COLOR_BIT, texture->mipLevels);
 }
 
-Texture* TextureManager::getTexture(const std::string& name) {
-	if (textures.find(name) != textures.end()) {
-		return &textures[name];
+Texture* TextureManager::getTexture(const std::string& path) {
+	// Normalize the file path key to a consistent form for storage/lookups.
+	std::string key;
+
+	key = std::filesystem::path(path).generic_string();
+
+
+	auto it = textures.find(key);
+	if (it != textures.end()) {
+		return &it->second;
 	}
-	else {
-		throw std::runtime_error("Texture not found: " + name);
-	}
+	std::cerr << "TextureManager::getTexture: texture not found for path='" << key << "' (original='" << path << "')" <<
+		std::endl;
+	throw std::runtime_error("Texture not found: " + key);
 }
 
 const std::unordered_map<std::string, Texture>& TextureManager::getAllTextures() {
 	return textures;
 }
 
-void TextureManager::registerTexture(const std::string& name, const Texture& texture) {
-	textures[name] = texture;
+void TextureManager::registerTexture(const std::string& path, const Texture& texture) {
+	std::string key;
+
+	key = std::filesystem::path(path).generic_string();
+
+	textures[key] = texture;
+	std::cerr << "TextureManager::registerTexture: registered texture path='" << key << "'" << std::endl;
 }
 
 void TextureManager::generateMipmaps(VkImage image,

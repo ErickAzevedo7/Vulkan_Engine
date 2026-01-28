@@ -4,35 +4,82 @@
 std::unordered_map<std::string, Material*> MaterialManager::materials;
 VkDescriptorPool MaterialManager::descriptorPool = VK_NULL_HANDLE;
 
+// Helper to produce a consistent key for material map lookups (normalizes
+// path separators to '/'). If a non-path logical name is used (e.g. "default")
+// this returns it unchanged.
+static std::string normalizeKey(const std::string& s) {
+	try {
+		std::filesystem::path p(s);
+		return p.generic_string();
+	}
+	catch (...) {
+		return s;
+	}
+}
+
 void MaterialManager::init() {
 	createDescriptorPool();
 	loadAllFromAssets();
 }
 
 void MaterialManager::loadDefault() {
-	createDescriptorSets("default", "default");
+	// Ensure there is a default material stored under a material path.
+	// If a default material file exists on disk, load it; otherwise create
+	// one that uses the engine default texture and save it.
+	const std::string defaultMaterialPath = "common/material/default.mat";
+
+	if (std::filesystem::exists(defaultMaterialPath)) {
+		loadMaterialFromFile(defaultMaterialPath);
+		return;
+	}
+
+	const std::string defaultName = "default";
+	saveMaterialToFile(defaultMaterialPath, defaultName, TextureManager::kDefaultTextureKey);
+	createMaterial(defaultName, TextureManager::kDefaultTextureKey, defaultMaterialPath);
 }
 
 Material* MaterialManager::createMaterial(const std::string& name,
                                           const std::string& albedoTexturePath,
                                           const std::string& path) {
-	createDescriptorSets(albedoTexturePath, name);
-	Material* mat = getMaterial(name);
-	if (mat) {
-		if (!path.empty()) {
-			mat->filePath = path;
-		}
+	std::string albedoKey = albedoTexturePath.empty() ? TextureManager::kDefaultTextureKey : albedoTexturePath;
+
+	std::string materialPath = path;
+
+	createDescriptorSets(albedoKey, materialPath);
+
+	Material* mat = getMaterial(materialPath);
+	if (!mat) {
+		std::cerr << "MaterialManager::createMaterial: ERROR material not found after createDescriptorSets for '" <<
+			materialPath << "'" << std::endl;
+		return nullptr;
 	}
+
+	mat->name = name;
+
+	std::cerr << "MaterialManager::createMaterial: created '" << materialPath << "'" << std::endl;
 	return mat;
 }
 
-Material* MaterialManager::getMaterial(const std::string& name) {
-	if (materials.find(name) != materials.end()) {
-		return materials[name];
+Material* MaterialManager::updateMaterialTexture(const std::string& materialPath, const std::string& texturePath) {
+	std::string matKey = normalizeKey(materialPath);
+	Material* mat = getMaterial(matKey);
+
+	// update texture key and recreate descriptor sets
+	mat->albedoTextureKey = texturePath.empty() ? TextureManager::kDefaultTextureKey : texturePath;
+	createDescriptorSets(mat->albedoTextureKey, materialPath);
+	std::cerr << "MaterialManager::updateMaterialTexture: updated material '" << materialPath << "' with texture '" << mat
+		->albedoTextureKey << "'" << std::endl;
+	return mat;
+}
+
+Material* MaterialManager::getMaterial(const std::string& filePath) {
+	// Normalize path keys to generic format so lookups are consistent
+	std::string key = normalizeKey(filePath);
+	auto it = materials.find(key);
+	if (it != materials.end()) {
+		return it->second;
 	}
-	else {
-		return nullptr;
-	}
+	return nullptr;
 }
 
 const std::unordered_map<std::string, Material*>& MaterialManager::getAllMaterials() {
@@ -69,6 +116,15 @@ void MaterialManager::loadAllFromAssets() {
 }
 
 Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
+	// If material already loaded, return it.
+	std::string norm = normalizeKey(path);
+	auto it = materials.find(norm);
+	if (it != materials.end()) {
+		std::cerr << "MaterialManager::loadMaterialFromFile: reusing existing material for path '" << path << "'" <<
+			std::endl;
+		return it->second;
+	}
+
 	std::ifstream file(path);
 	if (!file.is_open()) {
 		std::cerr << "MaterialManager::loadMaterialFromFile: failed to open file: "
@@ -96,11 +152,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 			return nullptr;
 		}
 
-
-		Material* existing = getMaterial(name);
-		if (existing) {
-			existing->filePath = path;
-			return existing;
+		if (albedoKey.empty()) {
+			albedoKey = TextureManager::kDefaultTextureKey;
 		}
 
 		// Check that the texture exists before creating the material
@@ -114,11 +167,18 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 			return nullptr;
 		}
 
-		std::cerr << "MaterialManager::loadMaterialFromFile: creating material '"
-			<< name << "' with albedoTextureKey '" << albedoKey
-			<< "' from file: " << path << std::endl;
+		std::cerr << "MaterialManager::loadMaterialFromFile: creating material with name '"
+			<< name << "' and file path '" << path << "' using albedoTextureKey '" << albedoKey
+			<< "'" << std::endl;
 
-		return createMaterial(name, albedoKey, path);
+		Material* created = createMaterial(name, albedoKey, path);
+		if (created) {
+			std::cerr << "MaterialManager: created material for path '" << path << "'" << std::endl;
+		}
+		else {
+			std::cerr << "MaterialManager: failed to create material for path '" << path << "'" << std::endl;
+		}
+		return created;
 	}
 	catch (...) {
 		std::cerr << "MaterialManager::loadMaterialFromFile: exception while reading file: "
@@ -137,7 +197,7 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 
 	nlohmann::json j;
 	j["name"] = name;
-	j["albedoTextureKey"] = albedoTextureKey;
+	j["albedoTextureKey"] = albedoTextureKey.empty() ? TextureManager::kDefaultTextureKey : albedoTextureKey;
 
 	file << j.dump(4) << std::endl;
 	file.close();
@@ -195,20 +255,29 @@ void MaterialManager::createDescriptorPool() {
 	}
 }
 
-void MaterialManager::createDescriptorSets(std::string textureName, std::string name) {
-	Texture* texture = TextureManager::getTexture(textureName);
-
-	// Preserve existing filePath if this material name already exists
+void MaterialManager::createDescriptorSets(const std::string& texturePath, const std::string& materialPath) {
+	// Preserve existing filePath if this materialy this already exists
 	std::string existingPath;
-	auto itExisting = materials.find(name);
+	std::string mapKey = normalizeKey(materialPath);
+	auto itExisting = materials.find(mapKey);
+	Material* material = nullptr;
 	if (itExisting != materials.end() && itExisting->second) {
-		existingPath = itExisting->second->filePath;
+		material = itExisting->second;
+		existingPath = material->filePath;
+		// Free any existing descriptor sets for this material before reallocating.
+		if (!material->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
+			vkFreeDescriptorSets(VulkanCore::getDevice(), descriptorPool,
+			                     static_cast<uint32_t>(material->descriptorSets.size()),
+			                     material->descriptorSets.data());
+		}
+	}
+	else {
+		material = new Material();
+		materials[mapKey] = material;
 	}
 
-	Material* material = new Material();
-	material->name = name;
-	material->filePath = existingPath;
-	material->albedoTexture = texture;
+	material->filePath = existingPath.empty() ? materialPath : existingPath;
+	material->albedoTextureKey = texturePath;
 	material->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
 
@@ -231,6 +300,22 @@ void MaterialManager::createDescriptorSets(std::string textureName, std::string 
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
+		Texture* texture = nullptr;
+		try {
+			texture = TextureManager::getTexture(texturePath);
+		}
+		catch (const std::exception& e) {
+			std::cerr << "MaterialManager::createDescriptorSets: texture '" << texturePath <<
+				"' not found, falling back to default: " << e.what() << std::endl;
+			try {
+				texture = TextureManager::getTexture(TextureManager::kDefaultTextureKey);
+			}
+			catch (...) {
+				std::cerr << "MaterialManager::createDescriptorSets: failed to get default texture '" <<
+					TextureManager::kDefaultTextureKey << "'" << std::endl;
+				throw;
+			}
+		}
 		VkDescriptorImageInfo imageInfo{};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		imageInfo.imageView = texture->imageView;
@@ -260,8 +345,4 @@ void MaterialManager::createDescriptorSets(std::string textureName, std::string 
 		                       static_cast<uint32_t>(descriptorWrites.size()),
 		                       descriptorWrites.data(), 0, nullptr);
 	}
-
-	// If a material with this name already exists, free its descriptor sets and delete it
-	destroyMaterialInternal(name);
-	materials[name] = material;
 }

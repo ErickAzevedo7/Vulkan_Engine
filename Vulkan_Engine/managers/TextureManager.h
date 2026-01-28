@@ -8,13 +8,13 @@
 #include "core/vulkancore.h"
 
 struct Texture {
-  VkImage image;
-  VkDeviceMemory memory;
-  VkImageView imageView;
-  VkSampler sampler;
-  uint32_t width;
-  uint32_t height;
-  uint32_t mipLevels;
+	VkImage image;
+	VkDeviceMemory memory;
+	VkImageView imageView;
+	VkSampler sampler;
+	uint32_t width;
+	uint32_t height;
+	uint32_t mipLevels;
 };
 
 struct ThumbnailTexture {
@@ -27,38 +27,41 @@ struct ThumbnailTexture {
 };
 
 class TextureManager {
- public:
-  static void loadDefaults();
+public:
+	static void loadDefaults();
+	static const std::string kDefaultTextureKey;
 
 	// Load all textures found under assets directory at startup
 	static void loadAllFromAssets(const std::string& assetsRoot);
 
-  static Texture* loadTexture(const std::string& path,
-                       VkDevice device,
-                       VkPhysicalDevice physicalDevice,
-                       VkCommandPool commandPool,
-                       VkQueue graphicsQueue);
+	static Texture* loadTexture(const std::string& path,
+	                            VkDevice device,
+	                            VkPhysicalDevice physicalDevice,
+	                            VkCommandPool commandPool,
+	                            VkQueue graphicsQueue);
 
 	static void createTextureSampler(Texture* texture);
 
-  static void createThumbnailSampler(ThumbnailTexture* texture);
+	static void createThumbnailSampler(ThumbnailTexture* texture);
 
-  static void createTextureImageView(Texture* texture);
+	static void createTextureImageView(Texture* texture);
 
-  static Texture* getTexture(const std::string& name);
+
+	static Texture* getTexture(const std::string& path);
 	static const ThumbnailTexture* getThumbnail(const std::string& key);
 
-  static const std::unordered_map<std::string, Texture>& getAllTextures();
+	static const std::unordered_map<std::string, Texture>& getAllTextures();
 
-	// Register an existing texture under a logical name in the manager map
-	static void registerTexture(const std::string& name, const Texture& texture);
+	// Register an existing texture under its file path key in the manager map
+	static void registerTexture(const std::string& path, const Texture& texture);
 
-  static void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
+	static void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight,
+	                            uint32_t mipLevels);
 
-  static void cleanup();
+	static void cleanup();
 
- private:
-  static std::unordered_map<std::string, Texture> textures;
+private:
+	static std::unordered_map<std::string, Texture> textures;
 	static std::unordered_map<std::string, ThumbnailTexture> thumbnails;
 
 	// Create (or reuse existing) downscaled thumbnail texture from a full Texture

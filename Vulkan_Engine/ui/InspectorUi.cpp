@@ -41,7 +41,7 @@ void InspectorUi::selectEntity(int entityId) {
 		Entity& e = *ePtr;
 		e.isSelected = (static_cast<int>(e.getID()) == entityId);
 	}
-			}
+}
 
 void InspectorUi::selectAsset(const std::string& assetPath) {
 	// Decide selection type based on asset extension
@@ -72,61 +72,64 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 		ePtr->isSelected = false;
 	}
 
-    // If we are currently picking something for the inspector, apply it now.
-    if (pickTarget != InspectorPickTarget::None) {
-        const int selectedId = getSelectedEntityId();
-        if (selectedId > 0 && scene) {
-            Entity* entityPtr = nullptr;
-            auto* entities = scene->getEntities();
-            if (entities) {
-                for (const auto& ePtr : *entities) {
-                    if (static_cast<int>(ePtr->getID()) == selectedId) {
-                        entityPtr = ePtr.get();
-                        break;
-                    }
-                }
-            }
+	// If we are currently picking something for the inspector, apply it now.
+	if (pickTarget != InspectorPickTarget::None) {
+		const int selectedId = getSelectedEntityId();
+		if (selectedId > 0 && scene) {
+			Entity* entityPtr = nullptr;
+			auto* entities = scene->getEntities();
+			if (entities) {
+				for (const auto& ePtr : *entities) {
+					if (static_cast<int>(ePtr->getID()) == selectedId) {
+						entityPtr = ePtr.get();
+						break;
+					}
+				}
+			}
 
-            if (entityPtr && pickTarget == InspectorPickTarget::MeshAlbedo) {
-                Entity& entity = *entityPtr;
-                auto* meshComp = entity.getComponent<MeshComponent>();
-                if (meshComp) {
-                    // Derive a logical name for the texture/material from the asset path
-                    std::filesystem::path p(assetPath);
-                    std::string stem = p.stem().string();
+			if (entityPtr && pickTarget == InspectorPickTarget::MeshAlbedo) {
+				Entity& entity = *entityPtr;
+				auto* meshComp = entity.getComponent<MeshComponent>();
+				if (meshComp) {
+					// Derive a logical name for the texture/material from the asset path
+					std::filesystem::path p(assetPath);
+					std::string stem = p.stem().string();
+					std::string texKey = p.string(); // use full path as texture key
 
-                    Texture* tex = nullptr;
-                    // Try to get existing texture first
-                    try {
-                        tex = TextureManager::getTexture(stem);
-                    }
-                    catch (...) {
-                        // Load new texture and register it in the manager map
-                        Texture* loaded = TextureManager::loadTexture(
-                            assetPath, VulkanCore::getDevice(),
-                            VulkanCore::getPhysicalDevice(),
-                            VulkanCore::getCommandPool(),
-                            VulkanCore::getGraphicsQueue());
-                        TextureManager::createTextureImageView(loaded);
-                        TextureManager::createTextureSampler(loaded);
-                        TextureManager::registerTexture(stem, *loaded);
-                        tex = TextureManager::getTexture(stem);
-                    }
+					Texture* tex = nullptr;
+					// Try to get existing texture first using full path key
+					try {
+						tex = TextureManager::getTexture(texKey);
+					}
+					catch (...) {
+						// Load new texture and register it under the full path key
+						Texture* loaded = TextureManager::loadTexture(
+							assetPath, VulkanCore::getDevice(),
+							VulkanCore::getPhysicalDevice(),
+							VulkanCore::getCommandPool(),
+							VulkanCore::getGraphicsQueue());
+						TextureManager::createTextureImageView(loaded);
+						TextureManager::createTextureSampler(loaded);
+						TextureManager::registerTexture(texKey, *loaded);
+						tex = TextureManager::getTexture(texKey);
+					}
 
-                    // Create or reuse a material that uses this texture
-                    Material* mat = MaterialManager::getMaterial(stem);
-                    if (!mat) {
-                        mat = MaterialManager::createMaterial(stem, stem);
-                    }
+					// Create or reuse a material that uses this texture.
+					// Use the texture file path as the material key.
+					Material* mat = MaterialManager::getMaterial(texKey);
+					if (!mat) {
+						// Create material with file path key equal to texKey.
+						mat = MaterialManager::createMaterial(stem, texKey, texKey);
+					}
 
-                    meshComp->SetMaterial(mat);
-                }
-            }
-        }
+					meshComp->SetMaterial(mat);
+				}
+			}
+		}
 
-        // Reset pick state after handling
-        pickTarget = InspectorPickTarget::None;
-    }
+		// Reset pick state after handling
+		pickTarget = InspectorPickTarget::None;
+	}
 }
 
 void InspectorUi::clearSelection() {
@@ -144,7 +147,7 @@ void InspectorUi::clearSelection() {
 	for (const auto& ePtr : *entities) {
 		ePtr->isSelected = false;
 	}
-			}
+}
 
 int InspectorUi::getSelectedEntityId() {
 	if (selection.type == InspectorSelectionType::Entity) {
@@ -274,7 +277,13 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 	ImGui::TextUnformatted("Material");
 	ImGui::Spacing();
 
-	Material* material = MaterialManager::loadMaterialFromFile(fullPath);
+	std::string normFullPath;
+	normFullPath = std::filesystem::path(fullPath).generic_string();
+
+	Material* material = MaterialManager::getMaterial(normFullPath);
+	if (!material) {
+		material = MaterialManager::loadMaterialFromFile(normFullPath);
+	}
 	if (!material) {
 		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
 		                   "Failed to load material.");
@@ -294,14 +303,20 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			                                : ImGuiCol_Border);
 		dl2->AddRect(min2, max2, col2, 3.0f);
 
-		// If material has an albedo texture, preview it inside the button
-		if (material->albedoTexture &&
-			material->albedoTexture->imageView != VK_NULL_HANDLE &&
-			material->albedoTexture->sampler != VK_NULL_HANDLE) {
+		// Preview the material's albedo texture (look up by key)
+		Texture* previewTex = nullptr;
+		try {
+			previewTex = TextureManager::getTexture(material->albedoTextureKey);
+		}
+		catch (...) {
+			previewTex = nullptr;
+		}
+
+		if (previewTex && previewTex->imageView != VK_NULL_HANDLE &&
+			previewTex->sampler != VK_NULL_HANDLE) {
 			ImVec2 innerMin2(min2.x + 2.0f, min2.y + 2.0f);
 			ImVec2 innerMax2(max2.x - 2.0f, max2.y - 2.0f);
-			VkDescriptorSet texSet2 =
-				getOrCreateImGuiTextureSet(material->albedoTexture);
+			VkDescriptorSet texSet2 = getOrCreateImGuiTextureSet(previewTex);
 			if (texSet2 != VK_NULL_HANDLE) {
 				dl2->AddImage(reinterpret_cast<ImTextureID>(texSet2), innerMin2,
 				              innerMax2);
@@ -349,14 +364,20 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 							tex = TextureManager::getTexture(texKey);
 						}
 
-						// Rebuild or create the material with new albedo texture
+						// Rebuild or create the material with new albedo texture.
 						std::string matName = getMaterialNameFromPath(fullPath);
-						Material* mat = MaterialManager::getMaterial(matName);
+						// Update material texture (create material if missing)
+						std::string normPath;
+						normPath = std::filesystem::path(fullPath).generic_string();
+						Material* mat = MaterialManager::updateMaterialTexture(normPath, texKey);
+						if (!mat) {
+							std::cerr << "Inspector: failed to create/update material for path '" << normPath << "'" << std::endl;
+						}
 
-						mat = MaterialManager::createMaterial(matName, texKey);
-
-						// Save updated material back to JSON file
+						// Persist updated material back to JSON file
 						MaterialManager::saveMaterialToFile(fullPath, matName, texKey);
+						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'" <<
+							std::endl;
 					}
 				}
 			}
@@ -378,28 +399,28 @@ void InspectorUi::render() {
 
 	const float kHeaderContentTopPadding = 6.0f;
 
-    if (selection.type == InspectorSelectionType::Entity && scene &&
-        selection.entityId > 0) {
-    Entity* entityPtr = nullptr;
-    auto* entities = scene->getEntities();
-    if (entities) {
-      for (const auto& ePtr : *entities) {
-        if (static_cast<int>(ePtr->getID()) == selection.entityId) {
-          entityPtr = ePtr.get();
-          break;
-        }
-      }
-    }
+	if (selection.type == InspectorSelectionType::Entity && scene &&
+		selection.entityId > 0) {
+		Entity* entityPtr = nullptr;
+		auto* entities = scene->getEntities();
+		if (entities) {
+			for (const auto& ePtr : *entities) {
+				if (static_cast<int>(ePtr->getID()) == selection.entityId) {
+					entityPtr = ePtr.get();
+					break;
+				}
+			}
+		}
 
-    if (!entityPtr) {
-      // Selected entity id not found in scene; clear selection
-      clearSelection();
-      ImGui::PopStyleVar();
-      ImGui::End();
-      return;
-    }
+		if (!entityPtr) {
+			// Selected entity id not found in scene; clear selection
+			clearSelection();
+			ImGui::PopStyleVar();
+			ImGui::End();
+			return;
+		}
 
-    Entity& entity = *entityPtr;
+		Entity& entity = *entityPtr;
 		char nameBuffer[256];
 		strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
 		nameBuffer[sizeof(nameBuffer) - 1] = 0;
@@ -512,12 +533,20 @@ void InspectorUi::render() {
 				ImU32 borderCol = ImGui::GetColorU32(isHovered ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
 				dl->AddRect(min, max, borderCol, 3.0f);
 
-				// If material has an albedo texture, preview it inside the button
-				if (material->albedoTexture && material->albedoTexture->imageView != VK_NULL_HANDLE &&
-					material->albedoTexture->sampler != VK_NULL_HANDLE) {
+				// Preview the material's albedo texture (look up by key)
+				Texture* previewTex = nullptr;
+				try {
+					previewTex = TextureManager::getTexture(material->albedoTextureKey);
+				}
+				catch (...) {
+					previewTex = nullptr;
+				}
+
+				if (previewTex && previewTex->imageView != VK_NULL_HANDLE &&
+					previewTex->sampler != VK_NULL_HANDLE) {
 					ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
 					ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
-					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(material->albedoTexture);
+					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
 					if (texSet != VK_NULL_HANDLE) {
 						dl->AddImage(
 							reinterpret_cast<ImTextureID>(texSet),
