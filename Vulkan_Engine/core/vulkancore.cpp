@@ -353,7 +353,14 @@ void VulkanCore::loadModel() {
       vertex.texCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
                          1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
 
-      vertex.color = {1.0f, 1.0f, 1.0f};
+      // If the OBJ provides normals use them, otherwise default to (0,1,0) (TEMPORARY)
+      if (!attrib.normals.empty()) {
+        vertex.normal = {attrib.normals[3 * index.normal_index + 0],
+                         attrib.normals[3 * index.normal_index + 1],
+                         attrib.normals[3 * index.normal_index + 2]};
+      } else {
+        vertex.normal = {0.0f, 1.0f, 0.0f};
+      }
 
       if (uniqueVertices.count(vertex) == 0) {
         uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
@@ -599,8 +606,15 @@ void VulkanCore::createDescriptorSetLayout() {
   samplerLayoutBinding.pImmutableSamplers = nullptr;
   samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-  std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding,
-                                                          samplerLayoutBinding};
+  VkDescriptorSetLayoutBinding lightLayoutBinding{};
+  lightLayoutBinding.binding = 2;
+  lightLayoutBinding.descriptorCount = 1;
+  lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  lightLayoutBinding.pImmutableSamplers = nullptr;
+  lightLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+  std::array<VkDescriptorSetLayoutBinding, 3> bindings = {
+      uboLayoutBinding, samplerLayoutBinding, lightLayoutBinding};
 
   VkDescriptorSetLayoutCreateInfo layoutInfo{};
   layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
