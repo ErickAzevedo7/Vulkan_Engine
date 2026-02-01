@@ -1,4 +1,5 @@
 #include "MaterialManager.h"
+#include "managers/LightManager.h"
 
 // initialize static members
 std::unordered_map<std::string, Material*> MaterialManager::materials;
@@ -236,11 +237,14 @@ void MaterialManager::createDescriptorPool() {
 	const uint32_t maxMaterials = 100; // adjust as needed
 	const uint32_t totalSets = maxMaterials * MAX_FRAMES_IN_FLIGHT;
 
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	std::array<VkDescriptorPoolSize, 3> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	poolSizes[0].descriptorCount = totalSets;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = totalSets;
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[2].descriptorCount = totalSets;
+
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

@@ -32,6 +32,8 @@
     <ClCompile Include="external\imgui\imgui_tables.cpp" />
     <ClCompile Include="external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="ui\InspectorUi.cpp" />
+    <ClCompile Include="components\LightComponent.cpp" />
+    <ClCompile Include="managers\LightManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\Component.h" />
@@ -65,6 +67,8 @@
     <ClInclude Include="external\imgui\imstb_textedit.h" />
     <ClInclude Include="ui\InspectorUi.h" />
     <ClInclude Include="Editor\MousePick.h" />
+    <ClInclude Include="components\LightComponent.h" />
+    <ClInclude Include="managers\LightManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">

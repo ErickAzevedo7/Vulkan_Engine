@@ -56,6 +56,7 @@ void GridPlane::updateUniformBuffer(uint32_t currentImage,
                                     const glm::mat4& proj) {
   UniformBufferObject ubo{};
   ubo.model = model;
+  ubo.normal = glm::transpose(glm::inverse(model));
   ubo.view = view;
   ubo.proj = proj;
 
@@ -128,7 +129,7 @@ void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
   attributeDescriptions[1].binding = 0;
   attributeDescriptions[1].location = 1;
   attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-  attributeDescriptions[1].offset = offsetof(Vertex, color);
+  attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType =

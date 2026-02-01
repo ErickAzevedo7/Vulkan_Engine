@@ -58,11 +58,16 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
   ubo.view = viewMatrix;
 
   ubo.proj = projMatrix;
+  
+  ubo.viewPos = cameraPos;
 
   for (const auto& entityPtr : *entities) {
     const Entity& entity = *entityPtr;
 
-    ubo.model = entity.getComponent<Transform>()->getMatrix();
+    glm::mat4 model = entity.getComponent<Transform>()->getMatrix();
+    ubo.model = model;
+    // normal matrix is inverse-transpose of model's upper-left 3x3
+    ubo.normal = glm::transpose(glm::inverse(model));
 
     size_t offset = entity.getID() * VulkanCore::getDynamicAlignment();
     char* base =

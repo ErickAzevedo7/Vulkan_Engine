@@ -8,7 +8,7 @@
 
 struct Vertex {
   glm::vec3 pos;
-  glm::vec3 color;
+  glm::vec3 normal;
   glm::vec2 texCoord;
 
   static VkVertexInputBindingDescription getBindingDescription();
@@ -17,7 +17,7 @@ struct Vertex {
   getAttributeDescriptions();
 
   bool operator==(const Vertex& other) const {
-    return pos == other.pos && color == other.color &&
+    return pos == other.pos && normal == other.normal &&
            texCoord == other.texCoord;
   }
 };
@@ -28,7 +28,7 @@ struct hash<Vertex> {
   inline size_t operator()(Vertex const& vertex) const noexcept
   {
     return ((std::hash<glm::vec3>()(vertex.pos) ^
-             (std::hash<glm::vec3>()(vertex.color) << 1)) >>
+             (std::hash<glm::vec3>()(vertex.normal) << 1)) >>
             1) ^
            (std::hash<glm::vec2>()(vertex.texCoord) << 1);
   }
@@ -43,6 +43,7 @@ struct Mesh {
   VkBuffer indexBuffer;
   VkDeviceMemory indexMemory;
   uint32_t indexCount;
+  std::string name; 
 };
 
 const std::vector<Vertex> quadVertices = {

@@ -3,6 +3,7 @@ layout(location = 0) out vec3 worldPos;
 
 layout(binding = 0) uniform UniformBufferObject {
     mat4 model;
+    mat4 normal;
     mat4 view;
     mat4 proj;
 } ubo;

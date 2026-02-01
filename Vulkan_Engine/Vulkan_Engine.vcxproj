@@ -138,6 +138,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="components\LightComponent.cpp" />
     <ClCompile Include="external\imgui\imgui.cpp" />
     <ClCompile Include="external\imgui\imgui_demo.cpp" />
     <ClCompile Include="external\imgui\imgui_draw.cpp" />
@@ -145,6 +146,7 @@
     <ClCompile Include="external\imgui\imgui_impl_vulkan.cpp" />
     <ClCompile Include="external\imgui\imgui_tables.cpp" />
     <ClCompile Include="external\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="managers\LightManager.cpp" />
     <ClCompile Include="ui\AssetBrowser.cpp" />
     <ClCompile Include="components\Component.cpp" />
     <ClCompile Include="core\utils\Utils.cpp" />
@@ -171,6 +173,7 @@
     <ClCompile Include="core\vulkancore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="components\LightComponent.h" />
     <ClInclude Include="Editor\MousePick.h" />
     <ClInclude Include="external\imgui\imconfig.h" />
     <ClInclude Include="external\imgui\imgui.h" />
@@ -180,6 +183,7 @@
     <ClInclude Include="external\imgui\imstb_rectpack.h" />
     <ClInclude Include="external\imgui\imstb_textedit.h" />
     <ClInclude Include="external\imgui\imstb_truetype.h" />
+    <ClInclude Include="managers\LightManager.h" />
     <ClInclude Include="ui\AssetBrowser.h" />
     <ClInclude Include="components\Component.h" />
     <ClInclude Include="core\utils\Utils.h" />

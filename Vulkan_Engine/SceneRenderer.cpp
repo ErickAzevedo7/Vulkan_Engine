@@ -30,7 +30,7 @@ void SceneRenderer::renderEntity(const Entity* entity,
   const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
   if (!meshComp) {
-    throw std::runtime_error("Entity does not have a MeshComponent.");
+    return;
   }
 
   meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex,
