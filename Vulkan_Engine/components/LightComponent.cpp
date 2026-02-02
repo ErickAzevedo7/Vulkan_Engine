@@ -37,6 +37,9 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	u.range = range;
 	u.innerCone = innerConeAngle;
 	u.outerCone = outerConeAngle;
+	u.ambient = ambient;
+	u.diffuse = diffuse;
+	u.specular = specular;
 
 	return u;
 }

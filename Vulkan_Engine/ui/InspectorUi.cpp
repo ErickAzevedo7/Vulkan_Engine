@@ -290,6 +290,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 	}
 	else {
 		ImGui::Spacing();
+
+		// Albedo texture section
 		const char* albedoLabel = "Albedo";
 		ImVec2 albedoSize = ImGui::CalcTextSize(albedoLabel);
 		ImVec2 squareSize(albedoSize.y, albedoSize.y);
@@ -375,7 +377,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						}
 
 						// Persist updated material back to JSON file
-						MaterialManager::saveMaterialToFile(fullPath, matName, texKey);
+						MaterialManager::saveMaterialToFile(fullPath, matName, texKey,
+						                                    mat->properties.ambient,
+						                                    mat->properties.shininess,
+						                                    mat->properties.specular);
 						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'" <<
 							std::endl;
 					}
@@ -386,7 +391,84 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 		ImGui::SameLine();
 		ImGui::TextUnformatted(albedoLabel);
+
+		// Material Properties section - keep same indentation as above
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		// Use bold font for title if available (Fonts[1]), otherwise use scaled default
+		ImGuiIO& io = ImGui::GetIO();
+
+		ImGui::PushFont(io.Fonts->Fonts[1]); // Use bold font (index 1)
+		ImGui::TextUnformatted("Lighting Properties");
+		ImGui::PopFont();
+
+		ImGui::Spacing();
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+
+		// Use a unique ID for these columns to avoid state conflicts
+		ImGui::Columns(2, "##MaterialPropsColumns", false);
+		ImGui::SetColumnWidth(0, 60.0f);
+
+		bool propertiesChanged = false;
+
+		// Ambient
+		ImGui::Text("Ambient");
+		ImGui::NextColumn();
+		if (ImGui::ColorEdit3("##Ambient", &material->properties.ambient.x,
+		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+			propertiesChanged = true;
+		}
+		ImGui::NextColumn();
+
+		// Diffuse
+		ImGui::Text("Diffuse");
+		ImGui::NextColumn();
+		if (ImGui::ColorEdit3("##Diffuse", &material->properties.diffuse.x,
+		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+			propertiesChanged = true;
+		}
+		ImGui::NextColumn();
+
+		// Specular
+		ImGui::Text("Specular");
+		ImGui::NextColumn();
+		if (ImGui::ColorEdit3("##Specular", &material->properties.specular.x,
+		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+			propertiesChanged = true;
+		}
+		ImGui::NextColumn();
+
+		// Shininess
+		ImGui::Text("Shininess");
+		ImGui::NextColumn();
+		if (ImGui::SliderFloat("##Shininess", &material->properties.shininess, 1.0f, 256.0f, "%.1f")) {
+			propertiesChanged = true;
+		}
+		ImGui::NextColumn();
+
+		// Important: End columns before continuing
+		ImGui::Columns(1);
+
+		// If properties changed, update GPU buffers and save to file
+		if (propertiesChanged) {
+			// Update all frames
+			for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+				MaterialManager::updateMaterialProperties(material, i);
+			}
+
+			// Save to file
+			std::string matName = getMaterialNameFromPath(fullPath);
+			MaterialManager::saveMaterialToFile(fullPath, matName, material->albedoTextureKey,
+			                                    material->properties.ambient,
+			                                    material->properties.shininess,
+			                                    material->properties.specular,
+			                                    material->properties.diffuse);
+		}
 	}
+
+	ImGui::Unindent(kContentIndent);
+	ImGui::PopStyleVar();
 }
 
 
@@ -620,8 +702,84 @@ void InspectorUi::render() {
 					ImGui::PopStyleVar();
 				}
 			}
+		}
+		else {
+			ImGui::PopStyleVar(3);
+		}
+
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
+
+		// Light component section
+		auto* lightComp = entity.getComponent<LightComponent>();
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+		if (lightComp && ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::PopStyleVar(3);
+
+			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+			ImGui::Indent(kContentIndent);
+
+			ImGui::Columns(2, "##LightColumns", false);
+			ImGui::SetColumnWidth(0, 80.0f);
+
+			// Color
+			ImGui::Text("Color");
+			ImGui::NextColumn();
+			ImGui::ColorEdit3("##LightColor", &lightComp->color.x,
+			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::NextColumn();
+
+			// Intensity
+			ImGui::Text("Intensity");
+			ImGui::NextColumn();
+			ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 0.01f, 0.0f, 100.0f, "%.2f");
+			ImGui::NextColumn();
+
+			ImGui::Columns(1);
+
+			// Lighting Properties section
+			ImGui::Spacing();
+			ImGui::Spacing();
+
+			ImGuiIO& io = ImGui::GetIO();
+			ImGui::PushFont(io.Fonts->Fonts[1]); // Bold font
+			ImGui::TextUnformatted("Lighting Properties");
+			ImGui::PopFont();
+
+			ImGui::Spacing();
+
+			ImGui::Columns(2, "##LightPropsColumns", false);
+			ImGui::SetColumnWidth(0, 60.0f);
+
+			// Ambient
+			ImGui::Text("Ambient");
+			ImGui::NextColumn();
+			ImGui::ColorEdit3("##LightAmbient", &lightComp->ambient.x,
+			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::NextColumn();
+
+			// Diffuse
+			ImGui::Text("Diffuse");
+			ImGui::NextColumn();
+			ImGui::ColorEdit3("##LightDiffuse", &lightComp->diffuse.x,
+			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::NextColumn();
+
+			// Specular
+			ImGui::Text("Specular");
+			ImGui::NextColumn();
+			ImGui::ColorEdit3("##LightSpecular", &lightComp->specular.x,
+			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::NextColumn();
+
+			ImGui::Columns(1);
 
 			ImGui::Unindent(kContentIndent);
+			ImGui::PopStyleVar();
 		}
 		else {
 			ImGui::PopStyleVar(3);

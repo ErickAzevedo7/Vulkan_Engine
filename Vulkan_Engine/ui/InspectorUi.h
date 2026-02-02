@@ -8,8 +8,9 @@
 #include <vulkan/vulkan.h>
 
 #include "Entity.h"
-#include "components/Transform.h"
+#include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "components/Transform.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "managers/SceneManager.h"

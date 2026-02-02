@@ -24,6 +24,11 @@ public:
 	float innerConeAngle{glm::radians(12.5f)};
 	float outerConeAngle{glm::radians(17.5f)};
 
+	// Lighting contribution factors
+	glm::vec3 ambient{0.15f, 0.15f, 0.15f};
+	glm::vec3 diffuse{1.0f, 1.0f, 1.0f};
+	glm::vec3 specular{1.0f, 1.0f, 1.0f};
+
 	Entity* getOwner() const { return owner; }
 
 	// Uniform layout for GPU upload (aligned)
@@ -36,6 +41,9 @@ public:
 		float range;
 		float innerCone;
 		float outerCone;
+		glm::vec3 ambient;
+		glm::vec3 diffuse;
+		glm::vec3 specular;
 	};
 
 	LightUniform getLightUniform() const;
