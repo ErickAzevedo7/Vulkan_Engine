@@ -726,6 +726,16 @@ void InspectorUi::render() {
 			ImGui::Columns(2, "##LightColumns", false);
 			ImGui::SetColumnWidth(0, 80.0f);
 
+			// Light Type
+			ImGui::Text("Type");
+			ImGui::NextColumn();
+			const char* lightTypeLabels[] = {"Directional", "Point", "Spot"};
+			int currentType = static_cast<int>(lightComp->getType());
+			if (ImGui::Combo("##LightType", &currentType, lightTypeLabels, IM_ARRAYSIZE(lightTypeLabels))) {
+				lightComp->setType(static_cast<LightType>(currentType));
+			}
+			ImGui::NextColumn();
+
 			// Color
 			ImGui::Text("Color");
 			ImGui::NextColumn();
@@ -777,6 +787,84 @@ void InspectorUi::render() {
 			ImGui::NextColumn();
 
 			ImGui::Columns(1);
+
+			// Attenuation section (for point/spot lights)
+			if (lightComp->getType() != LightType::Directional) {
+				ImGui::Spacing();
+				ImGui::Spacing();
+
+				ImGuiIO& ioAtt = ImGui::GetIO();
+				ImGui::PushFont(ioAtt.Fonts->Fonts[1]); // Bold font
+				ImGui::TextUnformatted("Attenuation");
+				ImGui::PopFont();
+
+				ImGui::Spacing();
+
+				ImGui::Columns(2, "##LightAttenColumns", false);
+				ImGui::SetColumnWidth(0, 80.0f);
+
+				// Constant (Kc)
+				ImGui::Text("Kc (Const)");
+				ImGui::NextColumn();
+				ImGui::DragFloat("##LightAttenKc", &lightComp->attenuationKc, 0.01f, 0.0f, 100.0f, "%.3f");
+				ImGui::NextColumn();
+
+				// Linear (Kl)
+				ImGui::Text("Kl (Linear)");
+				ImGui::NextColumn();
+				ImGui::DragFloat("##LightAttenKl", &lightComp->attenuationKl, 0.01f, 0.0f, 100.0f, "%.3f");
+				ImGui::NextColumn();
+
+				// Quadratic (Kq)
+			ImGui::Text("Kq (Quad)");
+			ImGui::NextColumn();
+			ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f");
+			ImGui::NextColumn();
+
+			ImGui::Columns(1);
+		}
+
+		// Spotlight cone angle section (only for spotlights)
+		if (lightComp->getType() == LightType::Spot) {
+			ImGui::Spacing();
+			ImGui::Spacing();
+
+			ImGuiIO& ioSpot = ImGui::GetIO();
+			ImGui::PushFont(ioSpot.Fonts->Fonts[1]); // Bold font
+			ImGui::TextUnformatted("Spotlight Cone");
+			ImGui::PopFont();
+
+			ImGui::Spacing();
+
+			ImGui::Columns(2, "##SpotlightConeColumns", false);
+			ImGui::SetColumnWidth(0, 80.0f);
+
+			// Inner Cone Angle
+			ImGui::Text("Inner Cone");
+			ImGui::NextColumn();
+			float innerDegrees = glm::degrees(lightComp->innerConeAngle);
+			if (ImGui::SliderFloat("##InnerCone", &innerDegrees, 0.0f, 90.0f, "%.1f°")) {
+				lightComp->innerConeAngle = glm::radians(innerDegrees);
+				// Ensure inner cone is not larger than outer cone
+				if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
+					lightComp->outerConeAngle = lightComp->innerConeAngle;
+				}
+			}
+			ImGui::NextColumn();
+
+			// Outer Cone Angle
+			ImGui::Text("Outer Cone");
+			ImGui::NextColumn();
+			float outerDegrees = glm::degrees(lightComp->outerConeAngle);
+			if (ImGui::SliderFloat("##OuterCone", &outerDegrees, 0.0f, 90.0f, "%.1f°")) {
+				lightComp->outerConeAngle = glm::radians(outerDegrees);
+				// Ensure outer cone is not smaller than inner cone
+				if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
+					lightComp->innerConeAngle = lightComp->outerConeAngle;
+				}
+			}
+			ImGui::NextColumn();
+		}
 
 			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();
