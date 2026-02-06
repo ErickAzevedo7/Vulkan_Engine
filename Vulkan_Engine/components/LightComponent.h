@@ -28,6 +28,12 @@ public:
 	glm::vec3 ambient{0.15f, 0.15f, 0.15f};
 	glm::vec3 diffuse{1.0f, 1.0f, 1.0f};
 	glm::vec3 specular{1.0f, 1.0f, 1.0f};
+	
+	// Attenuation factors for point/spot lights
+	// attenuation = 1.0 / (Kc + Kl * distance + Kq * distance * distance)
+	float attenuationKc{1.0f};    // constant term
+	float attenuationKl{0.09f};   // linear term
+	float attenuationKq{0.032f};  // quadratic term
 
 	Entity* getOwner() const { return owner; }
 
@@ -44,6 +50,9 @@ public:
 		glm::vec3 ambient;
 		glm::vec3 diffuse;
 		glm::vec3 specular;
+		float attenuationKc;
+		float attenuationKl;
+		float attenuationKq;
 	};
 
 	LightUniform getLightUniform() const;

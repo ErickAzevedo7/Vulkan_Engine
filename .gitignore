@@ -362,5 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
+.vscode/
 vcpckg_instaled/
-/Vulkan_Engine/vcpkg_installed
+Vulkan_Engine/vcpkg_installed
+Vulkan_Engine/assets

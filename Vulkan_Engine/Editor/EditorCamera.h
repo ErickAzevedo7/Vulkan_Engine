@@ -10,7 +10,7 @@
 #include "ui/SceneUi.h"
 #include "gizmos/ImGuizmo.h"
 
-extern float deltaTime;
+extern double deltaTime;
 
 class EditorCamera  
 {  

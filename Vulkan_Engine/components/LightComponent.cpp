@@ -40,6 +40,9 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	u.ambient = ambient;
 	u.diffuse = diffuse;
 	u.specular = specular;
+	u.attenuationKc = attenuationKc;
+	u.attenuationKl = attenuationKl;
+	u.attenuationKq = attenuationKq;
 
 	return u;
 }
