@@ -18,6 +18,7 @@ layout(binding = 2) uniform Light {
     float attenuationKq;
     float cutOff;        // inner cone angle (cosine)
     float outerCutOff;   // outer cone angle (cosine)
+    int useBlinnPhong;   // 1 = Blinn-Phong, 0 = Phong
 } light;
 
 layout(binding = 3) uniform MaterialProps {
@@ -40,6 +41,7 @@ void main() {
     else
     {
     vec4 tex = texture(texSampler, fragTexCoord);
+    vec3 texColor = tex.rgb;
 
     // read light data from uniform
     vec3 lightColor = light.colorIntensity.rgb;
@@ -63,19 +65,29 @@ void main() {
         spotIntensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
     }
 
-    //ambient
-    vec3 ambient = light.ambient.rgb * material.ambient;
+    //ambient - modulated by texture color
+    vec3 ambient = light.ambient.rgb * material.ambient * texColor;
     
-    // diffuse 
+    // diffuse - modulated by texture color
     vec3 norm = normalize(fragNormal);
     
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = light.diffuse.rgb * (diff * material.diffuse);
+    vec3 diffuse = light.diffuse.rgb * (diff * material.diffuse) * texColor;
     
-    // specular
+    // specular (Blinn-Phong or Phong based on flag) - NOT modulated by texture color
     vec3 viewDir = normalize(fragViewPos - fragPosition);
-    vec3 reflectDir = reflect(-lightDir, norm);  
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    float spec;
+    
+    if (light.useBlinnPhong == 1) {
+        // Blinn-Phong: use halfway vector
+        vec3 halfwayDir = normalize(lightDir + viewDir);  
+        spec = pow(max(dot(norm, halfwayDir), 0.0), material.shininess);
+    } else {
+        // Phong: use reflection vector
+        vec3 reflectDir = reflect(-lightDir, norm);  
+        spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    }
+    
     vec3 specular = light.specular.rgb * (spec * material.specular);
     
     // point light and spotlight attenuation
@@ -94,7 +106,8 @@ void main() {
       specular *= spotIntensity;
     }
     
-    vec3 result = (ambient + diffuse + specular) * tex.rgb;
+    // Final result - apply light color and intensity
+    vec3 result = (ambient + diffuse + specular) * lightIntensity;
     outColor = vec4(result, tex.a);
     }
 }

@@ -3,7 +3,6 @@
 #include "Component.h"
 #include "Entity.h"
 #include <glm/glm.hpp>
-#include "components/Transform.h"
 
 enum class LightType { Directional = 0, Point = 1, Spot = 2 };
 
@@ -35,6 +34,9 @@ public:
 	float attenuationKl{0.09f};   // linear term
 	float attenuationKq{0.032f};  // quadratic term
 
+	// Lighting model selection
+	bool useBlinnPhong{true};     // true = Blinn-Phong, false = Phong
+
 	Entity* getOwner() const { return owner; }
 
 	// Uniform layout for GPU upload (aligned)
@@ -53,6 +55,7 @@ public:
 		float attenuationKc;
 		float attenuationKl;
 		float attenuationKq;
+		int useBlinnPhong;  // 1 = Blinn-Phong, 0 = Phong
 	};
 
 	LightUniform getLightUniform() const;

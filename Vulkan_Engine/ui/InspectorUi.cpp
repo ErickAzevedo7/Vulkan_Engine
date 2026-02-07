@@ -786,6 +786,15 @@ void InspectorUi::render() {
 			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 			ImGui::NextColumn();
 
+			// Lighting Model
+			ImGui::Text("Model");
+			ImGui::NextColumn();
+			ImGui::Checkbox("Blinn-Phong", &lightComp->useBlinnPhong);
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Blinn-Phong (checked) or Phong (unchecked)");
+			}
+			ImGui::NextColumn();
+
 			ImGui::Columns(1);
 
 			// Attenuation section (for point/spot lights)

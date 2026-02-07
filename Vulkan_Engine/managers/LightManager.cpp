@@ -11,8 +11,8 @@ void LightManager::init() {
 	lightBuffers.resize(count);
 	lightBufferMem.resize(count);
 
-	// Allocate buffer for: colorIntensity(vec4) + direction(vec4) + positionType(vec4) + ambient(vec4) + diffuse(vec4) + specular(vec4) + attenuation(3 floats) + cutOff(float) + outerCutOff(float) = 6 vec4s + 5 floats (THIS IS TEMPORARY)
-	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 5;
+	// Allocate buffer for: colorIntensity(vec4) + direction(vec4) + positionType(vec4) + ambient(vec4) + diffuse(vec4) + specular(vec4) + attenuation(3 floats) + cutOff(float) + outerCutOff(float) + useBlinnPhong(int) = 6 vec4s + 6 floats
+	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
 	for (uint32_t i = 0; i < count; ++i) {
 		Utils::createBuffer(bufferSize,
 		                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -52,7 +52,7 @@ void LightManager::updateLight(uint32_t frame, const LightComponent::LightUnifor
 	float cutOff = glm::cos(u.innerCone);
 	float outerCutOff = glm::cos(u.outerCone);
 
-	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 5;
+	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
 	vkMapMemory(VulkanCore::getDevice(), lightBufferMem[frame], 0, bufferSize, 0, &data);
 	
 	memcpy(data, &v0, sizeof(glm::vec4));
@@ -70,6 +70,10 @@ void LightManager::updateLight(uint32_t frame, const LightComponent::LightUnifor
 	// Write spotlight cutoff angles
 	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 3, &cutOff, sizeof(float));
 	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 4, &outerCutOff, sizeof(float));
+	
+	// Write useBlinnPhong flag
+	int blinnPhongFlag = u.useBlinnPhong;
+	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 5, &blinnPhongFlag, sizeof(int));
 	
 	vkUnmapMemory(VulkanCore::getDevice(), lightBufferMem[frame]);
 }

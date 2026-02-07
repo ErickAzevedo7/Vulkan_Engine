@@ -1,4 +1,5 @@
 #include "LightComponent.h"
+#include "components/Transform.h"
 
 LightComponent::LightComponent(Entity* owner, LightType type)
 	: Component(), owner(owner), type(type) {
@@ -43,6 +44,7 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	u.attenuationKc = attenuationKc;
 	u.attenuationKl = attenuationKl;
 	u.attenuationKq = attenuationKq;
+	u.useBlinnPhong = useBlinnPhong ? 1 : 0;
 
 	return u;
 }
