@@ -1,52 +1,57 @@
 #include "SceneManager.h"
 
+#include "Scene.h"
+
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
+
 // Define the static member
 std::vector<std::unique_ptr<Scene>> SceneManager::scenes;
 size_t SceneManager::activeSceneIndex;
 
 void SceneManager::loadDefaults() {
-  createScene("Default Scene");
-  activeSceneIndex = 0;
+	createScene("Default Scene");
+	activeSceneIndex = 0;
 }
 
-
 size_t SceneManager::createScene(const std::string& name) {
-
-  scenes.emplace_back(std::make_unique<Scene>(name));
-  activeSceneIndex = scenes.size() - 1;
-  return activeSceneIndex;
+	scenes.emplace_back(std::make_unique<Scene>(name));
+	activeSceneIndex = scenes.size() - 1;
+	return activeSceneIndex;
 }
 
 void SceneManager::removeScene(const size_t index) {
-  if (index < scenes.size()) {
-    scenes.erase(scenes.begin() + index);
-    // Adjust activeSceneIndex if necessary
-    if (activeSceneIndex >= scenes.size()) {
-      activeSceneIndex = !scenes.empty() ? scenes.size() - 1 : 0;
-    }
-  }
+	if (index < scenes.size()) {
+		scenes.erase(scenes.begin() + index);
+		// Adjust activeSceneIndex if necessary
+		if (activeSceneIndex >= scenes.size()) {
+			activeSceneIndex = !scenes.empty() ? scenes.size() - 1 : 0;
+		}
+	}
 }
 
 Scene* SceneManager::getScene(size_t index) {
-  if (index < scenes.size()) {
-    return scenes[index].get();
-  }
-  return nullptr;
+	if (index < scenes.size()) {
+		return scenes[index].get();
+	}
+	return nullptr;
 }
 
 Scene* SceneManager::getActiveScene() {
-  if (!scenes.empty()) {
-    return scenes[activeSceneIndex].get();
-  }
-  return nullptr;
+	if (!scenes.empty()) {
+		return scenes[activeSceneIndex].get();
+	}
+	return nullptr;
 }
 
 void SceneManager::setActiveScene(const size_t index) {
-  if (index < scenes.size()) {
-    activeSceneIndex = index;
-  }
+	if (index < scenes.size()) {
+		activeSceneIndex = index;
+	}
 }
 
 size_t SceneManager::getSceneCount() {
-  return scenes.size();
+	return scenes.size();
 }

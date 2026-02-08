@@ -1,11 +1,9 @@
 #pragma once
-#include <stb_image.h>
+#include "vulkan/vulkan_core.h"
+
+#include <cstdint>
 #include <string>
 #include <unordered_map>
-#include <filesystem>
-
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
 
 struct Texture {
 	VkImage image;
@@ -35,17 +33,16 @@ public:
 	static void loadAllFromAssets(const std::string& assetsRoot);
 
 	static Texture* loadTexture(const std::string& path,
-	                            VkDevice device,
-	                            VkPhysicalDevice physicalDevice,
-	                            VkCommandPool commandPool,
-	                            VkQueue graphicsQueue);
+								VkDevice device,
+								VkPhysicalDevice physicalDevice,
+								VkCommandPool commandPool,
+								VkQueue graphicsQueue);
 
 	static void createTextureSampler(Texture* texture);
 
 	static void createThumbnailSampler(ThumbnailTexture* texture);
 
 	static void createTextureImageView(Texture* texture);
-
 
 	static Texture* getTexture(const std::string& path);
 	static const ThumbnailTexture* getThumbnail(const std::string& key);
@@ -55,8 +52,8 @@ public:
 	// Register an existing texture under its file path key in the manager map
 	static void registerTexture(const std::string& path, const Texture& texture);
 
-	static void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight,
-	                            uint32_t mipLevels);
+	static void
+	generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
 	static void cleanup();
 

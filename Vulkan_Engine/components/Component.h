@@ -1,9 +1,7 @@
 #pragma once
-class Component
-{
+class Component {
 public:
 	Component();
 	virtual ~Component();
 	void update();
 };
-

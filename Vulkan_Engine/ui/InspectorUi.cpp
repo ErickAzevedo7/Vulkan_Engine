@@ -1,7 +1,33 @@
 #include "InspectorUi.h"
 
+#include "components/LightComponent.h"
+#include "components/MeshComponent.h"
+#include "components/Transform.h"
+#include "core/vulkancore.h"
+#include "imgui.h"
+#include "imgui_impl_vulkan.h"
+#include "imgui_internal.h"
+#include "managers/MaterialManager.h"
+#include "managers/TextureManager.h"
+#include "Scene.h"
+#include "ui/AssetBrowser.h"
+#include "vulkan/vulkan_core.h"
+
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <managers/SceneManager.h>
+#include <string.h>
+
+#include <cctype>
+#include <cstdint>
+#include <filesystem>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+
+#include "glm/ext/quaternion_float.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include "glm/trigonometric.hpp"
 
 InspectorSelection InspectorUi::selection{};
 InspectorPickTarget InspectorUi::pickTarget = InspectorPickTarget::None;
@@ -32,10 +58,12 @@ void InspectorUi::selectEntity(int entityId) {
 
 	// Update per-entity selection flags so outline/rendering can use isSelected
 	Scene* scene = SceneManager::getActiveScene();
-	if (!scene) return;
+	if (!scene)
+		return;
 
 	auto* entities = scene->getEntities();
-	if (!entities) return;
+	if (!entities)
+		return;
 
 	for (const auto& ePtr : *entities) {
 		Entity& e = *ePtr;
@@ -53,8 +81,7 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 
 	if (ext == ".mat") {
 		selection.type = InspectorSelectionType::Material;
-	}
-	else {
+	} else {
 		selection.type = InspectorSelectionType::Asset;
 	}
 
@@ -63,10 +90,12 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 
 	// Clear entity selection flags when switching to an asset selection
 	Scene* scene = SceneManager::getActiveScene();
-	if (!scene) return;
+	if (!scene)
+		return;
 
 	auto* entities = scene->getEntities();
-	if (!entities) return;
+	if (!entities)
+		return;
 
 	for (const auto& ePtr : *entities) {
 		ePtr->isSelected = false;
@@ -100,14 +129,13 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 					// Try to get existing texture first using full path key
 					try {
 						tex = TextureManager::getTexture(texKey);
-					}
-					catch (...) {
+					} catch (...) {
 						// Load new texture and register it under the full path key
-						Texture* loaded = TextureManager::loadTexture(
-							assetPath, VulkanCore::getDevice(),
-							VulkanCore::getPhysicalDevice(),
-							VulkanCore::getCommandPool(),
-							VulkanCore::getGraphicsQueue());
+						Texture* loaded = TextureManager::loadTexture(assetPath,
+																	  VulkanCore::getDevice(),
+																	  VulkanCore::getPhysicalDevice(),
+																	  VulkanCore::getCommandPool(),
+																	  VulkanCore::getGraphicsQueue());
 						TextureManager::createTextureImageView(loaded);
 						TextureManager::createTextureSampler(loaded);
 						TextureManager::registerTexture(texKey, *loaded);
@@ -139,10 +167,12 @@ void InspectorUi::clearSelection() {
 
 	// Clear all per-entity selection flags
 	Scene* scene = SceneManager::getActiveScene();
-	if (!scene) return;
+	if (!scene)
+		return;
 
 	auto* entities = scene->getEntities();
-	if (!entities) return;
+	if (!entities)
+		return;
 
 	for (const auto& ePtr : *entities) {
 		ePtr->isSelected = false;
@@ -174,19 +204,17 @@ VkDescriptorSet InspectorUi::getOrCreateImGuiTextureSet(Texture* texture) {
 		return VK_NULL_HANDLE;
 
 	// Create a new ImGui texture descriptor set and cache it
-	VkDescriptorSet set = ImGui_ImplVulkan_AddTexture(
-		texture->sampler,
-		texture->imageView,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	VkDescriptorSet set =
+		ImGui_ImplVulkan_AddTexture(texture->sampler, texture->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	imguiTextureCache.emplace(texture, set);
 	return set;
 }
 
 bool InspectorUi::drawIconCollapsingHeader(const char* id,
-                                           ImTextureID iconTex,
-                                           const char* label,
-                                           ImGuiTreeNodeFlags flags) {
+										   ImTextureID iconTex,
+										   const char* label,
+										   ImGuiTreeNodeFlags flags) {
 	flags |= ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth;
 
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -199,8 +227,7 @@ bool InspectorUi::drawIconCollapsingHeader(const char* id,
 	float iconSizePx = iconTex ? 48.0f : ImGui::GetFrameHeight();
 	float headerHeight = ImMax(ImGui::GetFrameHeight(), iconSizePx);
 	ImVec2 headerSize(fullWidth, headerHeight);
-	ImRect headerRect(cursor, ImVec2(cursor.x + headerSize.x,
-	                                 cursor.y + headerSize.y));
+	ImRect headerRect(cursor, ImVec2(cursor.x + headerSize.x, cursor.y + headerSize.y));
 
 	ImGuiID headerId = window->GetID(id);
 	// Manage open/close state ourselves using storage
@@ -219,19 +246,15 @@ bool InspectorUi::drawIconCollapsingHeader(const char* id,
 	}
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	ImU32 headerCol = ImGui::GetColorU32(
-		ImGui::IsItemHovered() ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
-	drawList->AddRectFilled(headerRect.Min,
-	                        headerRect.Max,
-	                        headerCol, 0.0f);
+	ImU32 headerCol = ImGui::GetColorU32(ImGui::IsItemHovered() ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+	drawList->AddRectFilled(headerRect.Min, headerRect.Max, headerCol, 0.0f);
 
 	// Draw a small triangle arrow on the left to signal open/closed state
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const float arrowScale = 0.70f;
 	const float arrowSize = ImGui::GetFontSize() * arrowScale;
 	// Arrow position: left padding, vertically centered
-	ImVec2 arrowPos(headerRect.Min.x + style.FramePadding.x,
-	                headerRect.Min.y + (headerSize.y - arrowSize) * 0.5f);
+	ImVec2 arrowPos(headerRect.Min.x + style.FramePadding.x, headerRect.Min.y + (headerSize.y - arrowSize) * 0.5f);
 	ImRect arrowRect(arrowPos, ImVec2(arrowPos.x + arrowSize, arrowPos.y + arrowSize));
 	ImGuiID arrowId = window->GetID((std::string(id) + "##arrow").c_str());
 	if (ImGui::ItemAdd(arrowRect, arrowId)) {
@@ -252,14 +275,10 @@ bool InspectorUi::drawIconCollapsingHeader(const char* id,
 	textPos.x += style.FramePadding.x + arrowSize + tree_spacing;
 	if (iconTex) {
 		ImVec2 iconSize(iconSizePx, iconSizePx);
-		ImVec2 iconPos(textPos.x,
-		               cursor.y + (headerSize.y - iconSize.y) * 0.5f);
-		drawList->AddImage(iconTex, iconPos,
-		                   ImVec2(iconPos.x + iconSize.x,
-		                          iconPos.y + iconSize.y));
+		ImVec2 iconPos(textPos.x, cursor.y + (headerSize.y - iconSize.y) * 0.5f);
+		drawList->AddImage(iconTex, iconPos, ImVec2(iconPos.x + iconSize.x, iconPos.y + iconSize.y));
 		textPos.x = iconPos.x + iconSize.x + tree_spacing;
-	}
-	else {
+	} else {
 		textPos.x = cursor.x + tree_spacing;
 	}
 
@@ -285,10 +304,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		material = MaterialManager::loadMaterialFromFile(normFullPath);
 	}
 	if (!material) {
-		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-		                   "Failed to load material.");
-	}
-	else {
+		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Failed to load material.");
+	} else {
 		ImGui::Spacing();
 
 		// Albedo texture section
@@ -300,31 +317,25 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		ImDrawList* dl2 = ImGui::GetWindowDrawList();
 		ImVec2 min2 = ImGui::GetItemRectMin();
 		ImVec2 max2 = ImGui::GetItemRectMax();
-		ImU32 col2 = ImGui::GetColorU32(isHoveredTex
-			                                ? ImGuiCol_ButtonHovered
-			                                : ImGuiCol_Border);
+		ImU32 col2 = ImGui::GetColorU32(isHoveredTex ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
 		dl2->AddRect(min2, max2, col2, 3.0f);
 
 		// Preview the material's albedo texture (look up by key)
 		Texture* previewTex = nullptr;
 		try {
 			previewTex = TextureManager::getTexture(material->albedoTextureKey);
-		}
-		catch (...) {
+		} catch (...) {
 			previewTex = nullptr;
 		}
 
-		if (previewTex && previewTex->imageView != VK_NULL_HANDLE &&
-			previewTex->sampler != VK_NULL_HANDLE) {
+		if (previewTex && previewTex->imageView != VK_NULL_HANDLE && previewTex->sampler != VK_NULL_HANDLE) {
 			ImVec2 innerMin2(min2.x + 2.0f, min2.y + 2.0f);
 			ImVec2 innerMax2(max2.x - 2.0f, max2.y - 2.0f);
 			VkDescriptorSet texSet2 = getOrCreateImGuiTextureSet(previewTex);
 			if (texSet2 != VK_NULL_HANDLE) {
-				dl2->AddImage(reinterpret_cast<ImTextureID>(texSet2), innerMin2,
-				              innerMax2);
+				dl2->AddImage(reinterpret_cast<ImTextureID>(texSet2), innerMin2, innerMax2);
 			}
-		}
-		else {
+		} else {
 			// Fallback: inner shadow box for albedo drop target
 			float inset2 = 2.0f;
 			ImVec2 innerMin2(min2.x + inset2, min2.y + inset2);
@@ -337,8 +348,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 		// Attach drag-drop target to the square
 		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload =
-				ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
 				const char* droppedPath = static_cast<const char*>(payload->Data);
 				if (droppedPath && droppedPath[0] != '\0') {
 					std::filesystem::path texPath(droppedPath);
@@ -346,20 +356,20 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 					for (auto& c : texExt)
 						c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 
-					if (texExt == ".png" || texExt == ".jpg" || texExt == ".jpeg" ||
-						texExt == ".tga" || texExt == ".bmp" || texExt == ".hdr") {
+					if (texExt == ".png" || texExt == ".jpg" || texExt == ".jpeg" || texExt == ".tga" ||
+						texExt == ".bmp" || texExt == ".hdr") {
 						// Use full texture path as the key
 						std::string texKey = texPath.string();
 
 						Texture* tex = nullptr;
 						try {
 							tex = TextureManager::getTexture(texKey);
-						}
-						catch (...) {
-							Texture* loaded = TextureManager::loadTexture(
-								droppedPath, VulkanCore::getDevice(),
-								VulkanCore::getPhysicalDevice(), VulkanCore::getCommandPool(),
-								VulkanCore::getGraphicsQueue());
+						} catch (...) {
+							Texture* loaded = TextureManager::loadTexture(droppedPath,
+																		  VulkanCore::getDevice(),
+																		  VulkanCore::getPhysicalDevice(),
+																		  VulkanCore::getCommandPool(),
+																		  VulkanCore::getGraphicsQueue());
 							TextureManager::createTextureImageView(loaded);
 							TextureManager::createTextureSampler(loaded);
 							TextureManager::registerTexture(texKey, *loaded);
@@ -373,16 +383,19 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						normPath = std::filesystem::path(fullPath).generic_string();
 						Material* mat = MaterialManager::updateMaterialTexture(normPath, texKey);
 						if (!mat) {
-							std::cerr << "Inspector: failed to create/update material for path '" << normPath << "'" << std::endl;
+							std::cerr << "Inspector: failed to create/update material for path '" << normPath << "'"
+									  << std::endl;
 						}
 
 						// Persist updated material back to JSON file
-						MaterialManager::saveMaterialToFile(fullPath, matName, texKey,
-						                                    mat->properties.ambient,
-						                                    mat->properties.shininess,
-						                                    mat->properties.specular);
-						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'" <<
-							std::endl;
+						MaterialManager::saveMaterialToFile(fullPath,
+															matName,
+															texKey,
+															mat->properties.ambient,
+															mat->properties.shininess,
+															mat->properties.specular);
+						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'"
+								  << std::endl;
 					}
 				}
 			}
@@ -415,8 +428,9 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// Ambient
 		ImGui::Text("Ambient");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Ambient", &material->properties.ambient.x,
-		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+		if (ImGui::ColorEdit3("##Ambient",
+							  &material->properties.ambient.x,
+							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
@@ -424,8 +438,9 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// Diffuse
 		ImGui::Text("Diffuse");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Diffuse", &material->properties.diffuse.x,
-		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+		if (ImGui::ColorEdit3("##Diffuse",
+							  &material->properties.diffuse.x,
+							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
@@ -433,8 +448,9 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// Specular
 		ImGui::Text("Specular");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Specular", &material->properties.specular.x,
-		                      ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+		if (ImGui::ColorEdit3("##Specular",
+							  &material->properties.specular.x,
+							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
@@ -459,18 +475,19 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 			// Save to file
 			std::string matName = getMaterialNameFromPath(fullPath);
-			MaterialManager::saveMaterialToFile(fullPath, matName, material->albedoTextureKey,
-			                                    material->properties.ambient,
-			                                    material->properties.shininess,
-			                                    material->properties.specular,
-			                                    material->properties.diffuse);
+			MaterialManager::saveMaterialToFile(fullPath,
+												matName,
+												material->albedoTextureKey,
+												material->properties.ambient,
+												material->properties.shininess,
+												material->properties.specular,
+												material->properties.diffuse);
 		}
 	}
 
 	ImGui::Unindent(kContentIndent);
 	ImGui::PopStyleVar();
 }
-
 
 void InspectorUi::render() {
 	Scene* scene = SceneManager::getActiveScene();
@@ -481,8 +498,7 @@ void InspectorUi::render() {
 
 	const float kHeaderContentTopPadding = 6.0f;
 
-	if (selection.type == InspectorSelectionType::Entity && scene &&
-		selection.entityId > 0) {
+	if (selection.type == InspectorSelectionType::Entity && scene && selection.entityId > 0) {
 		Entity* entityPtr = nullptr;
 		auto* entities = scene->getEntities();
 		if (entities) {
@@ -528,14 +544,12 @@ void InspectorUi::render() {
 		if (transform && ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::PopStyleVar(3);
 
-
 			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
 			ImGui::Indent(kContentIndent);
 
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, 60.0f);
-
 
 			// Position
 			ImGui::Text("Position");
@@ -560,8 +574,7 @@ void InspectorUi::render() {
 
 			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();
-		}
-		else {
+		} else {
 			ImGui::PopStyleVar(3);
 		}
 
@@ -619,24 +632,18 @@ void InspectorUi::render() {
 				Texture* previewTex = nullptr;
 				try {
 					previewTex = TextureManager::getTexture(material->albedoTextureKey);
-				}
-				catch (...) {
+				} catch (...) {
 					previewTex = nullptr;
 				}
 
-				if (previewTex && previewTex->imageView != VK_NULL_HANDLE &&
-					previewTex->sampler != VK_NULL_HANDLE) {
+				if (previewTex && previewTex->imageView != VK_NULL_HANDLE && previewTex->sampler != VK_NULL_HANDLE) {
 					ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
 					ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
 					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
 					if (texSet != VK_NULL_HANDLE) {
-						dl->AddImage(
-							reinterpret_cast<ImTextureID>(texSet),
-							innerMin,
-							innerMax);
+						dl->AddImage(reinterpret_cast<ImTextureID>(texSet), innerMin, innerMax);
 					}
-				}
-				else {
+				} else {
 					// Fallback: simple inner shadow box
 					float inset = 2.0f;
 					ImVec2 innerMin(min.x + inset, min.y + inset);
@@ -654,7 +661,8 @@ void InspectorUi::render() {
 						if (droppedPath && droppedPath[0] != '\0') {
 							std::filesystem::path p(droppedPath);
 							std::string ext = p.extension().string();
-							for (auto& c : ext) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+							for (auto& c : ext)
+								c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 
 							// Only accept material assets here
 							if (ext == ".mat") {
@@ -695,15 +703,15 @@ void InspectorUi::render() {
 
 					ImGuiTreeNodeFlags matFlags = ImGuiTreeNodeFlags_DefaultOpen;
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
-					if (InspectorUi::drawIconCollapsingHeader("MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
+					if (InspectorUi::drawIconCollapsingHeader(
+							"MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
 						ImGui::Dummy(ImVec2(0.0f, 6.0f));
 						InspectorUi::renderMaterialTab(material->filePath);
 					}
 					ImGui::PopStyleVar();
 				}
 			}
-		}
-		else {
+		} else {
 			ImGui::PopStyleVar(3);
 		}
 
@@ -739,8 +747,8 @@ void InspectorUi::render() {
 			// Color
 			ImGui::Text("Color");
 			ImGui::NextColumn();
-			ImGui::ColorEdit3("##LightColor", &lightComp->color.x,
-			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::ColorEdit3(
+				"##LightColor", &lightComp->color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 			ImGui::NextColumn();
 
 			// Intensity
@@ -768,22 +776,22 @@ void InspectorUi::render() {
 			// Ambient
 			ImGui::Text("Ambient");
 			ImGui::NextColumn();
-			ImGui::ColorEdit3("##LightAmbient", &lightComp->ambient.x,
-			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::ColorEdit3(
+				"##LightAmbient", &lightComp->ambient.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 			ImGui::NextColumn();
 
 			// Diffuse
 			ImGui::Text("Diffuse");
 			ImGui::NextColumn();
-			ImGui::ColorEdit3("##LightDiffuse", &lightComp->diffuse.x,
-			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::ColorEdit3(
+				"##LightDiffuse", &lightComp->diffuse.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 			ImGui::NextColumn();
 
 			// Specular
 			ImGui::Text("Specular");
 			ImGui::NextColumn();
-			ImGui::ColorEdit3("##LightSpecular", &lightComp->specular.x,
-			                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			ImGui::ColorEdit3(
+				"##LightSpecular", &lightComp->specular.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 			ImGui::NextColumn();
 
 			// Lighting Model
@@ -825,70 +833,68 @@ void InspectorUi::render() {
 				ImGui::NextColumn();
 
 				// Quadratic (Kq)
-			ImGui::Text("Kq (Quad)");
-			ImGui::NextColumn();
-			ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f");
-			ImGui::NextColumn();
+				ImGui::Text("Kq (Quad)");
+				ImGui::NextColumn();
+				ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f");
+				ImGui::NextColumn();
 
-			ImGui::Columns(1);
-		}
-
-		// Spotlight cone angle section (only for spotlights)
-		if (lightComp->getType() == LightType::Spot) {
-			ImGui::Spacing();
-			ImGui::Spacing();
-
-			ImGuiIO& ioSpot = ImGui::GetIO();
-			ImGui::PushFont(ioSpot.Fonts->Fonts[1]); // Bold font
-			ImGui::TextUnformatted("Spotlight Cone");
-			ImGui::PopFont();
-
-			ImGui::Spacing();
-
-			ImGui::Columns(2, "##SpotlightConeColumns", false);
-			ImGui::SetColumnWidth(0, 80.0f);
-
-			// Inner Cone Angle
-			ImGui::Text("Inner Cone");
-			ImGui::NextColumn();
-			float innerDegrees = glm::degrees(lightComp->innerConeAngle);
-			if (ImGui::SliderFloat("##InnerCone", &innerDegrees, 0.0f, 90.0f, "%.1f°")) {
-				lightComp->innerConeAngle = glm::radians(innerDegrees);
-				// Ensure inner cone is not larger than outer cone
-				if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
-					lightComp->outerConeAngle = lightComp->innerConeAngle;
-				}
+				ImGui::Columns(1);
 			}
-			ImGui::NextColumn();
 
-			// Outer Cone Angle
-			ImGui::Text("Outer Cone");
-			ImGui::NextColumn();
-			float outerDegrees = glm::degrees(lightComp->outerConeAngle);
-			if (ImGui::SliderFloat("##OuterCone", &outerDegrees, 0.0f, 90.0f, "%.1f°")) {
-				lightComp->outerConeAngle = glm::radians(outerDegrees);
-				// Ensure outer cone is not smaller than inner cone
-				if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
-					lightComp->innerConeAngle = lightComp->outerConeAngle;
+			// Spotlight cone angle section (only for spotlights)
+			if (lightComp->getType() == LightType::Spot) {
+				ImGui::Spacing();
+				ImGui::Spacing();
+
+				ImGuiIO& ioSpot = ImGui::GetIO();
+				ImGui::PushFont(ioSpot.Fonts->Fonts[1]); // Bold font
+				ImGui::TextUnformatted("Spotlight Cone");
+				ImGui::PopFont();
+
+				ImGui::Spacing();
+
+				ImGui::Columns(2, "##SpotlightConeColumns", false);
+				ImGui::SetColumnWidth(0, 80.0f);
+
+				// Inner Cone Angle
+				ImGui::Text("Inner Cone");
+				ImGui::NextColumn();
+				float innerDegrees = glm::degrees(lightComp->innerConeAngle);
+				if (ImGui::SliderFloat("##InnerCone", &innerDegrees, 0.0f, 90.0f, "%.1f°")) {
+					lightComp->innerConeAngle = glm::radians(innerDegrees);
+					// Ensure inner cone is not larger than outer cone
+					if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
+						lightComp->outerConeAngle = lightComp->innerConeAngle;
+					}
 				}
+				ImGui::NextColumn();
+
+				// Outer Cone Angle
+				ImGui::Text("Outer Cone");
+				ImGui::NextColumn();
+				float outerDegrees = glm::degrees(lightComp->outerConeAngle);
+				if (ImGui::SliderFloat("##OuterCone", &outerDegrees, 0.0f, 90.0f, "%.1f°")) {
+					lightComp->outerConeAngle = glm::radians(outerDegrees);
+					// Ensure outer cone is not smaller than inner cone
+					if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
+						lightComp->innerConeAngle = lightComp->outerConeAngle;
+					}
+				}
+				ImGui::NextColumn();
 			}
-			ImGui::NextColumn();
-		}
 
 			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();
-		}
-		else {
+		} else {
 			ImGui::PopStyleVar(3);
 		}
 
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 		ImGui::Separator();
 		ImGui::PopStyleVar();
-	}
-	else if ((selection.type == InspectorSelectionType::Asset ||
-			selection.type == InspectorSelectionType::Material) &&
-		!selection.assetPath.empty()) {
+	} else if ((selection.type == InspectorSelectionType::Asset ||
+				selection.type == InspectorSelectionType::Material) &&
+			   !selection.assetPath.empty()) {
 		const std::string& fullPath = selection.assetPath;
 		std::filesystem::path p(fullPath);
 		std::string fileName = p.filename().string();

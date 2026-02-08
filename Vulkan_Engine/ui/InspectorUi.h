@@ -1,28 +1,15 @@
 #pragma once
 
-#include <cstring>
-#include <filesystem>
+#include "imgui.h"
+#include "managers/TextureManager.h"
+#include "vulkan/vulkan_core.h"
+
 #include <string>
 #include <unordered_map>
-
-#include <vulkan/vulkan.h>
-
-#include "Entity.h"
-#include "components/LightComponent.h"
-#include "components/MeshComponent.h"
-#include "components/Transform.h"
-#include "imgui.h"
-#include "imgui_internal.h"
-#include "managers/SceneManager.h"
-#include "ui/AssetBrowser.h"
+#include <vector>
 
 // What the inspector is currently inspecting.
-enum class InspectorSelectionType {
-	None,
-	Entity,
-	Asset,
-	Material
-};
+enum class InspectorSelectionType { None, Entity, Asset, Material };
 
 struct InspectorSelection {
 	InspectorSelectionType type = InspectorSelectionType::None;
@@ -32,10 +19,7 @@ struct InspectorSelection {
 
 // When selecting an asset we may be "picking" something for the inspector
 // rather than just inspecting the asset itself.
-enum class InspectorPickTarget {
-	None,
-	MeshAlbedo
-};
+enum class InspectorPickTarget { None, MeshAlbedo };
 
 class InspectorUi {
 public:
@@ -64,10 +48,8 @@ private:
 
 	static VkDescriptorSet getOrCreateImGuiTextureSet(Texture* texture);
 	// Draw a collapsing header with an optional icon; returns true when open
-	static bool drawIconCollapsingHeader(const char* id,
-	                                     ImTextureID iconTex,
-	                                     const char* label,
-	                                     ImGuiTreeNodeFlags flags = 0);
+	static bool
+	drawIconCollapsingHeader(const char* id, ImTextureID iconTex, const char* label, ImGuiTreeNodeFlags flags = 0);
 	static void renderMaterialTab(std::string fullPath);
 
 	static std::unordered_map<const Texture*, VkDescriptorSet> imguiTextureCache;

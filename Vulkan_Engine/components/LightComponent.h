@@ -1,8 +1,12 @@
 #pragma once
 
 #include "Component.h"
-#include "Entity.h"
-#include <glm/glm.hpp>
+
+#include "glm/ext/vector_float3.hpp"
+#include "glm/trigonometric.hpp"
+
+// Forward declarations
+class Entity;
 
 enum class LightType { Directional = 0, Point = 1, Spot = 2 };
 
@@ -27,17 +31,19 @@ public:
 	glm::vec3 ambient{0.15f, 0.15f, 0.15f};
 	glm::vec3 diffuse{1.0f, 1.0f, 1.0f};
 	glm::vec3 specular{1.0f, 1.0f, 1.0f};
-	
+
 	// Attenuation factors for point/spot lights
 	// attenuation = 1.0 / (Kc + Kl * distance + Kq * distance * distance)
-	float attenuationKc{1.0f};    // constant term
-	float attenuationKl{0.09f};   // linear term
-	float attenuationKq{0.032f};  // quadratic term
+	float attenuationKc{1.0f}; // constant term
+	float attenuationKl{0.09f}; // linear term
+	float attenuationKq{0.032f}; // quadratic term
 
 	// Lighting model selection
-	bool useBlinnPhong{true};     // true = Blinn-Phong, false = Phong
+	bool useBlinnPhong{true}; // true = Blinn-Phong, false = Phong
 
-	Entity* getOwner() const { return owner; }
+	Entity* getOwner() const {
+		return owner;
+	}
 
 	// Uniform layout for GPU upload (aligned)
 	struct alignas(16) LightUniform {
@@ -55,7 +61,7 @@ public:
 		float attenuationKc;
 		float attenuationKl;
 		float attenuationKq;
-		int useBlinnPhong;  // 1 = Blinn-Phong, 0 = Phong
+		int useBlinnPhong; // 1 = Blinn-Phong, 0 = Phong
 	};
 
 	LightUniform getLightUniform() const;

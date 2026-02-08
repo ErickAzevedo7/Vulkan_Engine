@@ -1,5 +1,23 @@
 #include "AssetBrowser.h"
 
+#include "imgui.h"
+#include "imgui_impl_vulkan.h"
+#include "imgui_internal.h"
+#include "managers/TextureManager.h"
+#include "vulkan/vulkan_core.h"
+
+#include <managers/MaterialManager.h>
+#include <ui/InspectorUi.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 // initialize static members
 bool AssetBrowser::firstFrame = true;
 bool AssetBrowser::iconsInitialized = false;
@@ -25,8 +43,7 @@ std::string truncateText(const std::string& p_text, float p_truncated_width) {
 
 		int visible_chars = 0;
 		for (size_t i = 0; i < p_text.size(); i++) {
-			const float current_width =
-				ImGui::CalcTextSize(p_text.substr(0, i).c_str(), nullptr, true).x;
+			const float current_width = ImGui::CalcTextSize(p_text.substr(0, i).c_str(), nullptr, true).x;
 			if (current_width + ellipsis_size > p_truncated_width) {
 				break;
 			}
@@ -57,14 +74,13 @@ void AssetBrowser::ScanCurrentFolderContents() {
 		currentFolderEntries.push_back(std::move(fe));
 	}
 
-	std::sort(currentFolderEntries.begin(), currentFolderEntries.end(),
-	          [](const FileEntry& a, const FileEntry& b) {
-		          // Directories first, then alphabetical
-		          if (a.isDirectory != b.isDirectory) {
-			          return a.isDirectory && !b.isDirectory;
-		          }
-		          return a.name < b.name;
-	          });
+	std::sort(currentFolderEntries.begin(), currentFolderEntries.end(), [](const FileEntry& a, const FileEntry& b) {
+		// Directories first, then alphabetical
+		if (a.isDirectory != b.isDirectory) {
+			return a.isDirectory && !b.isDirectory;
+		}
+		return a.name < b.name;
+	});
 }
 
 void AssetBrowser::ScanFolder(FolderNode& node) {
@@ -89,10 +105,9 @@ void AssetBrowser::ScanFolder(FolderNode& node) {
 		node.children.push_back(std::move(child));
 	}
 
-	std::sort(node.children.begin(), node.children.end(),
-	          [](const FolderNode& a, const FolderNode& b) {
-		          return a.name < b.name;
-	          });
+	std::sort(node.children.begin(), node.children.end(), [](const FolderNode& a, const FolderNode& b) {
+		return a.name < b.name;
+	});
 }
 
 void AssetBrowser::EnsureFolderTreeInitialized() {
@@ -111,8 +126,7 @@ void AssetBrowser::EnsureFolderTreeInitialized() {
 }
 
 void AssetBrowser::DrawFolderNode(FolderNode& node) {
-	ImGuiTreeNodeFlags flags =
-		ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth;
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth;
 
 	if (selectedFolderPath == node.fullPath) {
 		flags |= ImGuiTreeNodeFlags_Selected;
@@ -163,18 +177,15 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 	const float itemHeight = iconSize + labelHeight + cellPadding;
 
 	float totalWidth = ImGui::GetContentRegionAvail().x;
-	int columns =
-		static_cast<int>(totalWidth / (itemWidth + cellPadding));
+	int columns = static_cast<int>(totalWidth / (itemWidth + cellPadding));
 	columns = std::max(columns, 1);
 
 	int index = 0;
-	ImGui::BeginChild(
-		"FolderContentGrid",
-		ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2), false);
+	ImGui::BeginChild("FolderContentGrid", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2), false);
 
 	// Context menu (right-click) for current folder over the whole content area
 	if (ImGui::BeginPopupContextWindow("AssetBrowserFolderContext",
-	                                   ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+									   ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
 		if (ImGui::MenuItem("Create Material")) {
 			std::string baseName = "NewMaterial";
 			std::string newPath;
@@ -236,50 +247,40 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		}
 
 		// Draw icon
-		ImVec2 iconPos(cursor.x + (size.x - iconSize) * 0.5f,
-		               cursor.y + cellPadding * 0.5f);
+		ImVec2 iconPos(cursor.x + (size.x - iconSize) * 0.5f, cursor.y + cellPadding * 0.5f);
 		ImGui::SetCursorScreenPos(iconPos);
 
 		{
 			// Prefer real thumbnail texture if this is an image file already loaded
 			const ThumbnailTexture* thumbTex = getThumbnailForEntry(fe);
-			if (thumbTex && thumbTex->imageView != VK_NULL_HANDLE &&
-				thumbTex->sampler != VK_NULL_HANDLE) {
+			if (thumbTex && thumbTex->imageView != VK_NULL_HANDLE && thumbTex->sampler != VK_NULL_HANDLE) {
 				VkDescriptorSet thumbSet = VK_NULL_HANDLE;
 				std::string thumbKey;
 				thumbKey = std::filesystem::path(fe.fullPath).generic_string();
 				auto it = thumbnailDescriptorSets.find(thumbKey);
 				if (it != thumbnailDescriptorSets.end()) {
 					thumbSet = it->second;
-				}
-				else {
+				} else {
 					thumbSet = ImGui_ImplVulkan_AddTexture(
-						thumbTex->sampler, thumbTex->imageView,
-						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+						thumbTex->sampler, thumbTex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 					thumbnailDescriptorSets[thumbKey] = thumbSet;
 				}
-				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet),
-				             ImVec2(iconSize, iconSize));
-			}
-			else {
+				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet), ImVec2(iconSize, iconSize));
+			} else {
 				const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
 				if (icon.imguiTexture != VK_NULL_HANDLE) {
-					ImGui::Image(reinterpret_cast<ImTextureID>(icon.imguiTexture),
-					             ImVec2(iconSize, iconSize));
-				}
-				else {
+					ImGui::Image(reinterpret_cast<ImTextureID>(icon.imguiTexture), ImVec2(iconSize, iconSize));
+				} else {
 					ImGui::TextUnformatted(fe.isDirectory ? "[DIR]" : "[FILE]");
 				}
 			}
 		}
 
 		// Draw label text only (no selectable here)
-		ImGui::SetCursorScreenPos(ImVec2(cursor.x + cellPadding * 0.5f,
-		                                 cursor.y + size.y - labelHeight));
+		ImGui::SetCursorScreenPos(ImVec2(cursor.x + cellPadding * 0.5f, cursor.y + size.y - labelHeight));
 
 		const float textWidth = size.x - 8.0f;
-		const std::string truncated =
-			truncateText(fe.name.c_str(), textWidth);
+		const std::string truncated = truncateText(fe.name.c_str(), textWidth);
 		ImGui::TextUnformatted(truncated.c_str());
 
 		ImGui::SetCursorScreenPos(cursor);
@@ -304,8 +305,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 				if (fe.isDirectory) {
 					selectedFolderPath = fe.fullPath;
 					ScanCurrentFolderContents();
-				}
-				else {
+				} else {
 					// Open material assets when double-clicking .mat files
 					std::string ext;
 					const size_t dotPos = fe.name.find_last_of('.');
@@ -329,8 +329,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		}
 
 		// Begin drag from the selected tile (files only) so clicks still work
-		if (!fe.isDirectory &&
-			ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+		if (!fe.isDirectory && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
 			const std::string path = fe.fullPath;
 			ImGui::SetDragDropPayload("ASSET_BROWSER_FILE", path.c_str(), path.size() + 1);
 			ImGui::TextUnformatted(fe.name.c_str());
@@ -368,8 +367,7 @@ void AssetBrowser::InitFileIcons() {
 			return VK_NULL_HANDLE;
 		}
 
-		return ImGui_ImplVulkan_AddTexture(
-			tex->sampler, tex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		return ImGui_ImplVulkan_AddTexture(tex->sampler, tex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	};
 
 	defaultFileIcon.imguiTexture = makeImguiTexture(defaultFileIcon.texture);
@@ -385,7 +383,7 @@ const FileIcon& AssetBrowser::GetIconForEntry(const FileEntry& fe) {
 		return folderIcon;
 	}
 
-	// Descobrir extensão
+	// Descobrir extensï¿½o
 	std::string ext;
 	const size_t dotPos = fe.name.find_last_of('.');
 	if (dotPos != std::string::npos && dotPos + 1 < fe.name.size()) {
@@ -396,8 +394,7 @@ const FileIcon& AssetBrowser::GetIconForEntry(const FileEntry& fe) {
 	}
 
 	// Texturas
-	if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "tga" ||
-		ext == "bmp" || ext == "hdr") {
+	if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "tga" || ext == "bmp" || ext == "hdr") {
 		return textureFileIcon;
 	}
 
@@ -425,8 +422,7 @@ const ThumbnailTexture* AssetBrowser::getThumbnailForEntry(const FileEntry& fe) 
 		}
 	}
 
-	if (ext != "png" && ext != "jpg" && ext != "jpeg" && ext != "tga" &&
-		ext != "bmp" && ext != "hdr") {
+	if (ext != "png" && ext != "jpg" && ext != "jpeg" && ext != "tga" && ext != "bmp" && ext != "hdr") {
 		return nullptr;
 	}
 
@@ -449,8 +445,7 @@ void AssetBrowser::render() {
 	// Top search bar (before columns)
 	ImGui::BeginMenuBar();
 	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-	ImGui::InputText("##FileSearch", fileFilter,
-	                 IM_ARRAYSIZE(fileFilter));
+	ImGui::InputText("##FileSearch", fileFilter, IM_ARRAYSIZE(fileFilter));
 	ImGui::Separator();
 	ImGui::EndMenuBar();
 

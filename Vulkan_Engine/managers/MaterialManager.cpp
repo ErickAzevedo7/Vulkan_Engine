@@ -1,5 +1,27 @@
 #include "MaterialManager.h"
-#include "managers/LightManager.h"
+
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "managers/TextureManager.h"
+#include "vulkan/vulkan_core.h"
+
+#include <array>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "glm/ext/vector_float3.hpp"
+#include "nlohmann/json.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 // initialize static members
 std::unordered_map<std::string, Material*> MaterialManager::materials;
@@ -12,8 +34,7 @@ static std::string normalizeKey(const std::string& s) {
 	try {
 		std::filesystem::path p(s);
 		return p.generic_string();
-	}
-	catch (...) {
+	} catch (...) {
 		return s;
 	}
 }
@@ -40,8 +61,8 @@ void MaterialManager::loadDefault() {
 }
 
 Material* MaterialManager::createMaterial(const std::string& name,
-                                          const std::string& albedoTexturePath,
-                                          const std::string& path) {
+										  const std::string& albedoTexturePath,
+										  const std::string& path) {
 	std::string albedoKey = albedoTexturePath.empty() ? TextureManager::kDefaultTextureKey : albedoTexturePath;
 	std::string materialPath = path;
 	std::string mapKey = normalizeKey(materialPath);
@@ -49,8 +70,8 @@ Material* MaterialManager::createMaterial(const std::string& name,
 	// Check if material already exists
 	auto it = materials.find(mapKey);
 	if (it != materials.end()) {
-		std::cerr << "MaterialManager::createMaterial: material already exists for path '" << materialPath << "'" <<
-			std::endl;
+		std::cerr << "MaterialManager::createMaterial: material already exists for path '" << materialPath << "'"
+				  << std::endl;
 		return it->second;
 	}
 
@@ -73,10 +94,7 @@ Material* MaterialManager::createMaterial(const std::string& name,
 				// Load material properties if they exist in the file
 				if (j.contains("ambient") && j["ambient"].is_array() && j["ambient"].size() == 3) {
 					mat->properties.ambient = glm::vec3(
-						j["ambient"][0].get<float>(),
-						j["ambient"][1].get<float>(),
-						j["ambient"][2].get<float>()
-					);
+						j["ambient"][0].get<float>(), j["ambient"][1].get<float>(), j["ambient"][2].get<float>());
 				}
 
 				if (j.contains("shininess") && j["shininess"].is_number()) {
@@ -85,22 +103,16 @@ Material* MaterialManager::createMaterial(const std::string& name,
 
 				if (j.contains("specular") && j["specular"].is_array() && j["specular"].size() == 3) {
 					mat->properties.specular = glm::vec3(
-						j["specular"][0].get<float>(),
-						j["specular"][1].get<float>(),
-						j["specular"][2].get<float>()
-					);
+						j["specular"][0].get<float>(), j["specular"][1].get<float>(), j["specular"][2].get<float>());
 				}
 
 				if (j.contains("diffuse") && j["diffuse"].is_array() && j["diffuse"].size() == 3) {
 					mat->properties.diffuse = glm::vec3(
-						j["diffuse"][0].get<float>(),
-						j["diffuse"][1].get<float>(),
-						j["diffuse"][2].get<float>()
-					);
+						j["diffuse"][0].get<float>(), j["diffuse"][1].get<float>(), j["diffuse"][2].get<float>());
 				}
-			}
-			catch (const std::exception& e) {
-				std::cerr << "MaterialManager::createMaterial: failed to load properties from file: " << e.what() << std::endl;
+			} catch (const std::exception& e) {
+				std::cerr << "MaterialManager::createMaterial: failed to load properties from file: " << e.what()
+						  << std::endl;
 			}
 		}
 	}
@@ -122,8 +134,8 @@ Material* MaterialManager::updateMaterialTexture(const std::string& materialPath
 	// update texture key and recreate descriptor sets
 	mat->albedoTextureKey = texturePath.empty() ? TextureManager::kDefaultTextureKey : texturePath;
 	createDescriptorSets(mat->albedoTextureKey, materialPath);
-	std::cerr << "MaterialManager::updateMaterialTexture: updated material '" << materialPath << "' with texture '" << mat
-		->albedoTextureKey << "'" << std::endl;
+	std::cerr << "MaterialManager::updateMaterialTexture: updated material '" << materialPath << "' with texture '"
+			  << mat->albedoTextureKey << "'" << std::endl;
 	return mat;
 }
 
@@ -147,7 +159,7 @@ void MaterialManager::loadAllFromAssets() {
 
 	if (!fs::exists(materialsRoot) || !fs::is_directory(materialsRoot)) {
 		std::cerr << "MaterialManager::loadAllFromAssets: assets directory not found or not a directory: "
-			<< materialsRoot.string() << std::endl;
+				  << materialsRoot.string() << std::endl;
 		return;
 	}
 
@@ -163,8 +175,7 @@ void MaterialManager::loadAllFromAssets() {
 		}
 
 		if (ext == ".mat") {
-			std::cerr << "MaterialManager::loadAllFromAssets: found material file: "
-				<< p.string() << std::endl;
+			std::cerr << "MaterialManager::loadAllFromAssets: found material file: " << p.string() << std::endl;
 			loadMaterialFromFile(p.string());
 		}
 	}
@@ -175,15 +186,14 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 	std::string norm = normalizeKey(path);
 	auto it = materials.find(norm);
 	if (it != materials.end()) {
-		std::cerr << "MaterialManager::loadMaterialFromFile: reusing existing material for path '" << path << "'" <<
-			std::endl;
+		std::cerr << "MaterialManager::loadMaterialFromFile: reusing existing material for path '" << path << "'"
+				  << std::endl;
 		return it->second;
 	}
 
 	std::ifstream file(path);
 	if (!file.is_open()) {
-		std::cerr << "MaterialManager::loadMaterialFromFile: failed to open file: "
-			<< path << std::endl;
+		std::cerr << "MaterialManager::loadMaterialFromFile: failed to open file: " << path << std::endl;
 		return nullptr;
 	}
 
@@ -193,8 +203,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		file.close();
 
 		if (!j.contains("name") || !j.contains("albedoTextureKey")) {
-			std::cerr << "MaterialManager::loadMaterialFromFile: missing 'name' or 'albedoTextureKey' in file: "
-				<< path << std::endl;
+			std::cerr << "MaterialManager::loadMaterialFromFile: missing 'name' or 'albedoTextureKey' in file: " << path
+					  << std::endl;
 			return nullptr;
 		}
 
@@ -202,8 +212,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		std::string albedoKey = j["albedoTextureKey"].get<std::string>();
 
 		if (name.empty() || albedoKey.empty()) {
-			std::cerr << "MaterialManager::loadMaterialFromFile: empty name or albedoTextureKey in file: "
-				<< path << std::endl;
+			std::cerr << "MaterialManager::loadMaterialFromFile: empty name or albedoTextureKey in file: " << path
+					  << std::endl;
 			return nullptr;
 		}
 
@@ -214,41 +224,35 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		// Check that the texture exists before creating the material
 		try {
 			TextureManager::getTexture(albedoKey);
-		}
-		catch (...) {
-			std::cerr << "MaterialManager::loadMaterialFromFile: texture key not found: '"
-				<< albedoKey << "' for material '" << name
-				<< "' in file: " << path << std::endl;
+		} catch (...) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: texture key not found: '" << albedoKey
+					  << "' for material '" << name << "' in file: " << path << std::endl;
 			return nullptr;
 		}
 
-		std::cerr << "MaterialManager::loadMaterialFromFile: creating material with name '"
-			<< name << "' and file path '" << path << "' using albedoTextureKey '" << albedoKey
-			<< "'" << std::endl;
+		std::cerr << "MaterialManager::loadMaterialFromFile: creating material with name '" << name
+				  << "' and file path '" << path << "' using albedoTextureKey '" << albedoKey << "'" << std::endl;
 
 		Material* created = createMaterial(name, albedoKey, path);
 		if (created) {
 			std::cerr << "MaterialManager: created material for path '" << path << "'" << std::endl;
-		}
-		else {
+		} else {
 			std::cerr << "MaterialManager: failed to create material for path '" << path << "'" << std::endl;
 		}
 		return created;
-	}
-	catch (...) {
-		std::cerr << "MaterialManager::loadMaterialFromFile: exception while reading file: "
-			<< path << std::endl;
+	} catch (...) {
+		std::cerr << "MaterialManager::loadMaterialFromFile: exception while reading file: " << path << std::endl;
 		return nullptr;
 	}
 }
 
 void MaterialManager::saveMaterialToFile(const std::string& path,
-                                         const std::string& name,
-                                         const std::string& albedoTextureKey,
-                                         const glm::vec3& ambient,
-                                         float shininess,
-                                         const glm::vec3& specular,
-                                         const glm::vec3& diffuse) {
+										 const std::string& name,
+										 const std::string& albedoTextureKey,
+										 const glm::vec3& ambient,
+										 float shininess,
+										 const glm::vec3& specular,
+										 const glm::vec3& diffuse) {
 	std::ofstream file(path, std::ios::trunc);
 	if (!file.is_open()) {
 		return;
@@ -297,11 +301,10 @@ void MaterialManager::destroyMaterialInternal(const std::string& name) {
 	Material* mat = it->second;
 	if (mat) {
 		if (!mat->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
-			vkFreeDescriptorSets(
-				VulkanCore::getDevice(),
-				descriptorPool,
-				static_cast<uint32_t>(mat->descriptorSets.size()),
-				mat->descriptorSets.data());
+			vkFreeDescriptorSets(VulkanCore::getDevice(),
+								 descriptorPool,
+								 static_cast<uint32_t>(mat->descriptorSets.size()),
+								 mat->descriptorSets.data());
 		}
 		delete mat;
 	}
@@ -321,7 +324,6 @@ void MaterialManager::createDescriptorPool() {
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[2].descriptorCount = totalSets * 2; // Light + Material properties
 
-
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
@@ -329,8 +331,7 @@ void MaterialManager::createDescriptorPool() {
 	poolInfo.maxSets = totalSets;
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr,
-	                           &descriptorPool) != VK_SUCCESS) {
+	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
 }
@@ -340,8 +341,8 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 	std::string mapKey = normalizeKey(materialPath);
 	auto it = materials.find(mapKey);
 	if (it == materials.end() || !it->second) {
-		std::cerr << "MaterialManager::createDescriptorSets: material not found for path '" << materialPath << "'" <<
-			std::endl;
+		std::cerr << "MaterialManager::createDescriptorSets: material not found for path '" << materialPath << "'"
+				  << std::endl;
 		return;
 	}
 
@@ -349,24 +350,23 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 
 	// Free any existing descriptor sets before reallocating
 	if (!material->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
-		vkFreeDescriptorSets(VulkanCore::getDevice(), descriptorPool,
-		                     static_cast<uint32_t>(material->descriptorSets.size()),
-		                     material->descriptorSets.data());
+		vkFreeDescriptorSets(VulkanCore::getDevice(),
+							 descriptorPool,
+							 static_cast<uint32_t>(material->descriptorSets.size()),
+							 material->descriptorSets.data());
 	}
 
 	material->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
 	// Allocate descriptor sets
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
-	                                           VulkanCore::getDescriptorSetLayout());
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, VulkanCore::getDescriptorSetLayout());
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo,
-	                             material->descriptorSets.data()) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo, material->descriptorSets.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate descriptor sets!");
 	}
 
@@ -380,16 +380,14 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		Texture* texture = nullptr;
 		try {
 			texture = TextureManager::getTexture(texturePath);
-		}
-		catch (const std::exception& e) {
-			std::cerr << "MaterialManager::createDescriptorSets: texture '" << texturePath <<
-				"' not found, falling back to default: " << e.what() << std::endl;
+		} catch (const std::exception& e) {
+			std::cerr << "MaterialManager::createDescriptorSets: texture '" << texturePath
+					  << "' not found, falling back to default: " << e.what() << std::endl;
 			try {
 				texture = TextureManager::getTexture(TextureManager::kDefaultTextureKey);
-			}
-			catch (...) {
-				std::cerr << "MaterialManager::createDescriptorSets: failed to get default texture '" <<
-					TextureManager::kDefaultTextureKey << "'" << std::endl;
+			} catch (...) {
+				std::cerr << "MaterialManager::createDescriptorSets: failed to get default texture '"
+						  << TextureManager::kDefaultTextureKey << "'" << std::endl;
 				throw;
 			}
 		}
@@ -419,8 +417,7 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		descriptorWrites[1].dstSet = material->descriptorSets[i];
 		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType =
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].pImageInfo = &imageInfo;
 
@@ -433,22 +430,27 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		descriptorWrites[2].pBufferInfo = &materialPropInfo;
 
 		vkUpdateDescriptorSets(VulkanCore::getDevice(),
-		                       static_cast<uint32_t>(descriptorWrites.size()),
-		                       descriptorWrites.data(), 0, nullptr);
+							   static_cast<uint32_t>(descriptorWrites.size()),
+							   descriptorWrites.data(),
+							   0,
+							   nullptr);
 	}
 }
 
 void MaterialManager::createMaterialPropertyBuffers(Material* material) {
-	if (!material) return;
+	if (!material)
+		return;
 
 	material->propertyBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	material->propertyBufferMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
 	VkDeviceSize bufferSize = sizeof(MaterialProperties);
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		Utils::createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		                    material->propertyBuffers[i], material->propertyBufferMemory[i]);
+		Utils::createBuffer(bufferSize,
+							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+							material->propertyBuffers[i],
+							material->propertyBufferMemory[i]);
 
 		// Initialize with default properties
 		void* data;
@@ -459,11 +461,12 @@ void MaterialManager::createMaterialPropertyBuffers(Material* material) {
 }
 
 void MaterialManager::updateMaterialProperties(Material* material, uint32_t frame) {
-	if (!material || frame >= material->propertyBufferMemory.size()) return;
+	if (!material || frame >= material->propertyBufferMemory.size())
+		return;
 
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), material->propertyBufferMemory[frame],
-	            0, sizeof(MaterialProperties), 0, &data);
+	vkMapMemory(
+		VulkanCore::getDevice(), material->propertyBufferMemory[frame], 0, sizeof(MaterialProperties), 0, &data);
 	memcpy(data, &material->properties, sizeof(MaterialProperties));
 	vkUnmapMemory(VulkanCore::getDevice(), material->propertyBufferMemory[frame]);
 }

@@ -1,41 +1,45 @@
 #pragma once
-#include <vulkan/vulkan.h>
+
+#include <atomic>
+#include <cstdint>
+#include <string>
 #include <type_traits>
 #include <vector>
-#include "components/Component.h"
-#include "core/vulkancore.h"
+
+// Forward declaration
+class Component;
 
 class Entity {
- public:
-  bool isSelected = false;
+public:
+	bool isSelected = false;
 
-  Entity(std::string name);
+	Entity(std::string name);
 
-  ~Entity();
+	~Entity();
 
-  std::string getName() const;
+	std::string getName() const;
 
-  uint32_t getID() const { return id; }
+	uint32_t getID() const {
+		return id;
+	}
 
-  template <typename T>
-  T* getComponent() const {
-    static_assert(std::is_base_of<Component, T>::value,
-                  "T must inherit from Component");
-    for (const auto& component : components) {
-      if (T* casted = dynamic_cast<T*>(component)) {
-        return casted;
-      }
-    }
-    return nullptr;
-  }
+	template<typename T> T* getComponent() const {
+		static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+		for (const auto& component : components) {
+			if (T* casted = dynamic_cast<T*>(component)) {
+				return casted;
+			}
+		}
+		return nullptr;
+	}
 
-  void addComponent(Component* component);
+	void addComponent(Component* component);
 
-  void setName(char* str);
+	void setName(char* str);
 
 private:
-  static std::atomic<uint32_t> nextID;
-  std::vector<Component*> components;
-  std::string name;
-  uint32_t id;
+	static std::atomic<uint32_t> nextID;
+	std::vector<Component*> components;
+	std::string name;
+	uint32_t id;
 };

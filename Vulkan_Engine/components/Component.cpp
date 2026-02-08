@@ -1,12 +1,12 @@
 #include "Component.h"
 Component::Component() {
-  return;
+	return;
 }
 
 Component::~Component() {
-  return;
+	return;
 }
 
 void Component::update() {
-  return;
+	return;
 }

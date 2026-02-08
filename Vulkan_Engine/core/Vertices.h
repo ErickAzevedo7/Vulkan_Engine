@@ -1,13 +1,10 @@
 #pragma once
-#include <vulkan/vulkan.h>
-#include "vulkancore.h"
-#include "core/utils/Utils.h"
+#include "vulkan/vulkan_core.h"
 
-class Vertices
-{
+class Vertices {
 public:
-    static void createVertexBuffer(VkCommandPool commandPool, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
+	static void
+	createVertexBuffer(VkCommandPool commandPool, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
 
-    static void createIndexBuffer(VkCommandPool commandPool, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
+	static void createIndexBuffer(VkCommandPool commandPool, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
 };
-

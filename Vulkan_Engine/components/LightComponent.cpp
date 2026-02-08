@@ -1,16 +1,23 @@
 #include "LightComponent.h"
-#include "components/Transform.h"
 
-LightComponent::LightComponent(Entity* owner, LightType type)
-	: Component(), owner(owner), type(type) {
+#include "components/Transform.h"
+#include "Entity.h"
+
+#include "glm/ext/vector_float3.hpp"
+
+LightComponent::LightComponent(Entity* owner, LightType type) : Component(), owner(owner), type(type) {
 }
 
 LightComponent::~LightComponent() {
 }
 
-LightType LightComponent::getType() const { return type; }
+LightType LightComponent::getType() const {
+	return type;
+}
 
-void LightComponent::setType(LightType t) { type = t; }
+void LightComponent::setType(LightType t) {
+	type = t;
+}
 
 LightComponent::LightUniform LightComponent::getLightUniform() const {
 	LightUniform u{};
@@ -22,13 +29,11 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 			u.position = tcomp->position;
 			// forward direction by transform rotation
 			u.direction = tcomp->rotation * direction;
-		}
-		else {
+		} else {
 			u.position = glm::vec3(0.0f);
 			u.direction = direction;
 		}
-	}
-	else {
+	} else {
 		u.position = glm::vec3(0.0f);
 		u.direction = direction;
 	}
