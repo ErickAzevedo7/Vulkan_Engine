@@ -1,22 +1,22 @@
 #include "AssetBrowser.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <filesystem>
+#include <managers/MaterialManager.h>
+#include <string>
+#include <ui/InspectorUi.h>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "context/ResourceContext.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
 #include "managers/TextureManager.h"
 #include "vulkan/vulkan_core.h"
-
-#include <managers/MaterialManager.h>
-#include <ui/InspectorUi.h>
-
-#include <algorithm>
-#include <cctype>
-#include <cstddef>
-#include <filesystem>
-#include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 // initialize static members
 bool AssetBrowser::firstFrame = true;
@@ -208,8 +208,10 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 			std::string materialName = newPathFs.stem().string();
 
 			// Save file and create material in memory immediately with default texture
-			MaterialManager::saveMaterialToFile(newPath, materialName, TextureManager::kDefaultTextureKey);
-			MaterialManager::createMaterial(materialName, TextureManager::kDefaultTextureKey, newPath);
+			ResourceContext::getMaterialManager().saveMaterialToFile(
+				newPath, materialName, TextureManager::kDefaultTextureKey);
+			ResourceContext::getMaterialManager().createMaterial(
+				materialName, TextureManager::kDefaultTextureKey, newPath);
 			ScanCurrentFolderContents();
 		}
 		ImGui::EndPopup();
@@ -317,7 +319,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 					}
 
 					if (ext == "mat") {
-						Material* material = MaterialManager::loadMaterialFromFile(fe.fullPath);
+						Material* material = ResourceContext::getMaterialManager().loadMaterialFromFile(fe.fullPath);
 						if (material) {
 							// Here you can add a dedicated Inspector selection for materials
 							// For now we just select the asset path so user sees it in Inspector

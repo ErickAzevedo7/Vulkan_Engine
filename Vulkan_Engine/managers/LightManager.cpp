@@ -1,27 +1,25 @@
 #include "LightManager.h"
 
-#include "components/LightComponent.h"
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "vulkan/vulkan_core.h"
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>
+
+#include "components/LightComponent.h"
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
 
-// Simple single-light manager: creates a uniform buffer per-frame and exposes
+// light manager: creates a uniform buffer per-frame and exposes
 // it so descriptor sets can bind it at binding 2.
 
-static std::vector<VkBuffer> lightBuffers;
-static std::vector<VkDeviceMemory> lightBufferMem;
-
-void LightManager::init() {
+LightManager::LightManager() {
+	// Constructor - initialize all resources
 	uint32_t count = MAX_FRAMES_IN_FLIGHT;
 	lightBuffers.resize(count);
 	lightBufferMem.resize(count);
@@ -39,13 +37,16 @@ void LightManager::init() {
 	}
 }
 
-void LightManager::cleanup() {
+LightManager::~LightManager() {
+	// Destructor - automatic cleanup (RAII)
 	for (size_t i = 0; i < lightBuffers.size(); ++i) {
-		vkDestroyBuffer(VulkanCore::getDevice(), lightBuffers[i], nullptr);
-		vkFreeMemory(VulkanCore::getDevice(), lightBufferMem[i], nullptr);
+		if (lightBuffers[i] != VK_NULL_HANDLE) {
+			vkDestroyBuffer(VulkanCore::getDevice(), lightBuffers[i], nullptr);
+		}
+		if (lightBufferMem[i] != VK_NULL_HANDLE) {
+			vkFreeMemory(VulkanCore::getDevice(), lightBufferMem[i], nullptr);
+		}
 	}
-	lightBuffers.clear();
-	lightBufferMem.clear();
 }
 
 void LightManager::updateLight(uint32_t frame, const LightComponent::LightUniform& u) {

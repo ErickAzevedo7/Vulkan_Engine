@@ -1,29 +1,39 @@
 #include "ResourceContext.h"
 
+#include <memory>
+
 #include "managers/LightManager.h"
 #include "managers/MaterialManager.h"
 #include "managers/TextureManager.h"
 
+// Initialize pointer to nullptr
+std::unique_ptr<LightManager> ResourceContext::lightManager = nullptr;
+std::unique_ptr<MaterialManager> ResourceContext::materialManager = nullptr;
 
 void ResourceContext::init() {
-	// Initialize managers in dependency order
-	// LightManager has no dependencies
-	LightManager::init();
-
-	// MaterialManager depends on LightManager (for descriptor sets)
-	MaterialManager::init();
+	// Create Managers after Vulkan is initialized
+	// Constructor handles all initialization (true RAII!)
+	materialManager = std::make_unique<MaterialManager>();
+	lightManager = std::make_unique<LightManager>();
 }
 
 void ResourceContext::loadDefaults() {
-	// Load default resources
 	TextureManager::loadDefaults();
 	TextureManager::loadAllFromAssets("assets");
-	MaterialManager::loadDefault();
+	materialManager->loadDefault();
 }
 
 void ResourceContext::cleanup() {
-	// Cleanup in reverse order of initialization
-	MaterialManager::cleanup();
+	// Manager cleanup handled automatically by unique_ptr destructor
+	lightManager.reset();
+	materialManager.reset();
 	TextureManager::cleanup();
-	LightManager::cleanup();
+}
+
+LightManager& ResourceContext::getLightManager() {
+	return *lightManager;
+}
+
+MaterialManager& ResourceContext::getMaterialManager() {
+	return *materialManager;
 }

@@ -1,13 +1,14 @@
 #include "MeshComponent.h"
 
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+
+#include "context/ResourceContext.h"
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
 #include "vulkan/vulkan_core.h"
-
-#include <cstdint>
-#include <stdexcept>
-#include <string>
 
 #include "glm/ext/vector_float3.hpp"
 
@@ -15,7 +16,7 @@ MeshComponent::MeshComponent(Entity* owner, const std::string& meshName) : Compo
 	mesh = MeshManager::getMesh(meshName);
 
 	const std::string defaultMaterialPath = "common/material/default.mat";
-	this->material = MaterialManager::getMaterial(defaultMaterialPath);
+	this->material = ResourceContext::getMaterialManager().getMaterial(defaultMaterialPath);
 
 	if (!mesh) {
 		throw std::runtime_error("Mesh not found: " + meshName);

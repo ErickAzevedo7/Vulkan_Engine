@@ -161,10 +161,10 @@ public:
 				lu.color = glm::vec3(0.0f);
 				lu.intensity = 0.0f;
 			}
-			LightManager::updateLight(frame, lu);
+			ResourceContext::getLightManager().updateLight(frame, lu);
 
 			// Update all material descriptor sets for this frame to point binding 2 to the light buffer
-			const auto& mats = MaterialManager::getAllMaterials();
+			const auto& mats = ResourceContext::getMaterialManager().getAllMaterials();
 			for (const auto& pair : mats) {
 				Material* mat = pair.second;
 				if (!mat)
@@ -172,7 +172,7 @@ public:
 				if (mat->descriptorSets.size() <= frame)
 					continue;
 				VkDescriptorBufferInfo lightInfo{};
-				lightInfo.buffer = LightManager::getLightBuffer(frame);
+				lightInfo.buffer = ResourceContext::getLightManager().getLightBuffer(frame);
 				lightInfo.offset = 0;
 				// LightManager now allocates: 6 vec4s + 5 floats (3 attenuation + 2 cutoff angles)
 				lightInfo.range = sizeof(glm::vec4) * 6 + sizeof(float) * 5;

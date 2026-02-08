@@ -1,10 +1,5 @@
 #include "MaterialManager.h"
 
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "managers/TextureManager.h"
-#include "vulkan/vulkan_core.h"
-
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -19,13 +14,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "managers/TextureManager.h"
+#include "vulkan/vulkan_core.h"
+
 #include "glm/ext/vector_float3.hpp"
 #include "nlohmann/json.hpp"
 #include "nlohmann/json_fwd.hpp"
-
-// initialize static members
-std::unordered_map<std::string, Material*> MaterialManager::materials;
-VkDescriptorPool MaterialManager::descriptorPool = VK_NULL_HANDLE;
 
 // Helper to produce a consistent key for material map lookups (normalizes
 // path separators to '/'). If a non-path logical name is used (e.g. "default")
@@ -39,9 +35,33 @@ static std::string normalizeKey(const std::string& s) {
 	}
 }
 
-void MaterialManager::init() {
+MaterialManager::MaterialManager() {
+	// Constructor - initialize resources
 	createDescriptorPool();
 	loadAllFromAssets();
+}
+
+MaterialManager::~MaterialManager() {
+	// Destructor - automatic cleanup (RAII)
+	for (auto& pair : materials) {
+		Material* mat = pair.second;
+		if (mat) {
+			// Clean up property buffers
+			for (size_t i = 0; i < mat->propertyBuffers.size(); i++) {
+				if (mat->propertyBuffers[i]) {
+					vkDestroyBuffer(VulkanCore::getDevice(), mat->propertyBuffers[i], nullptr);
+				}
+				if (mat->propertyBufferMemory[i]) {
+					vkFreeMemory(VulkanCore::getDevice(), mat->propertyBufferMemory[i], nullptr);
+				}
+			}
+			delete mat;
+		}
+	}
+	materials.clear();
+	if (descriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
+	}
 }
 
 void MaterialManager::loadDefault() {
@@ -270,26 +290,6 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 
 	file << j.dump(4) << std::endl;
 	file.close();
-}
-
-void MaterialManager::cleanup() {
-	for (auto& pair : materials) {
-		Material* mat = pair.second;
-		if (mat) {
-			// Clean up property buffers
-			for (size_t i = 0; i < mat->propertyBuffers.size(); i++) {
-				if (mat->propertyBuffers[i]) {
-					vkDestroyBuffer(VulkanCore::getDevice(), mat->propertyBuffers[i], nullptr);
-				}
-				if (mat->propertyBufferMemory[i]) {
-					vkFreeMemory(VulkanCore::getDevice(), mat->propertyBufferMemory[i], nullptr);
-				}
-			}
-			delete mat;
-		}
-	}
-	materials.clear();
-	vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
 }
 
 void MaterialManager::destroyMaterialInternal(const std::string& name) {
