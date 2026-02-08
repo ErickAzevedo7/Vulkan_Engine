@@ -1,23 +1,51 @@
+#include <array>
+#include <corecrt_terminate.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
+#include <stdexcept>
+#include <stdio.h>
+#include <vector>
+
+#include "GLFW/glfw3.h"
+#include "managers/TextureManager.h"
+#include "Scene.h"
+#include "vulkan/vulkan_core.h"
+
+#include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
+
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define fontPath "C:\\Windows\\Fonts\\segoeuisl.ttf" // Windows UI font
+#define boldFontPath "C:\\Windows\\Fonts\\segoeuib.ttf" // Windows UI bold font
 
+#include <iostream>
+
+#include "components/LightComponent.h"
+#include "components/MeshComponent.h"
+#include "core/vulkancore.h"
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
 #include "Editor/ViewPort.h"
-#include "SceneRenderer.h"
-#include "core/vulkancore.h"
+#include "factory/EntityFactory.h"
+#include "gizmos/ImGuizmo.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "managers/LightManager.h"
+#include "managers/MaterialManager.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
+#include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
-#include "ui/SceneUi.h"
 #include "ui/InspectorUi.h"
+#include "ui/SceneUi.h"
 
 // GLOBAL VARIABLES
-float deltaTime = 0.0f; // Time between current frame and last frame
-float lastFrame = 0.0f; // Time of last frame
+double deltaTime = 0.0; // Time between current frame and last frame
+double lastFrame = 0.0; // Time of last frame
 
 class VulkanEngine {
 public:
@@ -29,13 +57,35 @@ public:
 		TextureManager::loadAllFromAssets("assets");
 		MaterialManager::init();
 		MaterialManager::loadDefault();
+		LightManager::init();
 		SceneRenderer::init(&engineCore);
 		mousePick.init(&engineCore);
 		viewPort.init(&engineCore, mousePick.getMousePickExtent());
-		outline.init(&engineCore, mousePick.getMousePickImageViews(),
-		             viewPort.m_ViewportImageViews, mousePick.getMousePickExtent());
+		outline.init(&engineCore,
+					 mousePick.getMousePickImageViews(),
+					 viewPort.m_ViewportImageViews,
+					 mousePick.getMousePickExtent());
 		editorCamera.init(&engineCore);
 		SceneManager::loadDefaults();
+
+		// Create a hardcoded test light entity so lighting can be verified (TEMPORARY)
+		{
+			Scene* scene = SceneManager::getActiveScene();
+			if (scene) {
+				Entity& lightEntity = EntityFactory::createLight(scene,
+																 "TestDirectionalLight",
+																 LightType::Directional,
+																 glm::vec3(0.0f, 10.0f, 0.0f),
+																 glm::vec3(1.0f, 0.95f, 0.9f),
+																 10.0f);
+
+				// Set the direction for the directional light
+				LightComponent* lc = lightEntity.getComponent<LightComponent>();
+				if (lc) {
+					lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
+				}
+			}
+		}
 		init();
 
 		changeImGuizmoStyle();
@@ -46,6 +96,7 @@ public:
 		mousePick.cleanup();
 		MaterialManager::cleanup();
 		TextureManager::cleanup();
+		LightManager::cleanup();
 
 		cleanup();
 		engineCore.cleanup();
@@ -59,47 +110,97 @@ public:
 			return;
 		}
 
-		vkWaitForFences(
-			VulkanCore::getDevice(), 1,
-			&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()], VK_TRUE,
-			UINT64_MAX);
+		vkWaitForFences(VulkanCore::getDevice(),
+						1,
+						&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()],
+						VK_TRUE,
+						UINT64_MAX);
 		uint32_t imageIndex;
-		VkResult result = vkAcquireNextImageKHR(
-			VulkanCore::getDevice(), engineCore.getSwapChain(), UINT64_MAX,
-			engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
-			VK_NULL_HANDLE, &imageIndex);
+		VkResult result = vkAcquireNextImageKHR(VulkanCore::getDevice(),
+												engineCore.getSwapChain(),
+												UINT64_MAX,
+												engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
+												VK_NULL_HANDLE,
+												&imageIndex);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 			engineCore.recreateSwapChain();
 			return;
-		}
-		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
 
-		vkResetFences(
-			VulkanCore::getDevice(), 1,
-			&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
+		vkResetFences(VulkanCore::getDevice(), 1, &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
 
-		vkResetCommandBuffer(
-			engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
+		vkResetCommandBuffer(engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
 
-		mousePick.recordMousePickCommandBuffer(
-			mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
-			imageIndex);
-
-		viewPort.recordViewportCommandBuffer(
-			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
-			imageIndex);
-
-		outline.recordOutlineCommandBuffer(
-			outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
-			imageIndex);
-
-		recordImguiCommandBuffer(imGuiCommandBuffers[VulkanCore::getCurrentFrame()],
-		                         imageIndex);
-
+		// (TEMPORARY)
+		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
 		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
+
+		// Update simple single light (for now static directional light)
+		{
+			uint32_t frame = VulkanCore::getCurrentFrame();
+			// Find the first LightComponent in the active scene. If none found,
+			// upload a zero-intensity light so the scene is dark.
+			LightComponent::LightUniform lu{};
+			bool foundLight = false;
+			Scene* scene = SceneManager::getActiveScene();
+			if (scene) {
+				auto entities = scene->getEntities();
+				for (const auto& entPtr : *entities) {
+					Entity* e = entPtr.get();
+					if (!e)
+						continue;
+					if (auto lc = e->getComponent<LightComponent>()) {
+						lu = lc->getLightUniform();
+						foundLight = true;
+						break;
+					}
+				}
+			}
+			if (!foundLight) {
+				// no lights in scene: make sure shader receives zero intensity
+				lu.color = glm::vec3(0.0f);
+				lu.intensity = 0.0f;
+			}
+			LightManager::updateLight(frame, lu);
+
+			// Update all material descriptor sets for this frame to point binding 2 to the light buffer
+			const auto& mats = MaterialManager::getAllMaterials();
+			for (const auto& pair : mats) {
+				Material* mat = pair.second;
+				if (!mat)
+					continue;
+				if (mat->descriptorSets.size() <= frame)
+					continue;
+				VkDescriptorBufferInfo lightInfo{};
+				lightInfo.buffer = LightManager::getLightBuffer(frame);
+				lightInfo.offset = 0;
+				// LightManager now allocates: 6 vec4s + 5 floats (3 attenuation + 2 cutoff angles)
+				lightInfo.range = sizeof(glm::vec4) * 6 + sizeof(float) * 5;
+
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = mat->descriptorSets[frame];
+				write.dstBinding = 2;
+				write.dstArrayElement = 0;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				write.descriptorCount = 1;
+				write.pBufferInfo = &lightInfo;
+				vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &write, 0, nullptr);
+			}
+		}
+
+		mousePick.recordMousePickCommandBuffer(mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
+											   imageIndex);
+
+		viewPort.recordViewportCommandBuffer(viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
+											 imageIndex);
+
+		outline.recordOutlineCommandBuffer(outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex);
+
+		recordImguiCommandBuffer(imGuiCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex);
 
 		std::array<VkCommandBuffer, 4> submitCommandBuffers = {
 			mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
@@ -111,32 +212,23 @@ public:
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-		VkSemaphore waitSemaphores[] = {
-			engineCore
-			.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()]
-		};
-		VkPipelineStageFlags waitStages[] = {
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-		};
+		VkSemaphore waitSemaphores[] = {engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()]};
+		VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 		submitInfo.waitSemaphoreCount = 1;
 		submitInfo.pWaitSemaphores = waitSemaphores;
 		submitInfo.pWaitDstStageMask = waitStages;
 
-		submitInfo.commandBufferCount =
-			static_cast<uint32_t>(submitCommandBuffers.size());
+		submitInfo.commandBufferCount = static_cast<uint32_t>(submitCommandBuffers.size());
 		submitInfo.pCommandBuffers = submitCommandBuffers.data();
 
-		VkSemaphore signalSemaphores[] = {
-			engineCore
-			.getRenderFinishedSemaphores()[VulkanCore::getCurrentFrame()]
-		};
+		VkSemaphore signalSemaphores[] = {engineCore.getRenderFinishedSemaphores()[VulkanCore::getCurrentFrame()]};
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
-		if (vkQueueSubmit(
-				VulkanCore::getGraphicsQueue(), 1, &submitInfo,
-				engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]) !=
-			VK_SUCCESS) {
+		if (vkQueueSubmit(VulkanCore::getGraphicsQueue(),
+						  1,
+						  &submitInfo,
+						  engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to submit draw command buffer!");
 		}
 
@@ -154,28 +246,25 @@ public:
 
 		result = vkQueuePresentKHR(VulkanCore::getPresentQueue(), &presentInfo);
 
-		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-			engineCore.getFramebufferResized()) {
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || engineCore.getFramebufferResized()) {
 			engineCore.setFramebufferResized(false);
 			engineCore.recreateSwapChain();
-		}
-		else if (result != VK_SUCCESS) {
+		} else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");
 		}
 
-		engineCore.setCurrentFrame((VulkanCore::getCurrentFrame() + 1) %
-			MAX_FRAMES_IN_FLIGHT);
+		engineCore.setCurrentFrame((VulkanCore::getCurrentFrame() + 1) % MAX_FRAMES_IN_FLIGHT);
 	}
 
 	void mainLoop() {
 		sceneTexture.resize(viewPort.m_ViewportImageViews.size());
 		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
-				engineCore.getTextureSampler(), outline.outlineColorImageViews[i],
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
+														  outline.outlineColorImageViews[i],
+														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		while (!glfwWindowShouldClose(engineCore.getWindow())) {
-			float currentFrame = glfwGetTime();
+			double currentFrame = glfwGetTime();
 			deltaTime = currentFrame - lastFrame;
 			lastFrame = currentFrame;
 			glfwPollEvents();
@@ -205,7 +294,6 @@ public:
 
 			ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
-
 			uint32_t viewportWidth = (viewportSize.x > 0.0f) ? static_cast<uint32_t>(viewportSize.x) : 0;
 			uint32_t viewportHeight = (viewportSize.y > 0.0f) ? static_cast<uint32_t>(viewportSize.y) : 0;
 
@@ -230,7 +318,7 @@ public:
 			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
 			ImGui::Image((ImTextureID)sceneTexture[VulkanCore::getCurrentFrame()],
-			             ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+						 ImVec2{viewportPanelSize.x, viewportPanelSize.y});
 
 			ImGui::SetCursorScreenPos(p);
 
@@ -248,32 +336,17 @@ public:
 			if (ImGui::BeginMainMenuBar()) {
 				if (ImGui::BeginMenu("Entities")) {
 					if (ImGui::MenuItem("Create Empty Entity")) {
-						SceneManager::getActiveScene()->createEntity("Empty Entity");
+						EntityFactory::createEmpty(SceneManager::getActiveScene(), "Empty Entity");
 					}
 
 					if (ImGui::MenuItem("Create Cube")) {
-						Entity& entity =
-							SceneManager::getActiveScene()->createEntity("Cube");
-						MeshComponent* meshComp = new MeshComponent(&entity, "cube");
-						Transform* transformComp = new Transform();
-						entity.addComponent(meshComp);
-						entity.addComponent(transformComp);
+						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Cube", "cube");
 					}
 					if (ImGui::MenuItem("Create Sphere")) {
-						Entity& entity =
-							SceneManager::getActiveScene()->createEntity("Sphere");
-						MeshComponent* meshComp = new MeshComponent(&entity, "sphere");
-						Transform* transformComp = new Transform();
-						entity.addComponent(meshComp);
-						entity.addComponent(transformComp);
+						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Sphere", "sphere");
 					}
 					if (ImGui::MenuItem("Create Quad")) {
-						Entity& entity =
-							SceneManager::getActiveScene()->createEntity("Quad");
-						MeshComponent* meshComp = new MeshComponent(&entity, "quad");
-						Transform* transformComp = new Transform();
-						entity.addComponent(meshComp);
-						entity.addComponent(transformComp);
+						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Quad", "quad");
 					}
 					ImGui::EndMenu();
 				}
@@ -318,30 +391,33 @@ private:
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
-		io.ConfigFlags |=
-			ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-		io.ConfigFlags |=
-			ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
-		io.ConfigFlags |=
-			ImGuiConfigFlags_DockingEnable; // IF using Docking Branch
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // IF using Docking Branch
 		io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
 		FILE* f = nullptr;
 		if (fopen_s(&f, fontPath, "rb") != 0 || !f) {
 			io.Fonts->AddFontDefault();
-		}
-		else {
+		} else {
 			fclose(f);
 
 			ImFontConfig fontCfg;
 			fontCfg.SizePixels = 16.0f;
 
-			io.Fonts->AddFontFromFileTTF(
-				fontPath, fontCfg.SizePixels, &fontCfg,
-				io.Fonts->GetGlyphRangesDefault()
-			);
+			io.Fonts->AddFontFromFileTTF(fontPath, fontCfg.SizePixels, &fontCfg, io.Fonts->GetGlyphRangesDefault());
 		}
 
+		if (fopen_s(&f, boldFontPath, "rb") != 0 || !f) {
+			io.Fonts->AddFontDefault();
+		} else {
+			fclose(f);
+
+			ImFontConfig fontCfg;
+			fontCfg.SizePixels = 16.0f;
+
+			io.Fonts->AddFontFromFileTTF(boldFontPath, fontCfg.SizePixels, &fontCfg, io.Fonts->GetGlyphRangesDefault());
+		}
 
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImVec4* colors = style.Colors;
@@ -385,7 +461,7 @@ private:
 		colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.13f, 0.78f, 0.07f, 1.00f);
 		colors[ImGuiCol_TabDimmed] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
 		colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
-		//colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.10f, 0.60f, 0.12f, 1.00f);
+		// colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.10f, 0.60f, 0.12f, 1.00f);
 		colors[ImGuiCol_DockingPreview] = ImVec4(0.26f, 0.59f, 0.98f, 0.70f);
 		colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
 		colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
@@ -420,19 +496,17 @@ private:
 		style.DockTabPadding.x = 0.0f;
 		style.IndentSpacing = 8.0f;
 
-		VkDescriptorPoolSize pool_sizes[] = {
-			{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-			{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-			{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-			{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-			{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}
-		};
+		VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+											 {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+											 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+											 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+											 {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+											 {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+											 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+											 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+											 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+											 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+											 {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
 		VkDescriptorPoolCreateInfo pool_info{};
 		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -441,12 +515,10 @@ private:
 			pool_info.maxSets += pool_size.descriptorCount;
 		pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
 		pool_info.pPoolSizes = pool_sizes;
-		err = vkCreateDescriptorPool(VulkanCore::getDevice(), &pool_info, nullptr,
-		                             &imguiDescriptorPool);
+		err = vkCreateDescriptorPool(VulkanCore::getDevice(), &pool_info, nullptr, &imguiDescriptorPool);
 		check_vk_result(err);
 
-		SwapChainSupportDetails swapChainSupport =
-			engineCore.querySwapChainSupport(VulkanCore::getPhysicalDevice());
+		SwapChainSupportDetails swapChainSupport = engineCore.querySwapChainSupport(VulkanCore::getPhysicalDevice());
 
 		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 
@@ -491,17 +563,14 @@ private:
 		info.dependencyCount = 1;
 		info.pDependencies = &dependency;
 
-		if (vkCreateRenderPass(VulkanCore::getDevice(), &info, nullptr,
-		                       &imGuiRenderPass) != VK_SUCCESS) {
+		if (vkCreateRenderPass(VulkanCore::getDevice(), &info, nullptr, &imGuiRenderPass) != VK_SUCCESS) {
 			throw std::runtime_error("Could not create Dear ImGui's render pass");
 		}
 
-		createCommandPool(&imGuiCommandPool,
-		                  VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+		createCommandPool(&imGuiCommandPool, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 		imGuiCommandBuffers.resize(engineCore.getSwapChainImageViews().size());
-		createCommandBuffers(imGuiCommandBuffers.data(),
-		                     static_cast<uint32_t>(imGuiCommandBuffers.size()),
-		                     imGuiCommandPool);
+		createCommandBuffers(
+			imGuiCommandBuffers.data(), static_cast<uint32_t>(imGuiCommandBuffers.size()), imGuiCommandPool);
 
 		createframebuffers();
 
@@ -526,8 +595,7 @@ private:
 		ImGui_ImplVulkan_Init(&init_info);
 	}
 
-	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer,
-	                              uint32_t ImageIndex) {
+	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ImageIndex) {
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -569,44 +637,35 @@ private:
 		frameBufferCreateInfo.layers = 1;
 		for (uint32_t i = 0; i < engineCore.getSwapChainImageViews().size(); i++) {
 			attachment[0] = engineCore.getSwapChainImageViews()[i];
-			err = vkCreateFramebuffer(VulkanCore::getDevice(), &frameBufferCreateInfo,
-			                          nullptr, &imGuiFramebuffers[i]);
+			err = vkCreateFramebuffer(VulkanCore::getDevice(), &frameBufferCreateInfo, nullptr, &imGuiFramebuffers[i]);
 			check_vk_result(err);
 		}
 	}
 
 	void cleanupFramebuffers() {
 		for (size_t i = 0; i < imGuiFramebuffers.size(); i++) {
-			vkDestroyFramebuffer(VulkanCore::getDevice(), imGuiFramebuffers[i],
-			                     nullptr);
+			vkDestroyFramebuffer(VulkanCore::getDevice(), imGuiFramebuffers[i], nullptr);
 		}
 	}
 
-	void createCommandPool(VkCommandPool* commandPool,
-	                       VkCommandPoolCreateFlags flags) {
+	void createCommandPool(VkCommandPool* commandPool, VkCommandPoolCreateFlags flags) {
 		VkCommandPoolCreateInfo commandPoolCreateInfo{};
 		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		commandPoolCreateInfo.queueFamilyIndex =
-			engineCore.getGraphicsQueueFamily();
+		commandPoolCreateInfo.queueFamilyIndex = engineCore.getGraphicsQueueFamily();
 		commandPoolCreateInfo.flags = flags;
 
-		if (vkCreateCommandPool(VulkanCore::getDevice(), &commandPoolCreateInfo,
-		                        nullptr, commandPool) != VK_SUCCESS) {
+		if (vkCreateCommandPool(VulkanCore::getDevice(), &commandPoolCreateInfo, nullptr, commandPool) != VK_SUCCESS) {
 			throw std::runtime_error("Could not create graphics command pool");
 		}
 	}
 
-	void createCommandBuffers(VkCommandBuffer* commandBuffer,
-	                          uint32_t commandBufferCount,
-	                          VkCommandPool& commandPool) {
+	void createCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool& commandPool) {
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
-		commandBufferAllocateInfo.sType =
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		commandBufferAllocateInfo.commandPool = commandPool;
 		commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
-		vkAllocateCommandBuffers(VulkanCore::getDevice(),
-		                         &commandBufferAllocateInfo, commandBuffer);
+		vkAllocateCommandBuffers(VulkanCore::getDevice(), &commandBufferAllocateInfo, commandBuffer);
 	}
 
 	void recreateRenderPasses() {
@@ -618,14 +677,13 @@ private:
 		createframebuffers();
 		mousePick.recreateMousePick();
 		viewPort.recreateViewport(mousePick.getMousePickExtent());
-		outline.recreateOutline(mousePick.getMousePickImageViews(),
-		                        viewPort.m_ViewportImageViews,
-		                        mousePick.getMousePickExtent());
+		outline.recreateOutline(
+			mousePick.getMousePickImageViews(), viewPort.m_ViewportImageViews, mousePick.getMousePickExtent());
 
 		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
-			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(
-				engineCore.getTextureSampler(), outline.outlineColorImageViews[i],
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
+														  outline.outlineColorImageViews[i],
+														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
 	void cleanup() {
@@ -635,20 +693,22 @@ private:
 
 		vkDestroyRenderPass(VulkanCore::getDevice(), imGuiRenderPass, nullptr);
 
-		vkFreeCommandBuffers(VulkanCore::getDevice(), imGuiCommandPool,
-		                     static_cast<uint32_t>(imGuiCommandBuffers.size()),
-		                     imGuiCommandBuffers.data());
+		vkFreeCommandBuffers(VulkanCore::getDevice(),
+							 imGuiCommandPool,
+							 static_cast<uint32_t>(imGuiCommandBuffers.size()),
+							 imGuiCommandBuffers.data());
 		vkDestroyCommandPool(VulkanCore::getDevice(), imGuiCommandPool, nullptr);
 
 		// Resources to destroy when the program ends
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
-		vkDestroyDescriptorPool(VulkanCore::getDevice(), imguiDescriptorPool,
-		                        nullptr);
+		vkDestroyDescriptorPool(VulkanCore::getDevice(), imguiDescriptorPool, nullptr);
 	}
 
-	void inputProcess() { editorCamera.inputProcess(mousePick); }
+	void inputProcess() {
+		editorCamera.inputProcess(mousePick);
+	}
 
 	void changeImGuizmoStyle() {
 		ImGuizmo::Style& style = ImGuizmo::GetStyle();
@@ -663,8 +723,7 @@ int main() {
 
 	try {
 		app.run();
-	}
-	catch (const std::exception& e) {
+	} catch (const std::exception& e) {
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
