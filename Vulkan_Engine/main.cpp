@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "GLFW/glfw3.h"
-#include "managers/TextureManager.h"
 #include "Scene.h"
 #include "vulkan/vulkan_core.h"
 
@@ -25,6 +24,7 @@
 
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "context/ResourceContext.h"
 #include "core/vulkancore.h"
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
@@ -53,11 +53,11 @@ public:
 		// Initialize Vulkan
 		engineCore.initWindow();
 		engineCore.initVulkan();
-		TextureManager::loadDefaults();
-		TextureManager::loadAllFromAssets("assets");
-		MaterialManager::init();
-		MaterialManager::loadDefault();
-		LightManager::init();
+
+		// Initialize resource managers (textures, materials, lights)
+		ResourceContext::init();
+		ResourceContext::loadDefaults();
+
 		SceneRenderer::init(&engineCore);
 		mousePick.init(&engineCore);
 		viewPort.init(&engineCore, mousePick.getMousePickExtent());
@@ -94,9 +94,7 @@ public:
 		outline.cleanup();
 		viewPort.cleanup();
 		mousePick.cleanup();
-		MaterialManager::cleanup();
-		TextureManager::cleanup();
-		LightManager::cleanup();
+		ResourceContext::cleanup();
 
 		cleanup();
 		engineCore.cleanup();
