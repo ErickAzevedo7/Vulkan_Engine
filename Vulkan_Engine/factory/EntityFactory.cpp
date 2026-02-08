@@ -1,12 +1,16 @@
 #include "EntityFactory.h"
 
 #include <stdexcept>
+#include <string>
 
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/Transform.h"
 #include "Entity.h"
 #include "Scene.h"
+
+#include "glm/ext/vector_float3.hpp"
+
 
 Entity& EntityFactory::createEmpty(Scene* scene, const std::string& name) {
 	if (!scene) {
