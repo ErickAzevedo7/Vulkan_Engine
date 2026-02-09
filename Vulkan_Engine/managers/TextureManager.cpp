@@ -1,11 +1,5 @@
 #include "TextureManager.h"
 
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "vulkan/vulkan_core.h"
-
-#include <stb_image.h>
-
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -13,23 +7,54 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <stb_image.h>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 
-// initialize static members
-std::unordered_map<std::string, Texture> TextureManager::textures;
-std::unordered_map<std::string, ThumbnailTexture> TextureManager::thumbnails;
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "vulkan/vulkan_core.h"
 
-const std::string TextureManager::kDefaultTextureKey = "common/texture/default.png";
+TextureManager::TextureManager() {
+	loadDefaults();
+}
+
+TextureManager::~TextureManager() {
+	// Destructor - automatic cleanup (RAII)
+	for (auto& pair : textures) {
+		vkDestroySampler(VulkanCore::getDevice(), pair.second.sampler, nullptr);
+		vkDestroyImageView(VulkanCore::getDevice(), pair.second.imageView, nullptr);
+		vkDestroyImage(VulkanCore::getDevice(), pair.second.image, nullptr);
+		vkFreeMemory(VulkanCore::getDevice(), pair.second.memory, nullptr);
+	}
+	textures.clear();
+
+	for (auto& pair : thumbnails) {
+		if (pair.second.sampler != VK_NULL_HANDLE) {
+			vkDestroySampler(VulkanCore::getDevice(), pair.second.sampler, nullptr);
+		}
+		if (pair.second.imageView != VK_NULL_HANDLE) {
+			vkDestroyImageView(VulkanCore::getDevice(), pair.second.imageView, nullptr);
+		}
+		if (pair.second.image != VK_NULL_HANDLE) {
+			vkDestroyImage(VulkanCore::getDevice(), pair.second.image, nullptr);
+		}
+		if (pair.second.memory != VK_NULL_HANDLE) {
+			vkFreeMemory(VulkanCore::getDevice(), pair.second.memory, nullptr);
+		}
+	}
+	thumbnails.clear();
+}
 
 void TextureManager::loadDefaults() {
-	// load icons textures
+	// load icons textures - UI icons should NOT be flipped
 	Texture* texture = loadTexture("ui/icons/defaultFile.png",
 								   VulkanCore::getDevice(),
 								   VulkanCore::getPhysicalDevice(),
 								   VulkanCore::getCommandPool(),
-								   VulkanCore::getGraphicsQueue());
+								   VulkanCore::getGraphicsQueue(),
+								   false);
 	createTextureImageView(texture);
 	createTextureSampler(texture);
 	textures["defaultFile"] = *texture;
@@ -38,19 +63,19 @@ void TextureManager::loadDefaults() {
 						  VulkanCore::getDevice(),
 						  VulkanCore::getPhysicalDevice(),
 						  VulkanCore::getCommandPool(),
-						  VulkanCore::getGraphicsQueue());
+						  VulkanCore::getGraphicsQueue(),
+						  false);
 	createTextureImageView(texture);
 	createTextureSampler(texture);
 	textures["folder"] = *texture;
 
-	// load default object texture
-	stbi_set_flip_vertically_on_load(true);
-
+	// load default object texture - 3D textures SHOULD be flipped
 	texture = loadTexture(kDefaultTextureKey,
 						  VulkanCore::getDevice(),
 						  VulkanCore::getPhysicalDevice(),
 						  VulkanCore::getCommandPool(),
-						  VulkanCore::getGraphicsQueue());
+						  VulkanCore::getGraphicsQueue(),
+						  true);
 	createTextureImageView(texture);
 	createTextureSampler(texture);
 	textures[kDefaultTextureKey] = *texture;
@@ -86,11 +111,20 @@ void TextureManager::loadAllFromAssets(const std::string& assetsRoot) {
 			continue;
 		}
 
+		// Check if it's a UI icon (heuristic: path contains "ui/icons" or similar?)
+		// For now, assume everything in assets/ is a 3D texture, EXCEPT if user organizes otherwise.
+		// Detailed check: if path contains "ui/icons", don't flip.
+		bool flip = true;
+		if (normFullPath.find("ui/icons/") != std::string::npos) {
+			flip = false;
+		}
+
 		Texture* texture = loadTexture(fullPath,
 									   VulkanCore::getDevice(),
 									   VulkanCore::getPhysicalDevice(),
 									   VulkanCore::getCommandPool(),
-									   VulkanCore::getGraphicsQueue());
+									   VulkanCore::getGraphicsQueue(),
+									   flip);
 		createTextureImageView(texture);
 		createTextureSampler(texture);
 		textures[normFullPath] = *texture;
@@ -248,9 +282,11 @@ Texture* TextureManager::loadTexture(const std::string& path,
 									 VkDevice device,
 									 VkPhysicalDevice physicalDevice,
 									 VkCommandPool commandPool,
-									 VkQueue graphicsQueue) {
+									 VkQueue graphicsQueue,
+									 bool flipV) {
 	int texWidth, texHeight, texChannels;
 
+	stbi_set_flip_vertically_on_load(flipV);
 	stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -499,30 +535,4 @@ void TextureManager::generateMipmaps(
 						 &barrier);
 
 	Utils::endSingleTimeCommands(VulkanCore::getCommandPool(), commandBuffer);
-}
-
-void TextureManager::cleanup() {
-	for (auto& pair : textures) {
-		vkDestroySampler(VulkanCore::getDevice(), pair.second.sampler, nullptr);
-		vkDestroyImageView(VulkanCore::getDevice(), pair.second.imageView, nullptr);
-		vkDestroyImage(VulkanCore::getDevice(), pair.second.image, nullptr);
-		vkFreeMemory(VulkanCore::getDevice(), pair.second.memory, nullptr);
-	}
-	textures.clear();
-
-	for (auto& pair : thumbnails) {
-		if (pair.second.sampler != VK_NULL_HANDLE) {
-			vkDestroySampler(VulkanCore::getDevice(), pair.second.sampler, nullptr);
-		}
-		if (pair.second.imageView != VK_NULL_HANDLE) {
-			vkDestroyImageView(VulkanCore::getDevice(), pair.second.imageView, nullptr);
-		}
-		if (pair.second.image != VK_NULL_HANDLE) {
-			vkDestroyImage(VulkanCore::getDevice(), pair.second.image, nullptr);
-		}
-		if (pair.second.memory != VK_NULL_HANDLE) {
-			vkFreeMemory(VulkanCore::getDevice(), pair.second.memory, nullptr);
-		}
-	}
-	thumbnails.clear();
 }

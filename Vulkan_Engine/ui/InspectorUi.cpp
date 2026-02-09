@@ -57,7 +57,7 @@ void InspectorUi::selectEntity(int entityId) {
 	selection.assetPath.clear();
 
 	// Update per-entity selection flags so outline/rendering can use isSelected
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -89,7 +89,7 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 	selection.assetPath = assetPath;
 
 	// Clear entity selection flags when switching to an asset selection
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -128,18 +128,18 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 					Texture* tex = nullptr;
 					// Try to get existing texture first using full path key
 					try {
-						tex = TextureManager::getTexture(texKey);
+						tex = ResourceContext::getTextureManager().getTexture(texKey);
 					} catch (...) {
 						// Load new texture and register it under the full path key
-						Texture* loaded = TextureManager::loadTexture(assetPath,
+						Texture* loaded = ResourceContext::getTextureManager().loadTexture(assetPath,
 																	  VulkanCore::getDevice(),
 																	  VulkanCore::getPhysicalDevice(),
 																	  VulkanCore::getCommandPool(),
 																	  VulkanCore::getGraphicsQueue());
-						TextureManager::createTextureImageView(loaded);
-						TextureManager::createTextureSampler(loaded);
-						TextureManager::registerTexture(texKey, *loaded);
-						tex = TextureManager::getTexture(texKey);
+						ResourceContext::getTextureManager().createTextureImageView(loaded);
+						ResourceContext::getTextureManager().createTextureSampler(loaded);
+						ResourceContext::getTextureManager().registerTexture(texKey, *loaded);
+						tex = ResourceContext::getTextureManager().getTexture(texKey);
 					}
 
 					// Create or reuse a material that uses this texture.
@@ -166,7 +166,7 @@ void InspectorUi::clearSelection() {
 	selection.assetPath.clear();
 
 	// Clear all per-entity selection flags
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -323,7 +323,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// Preview the material's albedo texture (look up by key)
 		Texture* previewTex = nullptr;
 		try {
-			previewTex = TextureManager::getTexture(material->albedoTextureKey);
+			previewTex = ResourceContext::getTextureManager().getTexture(material->albedoTextureKey);
 		} catch (...) {
 			previewTex = nullptr;
 		}
@@ -363,17 +363,17 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 						Texture* tex = nullptr;
 						try {
-							tex = TextureManager::getTexture(texKey);
+							tex = ResourceContext::getTextureManager().getTexture(texKey);
 						} catch (...) {
-							Texture* loaded = TextureManager::loadTexture(droppedPath,
+							Texture* loaded = ResourceContext::getTextureManager().loadTexture(droppedPath,
 																		  VulkanCore::getDevice(),
 																		  VulkanCore::getPhysicalDevice(),
 																		  VulkanCore::getCommandPool(),
 																		  VulkanCore::getGraphicsQueue());
-							TextureManager::createTextureImageView(loaded);
-							TextureManager::createTextureSampler(loaded);
-							TextureManager::registerTexture(texKey, *loaded);
-							tex = TextureManager::getTexture(texKey);
+							ResourceContext::getTextureManager().createTextureImageView(loaded);
+							ResourceContext::getTextureManager().createTextureSampler(loaded);
+							ResourceContext::getTextureManager().registerTexture(texKey, *loaded);
+							tex = ResourceContext::getTextureManager().getTexture(texKey);
 						}
 
 						// Rebuild or create the material with new albedo texture.
@@ -490,7 +490,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 }
 
 void InspectorUi::render() {
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 
 	ImGui::PushStyleVarX(ImGuiStyleVar_WindowPadding, 0.0f);
 
@@ -631,7 +631,7 @@ void InspectorUi::render() {
 				// Preview the material's albedo texture (look up by key)
 				Texture* previewTex = nullptr;
 				try {
-					previewTex = TextureManager::getTexture(material->albedoTextureKey);
+					previewTex = ResourceContext::getTextureManager().getTexture(material->albedoTextureKey);
 				} catch (...) {
 					previewTex = nullptr;
 				}

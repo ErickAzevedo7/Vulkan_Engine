@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "context/ResourceContext.h"
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "managers/TextureManager.h"
@@ -76,14 +77,15 @@ void MaterialManager::loadDefault() {
 	}
 
 	const std::string defaultName = "default";
-	saveMaterialToFile(defaultMaterialPath, defaultName, TextureManager::kDefaultTextureKey);
-	createMaterial(defaultName, TextureManager::kDefaultTextureKey, defaultMaterialPath);
+	saveMaterialToFile(defaultMaterialPath, defaultName, ResourceContext::getTextureManager().kDefaultTextureKey);
+	createMaterial(defaultName, ResourceContext::getTextureManager().kDefaultTextureKey, defaultMaterialPath);
 }
 
 Material* MaterialManager::createMaterial(const std::string& name,
 										  const std::string& albedoTexturePath,
 										  const std::string& path) {
-	std::string albedoKey = albedoTexturePath.empty() ? TextureManager::kDefaultTextureKey : albedoTexturePath;
+	std::string albedoKey =
+		albedoTexturePath.empty() ? ResourceContext::getTextureManager().kDefaultTextureKey : albedoTexturePath;
 	std::string materialPath = path;
 	std::string mapKey = normalizeKey(materialPath);
 
@@ -152,7 +154,7 @@ Material* MaterialManager::updateMaterialTexture(const std::string& materialPath
 	Material* mat = getMaterial(matKey);
 
 	// update texture key and recreate descriptor sets
-	mat->albedoTextureKey = texturePath.empty() ? TextureManager::kDefaultTextureKey : texturePath;
+	mat->albedoTextureKey = texturePath.empty() ? ResourceContext::getTextureManager().kDefaultTextureKey : texturePath;
 	createDescriptorSets(mat->albedoTextureKey, materialPath);
 	std::cerr << "MaterialManager::updateMaterialTexture: updated material '" << materialPath << "' with texture '"
 			  << mat->albedoTextureKey << "'" << std::endl;
@@ -238,12 +240,12 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 		}
 
 		if (albedoKey.empty()) {
-			albedoKey = TextureManager::kDefaultTextureKey;
+			albedoKey = ResourceContext::getTextureManager().kDefaultTextureKey;
 		}
 
 		// Check that the texture exists before creating the material
 		try {
-			TextureManager::getTexture(albedoKey);
+			ResourceContext::getTextureManager().getTexture(albedoKey);
 		} catch (...) {
 			std::cerr << "MaterialManager::loadMaterialFromFile: texture key not found: '" << albedoKey
 					  << "' for material '" << name << "' in file: " << path << std::endl;
@@ -280,7 +282,8 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 
 	nlohmann::json j;
 	j["name"] = name;
-	j["albedoTextureKey"] = albedoTextureKey.empty() ? TextureManager::kDefaultTextureKey : albedoTextureKey;
+	j["albedoTextureKey"] =
+		albedoTextureKey.empty() ? ResourceContext::getTextureManager().kDefaultTextureKey : albedoTextureKey;
 
 	// Save material properties
 	j["ambient"] = {ambient.x, ambient.y, ambient.z};
@@ -379,15 +382,16 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 
 		Texture* texture = nullptr;
 		try {
-			texture = TextureManager::getTexture(texturePath);
+			texture = ResourceContext::getTextureManager().getTexture(texturePath);
 		} catch (const std::exception& e) {
 			std::cerr << "MaterialManager::createDescriptorSets: texture '" << texturePath
 					  << "' not found, falling back to default: " << e.what() << std::endl;
 			try {
-				texture = TextureManager::getTexture(TextureManager::kDefaultTextureKey);
+				texture = ResourceContext::getTextureManager().getTexture(
+					ResourceContext::getTextureManager().kDefaultTextureKey);
 			} catch (...) {
 				std::cerr << "MaterialManager::createDescriptorSets: failed to get default texture '"
-						  << TextureManager::kDefaultTextureKey << "'" << std::endl;
+						  << ResourceContext::getTextureManager().kDefaultTextureKey << "'" << std::endl;
 				throw;
 			}
 		}

@@ -65,11 +65,10 @@ public:
 					 viewPort.m_ViewportImageViews,
 					 mousePick.getMousePickExtent());
 		editorCamera.init(&engineCore);
-		SceneManager::loadDefaults();
 
 		// Create a hardcoded test light entity so lighting can be verified (TEMPORARY)
 		{
-			Scene* scene = SceneManager::getActiveScene();
+			Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 			if (scene) {
 				Entity& lightEntity = EntityFactory::createLight(scene,
 																 "TestDirectionalLight",
@@ -142,7 +141,7 @@ public:
 			// upload a zero-intensity light so the scene is dark.
 			LightComponent::LightUniform lu{};
 			bool foundLight = false;
-			Scene* scene = SceneManager::getActiveScene();
+			Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 			if (scene) {
 				auto entities = scene->getEntities();
 				for (const auto& entPtr : *entities) {
@@ -331,17 +330,20 @@ public:
 			if (ImGui::BeginMainMenuBar()) {
 				if (ImGui::BeginMenu("Entities")) {
 					if (ImGui::MenuItem("Create Empty Entity")) {
-						EntityFactory::createEmpty(SceneManager::getActiveScene(), "Empty Entity");
+						EntityFactory::createEmpty(ResourceContext::getSceneManager().getActiveScene(), "Empty Entity");
 					}
 
 					if (ImGui::MenuItem("Create Cube")) {
-						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Cube", "cube");
+						EntityFactory::createPrimitive(
+							ResourceContext::getSceneManager().getActiveScene(), "Cube", "cube");
 					}
 					if (ImGui::MenuItem("Create Sphere")) {
-						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Sphere", "sphere");
+						EntityFactory::createPrimitive(
+							ResourceContext::getSceneManager().getActiveScene(), "Sphere", "sphere");
 					}
 					if (ImGui::MenuItem("Create Quad")) {
-						EntityFactory::createPrimitive(SceneManager::getActiveScene(), "Quad", "quad");
+						EntityFactory::createPrimitive(
+							ResourceContext::getSceneManager().getActiveScene(), "Quad", "quad");
 					}
 					ImGui::EndMenu();
 				}

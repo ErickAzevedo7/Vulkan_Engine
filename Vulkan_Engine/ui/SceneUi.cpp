@@ -1,16 +1,18 @@
 #include "SceneUi.h"
 
+#include <cstddef>
+#include <string>
+
+#include "context/ResourceContext.h"
 #include "Entity.h"
 #include "imgui.h"
 #include "managers/SceneManager.h"
 #include "Scene.h"
 #include "ui/InspectorUi.h"
 
-#include <cstddef>
-#include <string>
 
 void SceneUi::render() {
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 
 	ImGui::Begin("scene");
 	if (scene) {

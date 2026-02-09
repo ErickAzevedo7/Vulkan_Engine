@@ -1,15 +1,20 @@
 #include "SceneManager.h"
 
-#include "Scene.h"
-
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
 
-// Define the static member
-std::vector<std::unique_ptr<Scene>> SceneManager::scenes;
-size_t SceneManager::activeSceneIndex;
+#include "Scene.h"
+
+
+SceneManager::SceneManager() : activeSceneIndex(0) {
+	// Initialize defaults immediately or defer to explicit loadDefaults()
+}
+
+SceneManager::~SceneManager() {
+	scenes.clear();
+}
 
 void SceneManager::loadDefaults() {
 	createScene("Default Scene");

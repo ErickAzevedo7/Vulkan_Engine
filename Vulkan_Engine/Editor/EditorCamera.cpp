@@ -1,9 +1,11 @@
 #include "EditorCamera.h"
 
 // Project headers - Core
+#include "context/ResourceContext.h"
 #include "core/vulkancore.h"
 #include "Entity.h"
 #include "Scene.h"
+
 
 // Project headers - Components
 #include "components/Transform.h"
@@ -85,7 +87,7 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 
 	std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
@@ -233,7 +235,7 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 }
 
 void EditorCamera::drawGuizmo() {
-	Scene* scene = SceneManager::getActiveScene();
+	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 

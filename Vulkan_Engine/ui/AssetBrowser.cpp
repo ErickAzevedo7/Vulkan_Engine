@@ -209,9 +209,9 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 
 			// Save file and create material in memory immediately with default texture
 			ResourceContext::getMaterialManager().saveMaterialToFile(
-				newPath, materialName, TextureManager::kDefaultTextureKey);
+				newPath, materialName, ResourceContext::getTextureManager().kDefaultTextureKey);
 			ResourceContext::getMaterialManager().createMaterial(
-				materialName, TextureManager::kDefaultTextureKey, newPath);
+				materialName, ResourceContext::getTextureManager().kDefaultTextureKey, newPath);
 			ScanCurrentFolderContents();
 		}
 		ImGui::EndPopup();
@@ -355,8 +355,8 @@ void AssetBrowser::InitFileIcons() {
 		return;
 	}
 
-	Texture* defaultFile = TextureManager::getTexture("defaultFile");
-	Texture* folder = TextureManager::getTexture("folder");
+	Texture* defaultFile = ResourceContext::getTextureManager().getTexture("defaultFile");
+	Texture* folder = ResourceContext::getTextureManager().getTexture("folder");
 
 	defaultFileIcon.texture = defaultFile;
 	textureFileIcon.texture = defaultFile;
@@ -429,7 +429,7 @@ const ThumbnailTexture* AssetBrowser::getThumbnailForEntry(const FileEntry& fe) 
 	}
 
 	// Thumbnails were precomputed in TextureManager with fullPath as key
-	return TextureManager::getThumbnail(fe.fullPath);
+	return ResourceContext::getTextureManager().getThumbnail(fe.fullPath);
 }
 
 void AssetBrowser::render() {
