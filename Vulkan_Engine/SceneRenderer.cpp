@@ -10,18 +10,20 @@
 #include "Scene.h"
 #include "vulkan/vulkan_core.h"
 
-
+// Initialize static members
 VulkanCore* SceneRenderer::engineCore = nullptr;
+ResourceContext* SceneRenderer::resources = nullptr;
 
-void SceneRenderer::init(VulkanCore* engineCore) {
+void SceneRenderer::init(VulkanCore* engineCore, ResourceContext* resources) {
 	SceneRenderer::engineCore = engineCore;
+	SceneRenderer::resources = resources;
 }
 
 void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
 								uint32_t imageIndex) {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
@@ -50,7 +52,7 @@ void SceneRenderer::renderOutlineSelected(VkCommandBuffer commandBuffer,
 										  VkPipeline outlinePipeline,
 										  VkPipelineLayout outlinePipelineLayout,
 										  VkDescriptorSet outlineDescriptorSet) {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources->getSceneManager().getActiveScene();
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
@@ -77,7 +79,7 @@ void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
 									VkPipeline pipeline,
 									VkPipelineLayout pipelineLayout,
 									uint32_t imageIndex) {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {

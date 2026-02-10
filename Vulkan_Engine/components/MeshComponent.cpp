@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <string>
 
-#include "context/ResourceContext.h"
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
@@ -15,14 +14,10 @@
 MeshComponent::MeshComponent(Entity* owner, const std::string& meshName) : Component(), owner(owner), visible(true) {
 	mesh = MeshManager::getMesh(meshName);
 
-	const std::string defaultMaterialPath = "common/material/default.mat";
-	this->material = ResourceContext::getMaterialManager().getMaterial(defaultMaterialPath);
+	this->material = nullptr;
 
 	if (!mesh) {
 		throw std::runtime_error("Mesh not found: " + meshName);
-	}
-	if (!material) {
-		throw std::runtime_error("Material not found: " + defaultMaterialPath);
 	}
 }
 

@@ -48,29 +48,40 @@ double lastFrame = 0.0; // Time of last frame
 
 class VulkanEngine {
 public:
+	VulkanEngine()
+		: inspector(resourceContext), assetBrowser(resourceContext, inspector), sceneUi(resourceContext, inspector) {
+	}
+
 	void run() {
 		// Initialize Vulkan
 		engineCore.initWindow();
 		engineCore.initVulkan();
 
-		// Initialize resource managers (textures, materials, lights)
-		ResourceContext::init();
-		ResourceContext::loadDefaults();
+		// Initialize ResourceContext managers (create pools/buffers)
+		resourceContext.init();
 
-		SceneRenderer::init(&engineCore);
+		// Initialize resource managers (textures, materials, lights)
+		// ResourceContext constructor created the managers, now load content
+		resourceContext.loadDefaults();
+
+		// Link AssetBrowser to InspectorUi (circular dependency resolution)
+		inspector.setAssetBrowser(&assetBrowser);
+
+		SceneRenderer::init(&engineCore, &resourceContext);
 		mousePick.init(&engineCore);
 		viewPort.init(&engineCore, mousePick.getMousePickExtent());
 		outline.init(&engineCore,
 					 mousePick.getMousePickImageViews(),
 					 viewPort.m_ViewportImageViews,
 					 mousePick.getMousePickExtent());
-		editorCamera.init(&engineCore);
+		editorCamera.init(&engineCore, &resourceContext, &inspector);
 
 		// Create a hardcoded test light entity so lighting can be verified (TEMPORARY)
 		{
-			Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+			Scene* scene = resourceContext.getSceneManager().getActiveScene();
 			if (scene) {
-				Entity& lightEntity = EntityFactory::createLight(scene,
+				Entity& lightEntity = EntityFactory::createLight(resourceContext,
+																 scene,
 																 "TestDirectionalLight",
 																 LightType::Directional,
 																 glm::vec3(0.0f, 10.0f, 0.0f),
@@ -92,7 +103,8 @@ public:
 		outline.cleanup();
 		viewPort.cleanup();
 		mousePick.cleanup();
-		ResourceContext::cleanup();
+		// ResourceContext cleanup handled by destructor
+		resourceContext.cleanup();
 
 		cleanup();
 		engineCore.cleanup();
@@ -141,7 +153,7 @@ public:
 			// upload a zero-intensity light so the scene is dark.
 			LightComponent::LightUniform lu{};
 			bool foundLight = false;
-			Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+			Scene* scene = resourceContext.getSceneManager().getActiveScene();
 			if (scene) {
 				auto entities = scene->getEntities();
 				for (const auto& entPtr : *entities) {
@@ -160,10 +172,10 @@ public:
 				lu.color = glm::vec3(0.0f);
 				lu.intensity = 0.0f;
 			}
-			ResourceContext::getLightManager().updateLight(frame, lu);
+			resourceContext.getLightManager().updateLight(frame, lu);
 
 			// Update all material descriptor sets for this frame to point binding 2 to the light buffer
-			const auto& mats = ResourceContext::getMaterialManager().getAllMaterials();
+			const auto& mats = resourceContext.getMaterialManager().getAllMaterials();
 			for (const auto& pair : mats) {
 				Material* mat = pair.second;
 				if (!mat)
@@ -171,7 +183,7 @@ public:
 				if (mat->descriptorSets.size() <= frame)
 					continue;
 				VkDescriptorBufferInfo lightInfo{};
-				lightInfo.buffer = ResourceContext::getLightManager().getLightBuffer(frame);
+				lightInfo.buffer = resourceContext.getLightManager().getLightBuffer(frame);
 				lightInfo.offset = 0;
 				// LightManager now allocates: 6 vec4s + 5 floats (3 attenuation + 2 cutoff angles)
 				lightInfo.range = sizeof(glm::vec4) * 6 + sizeof(float) * 5;
@@ -321,29 +333,29 @@ public:
 			ImGui::End();
 			ImGui::PopStyleVar(2);
 
-			SceneUi::render();
+			sceneUi.render();
 
-			InspectorUi::render();
+			inspector.render();
 
-			AssetBrowser::render();
+			assetBrowser.render();
 
 			if (ImGui::BeginMainMenuBar()) {
 				if (ImGui::BeginMenu("Entities")) {
 					if (ImGui::MenuItem("Create Empty Entity")) {
-						EntityFactory::createEmpty(ResourceContext::getSceneManager().getActiveScene(), "Empty Entity");
+						EntityFactory::createEmpty(resourceContext.getSceneManager().getActiveScene(), "Empty Entity");
 					}
 
 					if (ImGui::MenuItem("Create Cube")) {
 						EntityFactory::createPrimitive(
-							ResourceContext::getSceneManager().getActiveScene(), "Cube", "cube");
+							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Cube", "cube");
 					}
 					if (ImGui::MenuItem("Create Sphere")) {
 						EntityFactory::createPrimitive(
-							ResourceContext::getSceneManager().getActiveScene(), "Sphere", "sphere");
+							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Sphere", "sphere");
 					}
 					if (ImGui::MenuItem("Create Quad")) {
 						EntityFactory::createPrimitive(
-							ResourceContext::getSceneManager().getActiveScene(), "Quad", "quad");
+							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Quad", "quad");
 					}
 					ImGui::EndMenu();
 				}
@@ -363,6 +375,10 @@ public:
 private:
 	VkResult err;
 	VulkanCore engineCore;
+	ResourceContext resourceContext;
+	InspectorUi inspector;
+	AssetBrowser assetBrowser;
+	SceneUi sceneUi;
 	EditorCamera editorCamera;
 	ViewPort viewPort;
 	MousePick mousePick;

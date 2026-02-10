@@ -9,6 +9,7 @@
 
 #include "glm/ext/vector_float3.hpp"
 
+class TextureManager;
 
 struct MaterialProperties {
 	alignas(16) glm::vec3 ambient{0.15f, 0.15f, 0.15f};
@@ -29,9 +30,10 @@ struct Material {
 
 class MaterialManager {
 public:
-	MaterialManager();
+	MaterialManager(TextureManager& textureManager);
 	~MaterialManager();
 
+	void init();
 	void loadDefault();
 	// Load all material assets from disk at startup
 	void loadAllFromAssets();
@@ -52,6 +54,7 @@ public:
 	void updateMaterialProperties(Material* material, uint32_t frame);
 
 private:
+	TextureManager& textureManager;
 	void createDescriptorPool();
 	void destroyMaterialInternal(const std::string& name);
 	std::unordered_map<std::string, Material*> materials;

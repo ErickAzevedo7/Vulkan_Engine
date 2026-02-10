@@ -10,13 +10,16 @@
 #include "Scene.h"
 #include "ui/InspectorUi.h"
 
+SceneUi::SceneUi(ResourceContext& resources, InspectorUi& inspector) : resources(resources), inspector(inspector) {
+	selectedEntity = -1;
+}
 
 void SceneUi::render() {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources.getSceneManager().getActiveScene();
 
 	ImGui::Begin("scene");
 	if (scene) {
-		const int selectedId = InspectorUi::getSelectedEntityId();
+		const int selectedId = inspector.getSelectedEntityId();
 
 		for (size_t i = 1; i <= scene->getEntityCount(); ++i) {
 			Entity& entity = scene->getEntity(i);
@@ -26,7 +29,7 @@ void SceneUi::render() {
 			const int thisId = static_cast<int>(entity.getID());
 			bool isSelected = (selectedId == thisId);
 			if (ImGui::Selectable(label.c_str(), isSelected)) {
-				InspectorUi::selectEntity(thisId);
+				inspector.selectEntity(thisId);
 			}
 
 			// Right-click context menu for each entity

@@ -1,12 +1,14 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "imgui.h"
 #include "managers/TextureManager.h"
 #include "vulkan/vulkan_core.h"
 
-#include <string>
-#include <unordered_map>
-#include <vector>
+class AssetBrowser;
 
 // What the inspector is currently inspecting.
 enum class InspectorSelectionType { None, Entity, Asset, Material };
@@ -21,36 +23,46 @@ struct InspectorSelection {
 // rather than just inspecting the asset itself.
 enum class InspectorPickTarget { None, MeshAlbedo };
 
+class ResourceContext; // Forward declaration
+
 class InspectorUi {
 public:
-	static void render();
+	InspectorUi(ResourceContext& resources);
+	~InspectorUi();
+
+	void render();
 
 	// Selection control API
-	static void selectEntity(int entityId);
-	static void selectAsset(const std::string& assetPath);
-	static void clearSelection();
+	void selectEntity(int entityId);
+	void selectAsset(const std::string& assetPath);
+	void clearSelection();
 
 	// Query helpers
-	static int getSelectedEntityId(); // returns -1 if no entity selected
-	static const std::string& getSelectedAssetPath();
+	int getSelectedEntityId(); // returns -1 if no entity selected
+	const std::string& getSelectedAssetPath();
+
+	void setAssetBrowser(AssetBrowser* browser) {
+		assetBrowser = browser;
+	}
 
 private:
-	static std::vector<VkDescriptorSet> imguiTextureSets;
-	static void releaseImGuiTextureSets();
+	ResourceContext& resources;
+	AssetBrowser* assetBrowser = nullptr;
+	std::vector<VkDescriptorSet> imguiTextureSets;
+	void releaseImGuiTextureSets();
 
-	static InspectorSelection selection;
-	static InspectorPickTarget pickTarget;
-	static const float kContentIndent;
-	static const ImVec2 kContentSpacing;
+	InspectorSelection selection;
+	InspectorPickTarget pickTarget;
+	const float kContentIndent;
+	const ImVec2 kContentSpacing;
 
 	// Helper to derive a logical material name from a .mat asset path
-	static std::string getMaterialNameFromPath(const std::string& fullPath);
+	std::string getMaterialNameFromPath(const std::string& fullPath);
 
-	static VkDescriptorSet getOrCreateImGuiTextureSet(Texture* texture);
+	VkDescriptorSet getOrCreateImGuiTextureSet(Texture* texture);
 	// Draw a collapsing header with an optional icon; returns true when open
-	static bool
-	drawIconCollapsingHeader(const char* id, ImTextureID iconTex, const char* label, ImGuiTreeNodeFlags flags = 0);
-	static void renderMaterialTab(std::string fullPath);
+	bool drawIconCollapsingHeader(const char* id, ImTextureID iconTex, const char* label, ImGuiTreeNodeFlags flags = 0);
+	void renderMaterialTab(std::string fullPath);
 
-	static std::unordered_map<const Texture*, VkDescriptorSet> imguiTextureCache;
+	std::unordered_map<const Texture*, VkDescriptorSet> imguiTextureCache;
 };

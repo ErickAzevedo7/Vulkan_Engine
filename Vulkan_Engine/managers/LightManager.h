@@ -12,6 +12,7 @@ public:
 	~LightManager();
 
 	// Update the uniform for a given frame index
+	void init();
 	void updateLight(uint32_t frame, const LightComponent::LightUniform& u);
 
 	// Access to the underlying VkBuffer for descriptor writes

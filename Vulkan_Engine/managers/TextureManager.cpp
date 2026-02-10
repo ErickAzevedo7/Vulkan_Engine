@@ -17,7 +17,7 @@
 #include "vulkan/vulkan_core.h"
 
 TextureManager::TextureManager() {
-	loadDefaults();
+	// Initialization deferred to loadDefaults() called by ResourceContext
 }
 
 TextureManager::~TextureManager() {

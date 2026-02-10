@@ -18,19 +18,14 @@
 #include "managers/TextureManager.h"
 #include "vulkan/vulkan_core.h"
 
-// initialize static members
-bool AssetBrowser::firstFrame = true;
-bool AssetBrowser::iconsInitialized = false;
-FileIcon AssetBrowser::defaultFileIcon;
-FileIcon AssetBrowser::textureFileIcon;
-FileIcon AssetBrowser::meshFileIcon;
-FileIcon AssetBrowser::folderIcon;
-FolderNode AssetBrowser::rootFolder;
-bool AssetBrowser::folderTreeInitialized = false;
-std::string AssetBrowser::selectedFolderPath;
-std::vector<FileEntry> AssetBrowser::currentFolderEntries;
-char AssetBrowser::fileFilter[128] = "";
-std::unordered_map<std::string, VkDescriptorSet> AssetBrowser::thumbnailDescriptorSets;
+AssetBrowser::AssetBrowser(ResourceContext& resources, InspectorUi& inspector)
+	: resources(resources), inspector(inspector) {
+	// Initialize defaults
+	firstFrame = true;
+	iconsInitialized = false;
+	folderTreeInitialized = false;
+	fileFilter[0] = '\0';
+}
 
 std::string truncateText(const std::string& p_text, float p_truncated_width) {
 	std::string truncated_text = p_text;
@@ -208,10 +203,10 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 			std::string materialName = newPathFs.stem().string();
 
 			// Save file and create material in memory immediately with default texture
-			ResourceContext::getMaterialManager().saveMaterialToFile(
-				newPath, materialName, ResourceContext::getTextureManager().kDefaultTextureKey);
-			ResourceContext::getMaterialManager().createMaterial(
-				materialName, ResourceContext::getTextureManager().kDefaultTextureKey, newPath);
+			resources.getMaterialManager().saveMaterialToFile(
+				newPath, materialName, resources.getTextureManager().kDefaultTextureKey);
+			resources.getMaterialManager().createMaterial(
+				materialName, resources.getTextureManager().kDefaultTextureKey, newPath);
 			ScanCurrentFolderContents();
 		}
 		ImGui::EndPopup();
@@ -233,7 +228,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		ImVec2 cursor = ImGui::GetCursorScreenPos();
 		ImVec2 size(itemWidth, itemHeight);
 
-		const std::string& selectedAssetPath = InspectorUi::getSelectedAssetPath();
+		const std::string& selectedAssetPath = inspector.getSelectedAssetPath();
 		bool selected = (selectedAssetPath == fe.fullPath);
 
 		if (selected) {
@@ -269,7 +264,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 				}
 				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet), ImVec2(iconSize, iconSize));
 			} else {
-				const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
+				const FileIcon& icon = GetIconForEntry(fe);
 				if (icon.imguiTexture != VK_NULL_HANDLE) {
 					ImGui::Image(reinterpret_cast<ImTextureID>(icon.imguiTexture), ImVec2(iconSize, iconSize));
 				} else {
@@ -301,7 +296,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 
 		if (ImGui::Selectable("##AssetTile", selected, flags, size)) {
 			// Let inspector know this asset is now the active selection
-			InspectorUi::selectAsset(fe.fullPath);
+			inspector.selectAsset(fe.fullPath);
 
 			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 				if (fe.isDirectory) {
@@ -319,11 +314,11 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 					}
 
 					if (ext == "mat") {
-						Material* material = ResourceContext::getMaterialManager().loadMaterialFromFile(fe.fullPath);
+						Material* material = resources.getMaterialManager().loadMaterialFromFile(fe.fullPath);
 						if (material) {
 							// Here you can add a dedicated Inspector selection for materials
 							// For now we just select the asset path so user sees it in Inspector
-							InspectorUi::selectAsset(fe.fullPath);
+							inspector.selectAsset(fe.fullPath);
 						}
 					}
 				}
@@ -355,8 +350,8 @@ void AssetBrowser::InitFileIcons() {
 		return;
 	}
 
-	Texture* defaultFile = ResourceContext::getTextureManager().getTexture("defaultFile");
-	Texture* folder = ResourceContext::getTextureManager().getTexture("folder");
+	Texture* defaultFile = resources.getTextureManager().getTexture("defaultFile");
+	Texture* folder = resources.getTextureManager().getTexture("folder");
 
 	defaultFileIcon.texture = defaultFile;
 	textureFileIcon.texture = defaultFile;
@@ -429,11 +424,11 @@ const ThumbnailTexture* AssetBrowser::getThumbnailForEntry(const FileEntry& fe) 
 	}
 
 	// Thumbnails were precomputed in TextureManager with fullPath as key
-	return ResourceContext::getTextureManager().getThumbnail(fe.fullPath);
+	return resources.getTextureManager().getThumbnail(fe.fullPath);
 }
 
 void AssetBrowser::render() {
-	AssetBrowser::InitFileIcons();
+	InitFileIcons();
 
 	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar;
 
@@ -457,9 +452,9 @@ void AssetBrowser::render() {
 
 	ImGui::Columns(2, nullptr, true);
 
-	if (AssetBrowser::firstFrame) {
+	if (firstFrame) {
 		ImGui::SetColumnWidth(0, 220.0f);
-		AssetBrowser::firstFrame = false;
+		firstFrame = false;
 	}
 
 	DrawSidebar();

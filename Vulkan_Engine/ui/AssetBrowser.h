@@ -1,12 +1,12 @@
 #pragma once
-#include "managers/TextureManager.h"
-#include "vulkan/vulkan_core.h"
-
 #include <imgui_internal.h>
-
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "managers/TextureManager.h"
+#include "vulkan/vulkan_core.h"
+
 
 struct FileIcon {
 	Texture* texture = nullptr;
@@ -26,35 +26,42 @@ struct FolderNode {
 	bool scanned = false;
 };
 
+class ResourceContext;
+class InspectorUi;
+
 class AssetBrowser {
 private:
-	static FileIcon defaultFileIcon;
-	static FileIcon textureFileIcon;
-	static FileIcon meshFileIcon;
-	static FileIcon folderIcon;
-	static bool iconsInitialized;
-	static bool firstFrame;
+	ResourceContext& resources;
+	InspectorUi& inspector;
 
-	static FolderNode rootFolder;
-	static bool folderTreeInitialized;
-	static std::string selectedFolderPath;
-	static std::vector<FileEntry> currentFolderEntries;
-	static char fileFilter[128];
-	static std::unordered_map<std::string, VkDescriptorSet> thumbnailDescriptorSets;
+	FileIcon defaultFileIcon;
+	FileIcon textureFileIcon;
+	FileIcon meshFileIcon;
+	FileIcon folderIcon;
+	bool iconsInitialized = false;
+	bool firstFrame = true;
+
+	FolderNode rootFolder;
+	bool folderTreeInitialized = false;
+	std::string selectedFolderPath;
+	std::vector<FileEntry> currentFolderEntries;
+	char fileFilter[128] = "";
+	std::unordered_map<std::string, VkDescriptorSet> thumbnailDescriptorSets;
 
 	static constexpr const char* kAssetsRootPath = "assets";
 
-	static void InitFileIcons();
-	static void ScanCurrentFolderContents();
-	static void ScanFolder(FolderNode& node);
-	static void EnsureFolderTreeInitialized();
-	static void DrawFolderNode(FolderNode& node);
-	static void DrawSidebar();
-	static bool PassesFilter(const char* name, const char* filter);
-	static void DrawFolderContents(const char* fileFilter);
-	static const ThumbnailTexture* getThumbnailForEntry(const FileEntry& fe);
+	void InitFileIcons();
+	void ScanCurrentFolderContents();
+	void ScanFolder(FolderNode& node);
+	void EnsureFolderTreeInitialized();
+	void DrawFolderNode(FolderNode& node);
+	void DrawSidebar();
+	bool PassesFilter(const char* name, const char* filter);
+	void DrawFolderContents(const char* fileFilter);
+	const ThumbnailTexture* getThumbnailForEntry(const FileEntry& fe);
 
 public:
-	static const FileIcon& GetIconForEntry(const FileEntry& fe);
-	static void render();
+	AssetBrowser(ResourceContext& resources, InspectorUi& inspector);
+	const FileIcon& GetIconForEntry(const FileEntry& fe);
+	void render();
 };

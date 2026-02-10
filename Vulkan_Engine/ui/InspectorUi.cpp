@@ -1,7 +1,6 @@
 #include "InspectorUi.h"
 
 #include <cctype>
-#include <cstdint>
 #include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -16,6 +15,7 @@
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
+#include "Entity.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
@@ -29,11 +29,26 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
 
-InspectorSelection InspectorUi::selection{};
-InspectorPickTarget InspectorUi::pickTarget = InspectorPickTarget::None;
-std::unordered_map<const Texture*, VkDescriptorSet> InspectorUi::imguiTextureCache{};
-const float InspectorUi::kContentIndent = 12.0f;
-const ImVec2 InspectorUi::kContentSpacing(0.0f, 6.0f);
+// Initialize constants
+// Constants are initialized in the constructor/header
+
+InspectorUi::InspectorUi(ResourceContext& resources)
+	: resources(resources), kContentIndent(12.0f), kContentSpacing(0.0f, 6.0f) {
+	selection = {};
+	pickTarget = InspectorPickTarget::None;
+}
+
+InspectorUi::~InspectorUi() {
+	releaseImGuiTextureSets();
+}
+
+void InspectorUi::releaseImGuiTextureSets() {
+	if (imguiTextureSets.empty())
+		return;
+	// Logic to free sets if needed, though ImGui_ImplVulkan typically handles shutdown
+	// or we just clear the list.
+	imguiTextureSets.clear();
+}
 
 static bool Inspector_GetHeaderOpen(ImGuiID id, bool default_open) {
 	ImGuiStorage* storage = ImGui::GetStateStorage();
@@ -57,7 +72,7 @@ void InspectorUi::selectEntity(int entityId) {
 	selection.assetPath.clear();
 
 	// Update per-entity selection flags so outline/rendering can use isSelected
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources.getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -89,7 +104,7 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 	selection.assetPath = assetPath;
 
 	// Clear entity selection flags when switching to an asset selection
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources.getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -128,26 +143,26 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 					Texture* tex = nullptr;
 					// Try to get existing texture first using full path key
 					try {
-						tex = ResourceContext::getTextureManager().getTexture(texKey);
+						tex = resources.getTextureManager().getTexture(texKey);
 					} catch (...) {
 						// Load new texture and register it under the full path key
-						Texture* loaded = ResourceContext::getTextureManager().loadTexture(assetPath,
-																	  VulkanCore::getDevice(),
-																	  VulkanCore::getPhysicalDevice(),
-																	  VulkanCore::getCommandPool(),
-																	  VulkanCore::getGraphicsQueue());
-						ResourceContext::getTextureManager().createTextureImageView(loaded);
-						ResourceContext::getTextureManager().createTextureSampler(loaded);
-						ResourceContext::getTextureManager().registerTexture(texKey, *loaded);
-						tex = ResourceContext::getTextureManager().getTexture(texKey);
+						Texture* loaded = resources.getTextureManager().loadTexture(assetPath,
+																					VulkanCore::getDevice(),
+																					VulkanCore::getPhysicalDevice(),
+																					VulkanCore::getCommandPool(),
+																					VulkanCore::getGraphicsQueue());
+						resources.getTextureManager().createTextureImageView(loaded);
+						resources.getTextureManager().createTextureSampler(loaded);
+						resources.getTextureManager().registerTexture(texKey, *loaded);
+						tex = resources.getTextureManager().getTexture(texKey);
 					}
 
 					// Create or reuse a material that uses this texture.
 					// Use the texture file path as the material key.
-					Material* mat = ResourceContext::getMaterialManager().getMaterial(texKey);
+					Material* mat = resources.getMaterialManager().getMaterial(texKey);
 					if (!mat) {
 						// Create material with file path key equal to texKey.
-						mat = ResourceContext::getMaterialManager().createMaterial(stem, texKey, texKey);
+						mat = resources.getMaterialManager().createMaterial(stem, texKey, texKey);
 					}
 
 					meshComp->SetMaterial(mat);
@@ -166,7 +181,7 @@ void InspectorUi::clearSelection() {
 	selection.assetPath.clear();
 
 	// Clear all per-entity selection flags
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources.getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -299,9 +314,9 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 	std::string normFullPath;
 	normFullPath = std::filesystem::path(fullPath).generic_string();
 
-	Material* material = ResourceContext::getMaterialManager().getMaterial(normFullPath);
+	Material* material = resources.getMaterialManager().getMaterial(normFullPath);
 	if (!material) {
-		material = ResourceContext::getMaterialManager().loadMaterialFromFile(normFullPath);
+		material = resources.getMaterialManager().loadMaterialFromFile(normFullPath);
 	}
 	if (!material) {
 		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Failed to load material.");
@@ -323,7 +338,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// Preview the material's albedo texture (look up by key)
 		Texture* previewTex = nullptr;
 		try {
-			previewTex = ResourceContext::getTextureManager().getTexture(material->albedoTextureKey);
+			previewTex = resources.getTextureManager().getTexture(material->albedoTextureKey);
 		} catch (...) {
 			previewTex = nullptr;
 		}
@@ -363,17 +378,17 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 						Texture* tex = nullptr;
 						try {
-							tex = ResourceContext::getTextureManager().getTexture(texKey);
+							tex = resources.getTextureManager().getTexture(texKey);
 						} catch (...) {
-							Texture* loaded = ResourceContext::getTextureManager().loadTexture(droppedPath,
-																		  VulkanCore::getDevice(),
-																		  VulkanCore::getPhysicalDevice(),
-																		  VulkanCore::getCommandPool(),
-																		  VulkanCore::getGraphicsQueue());
-							ResourceContext::getTextureManager().createTextureImageView(loaded);
-							ResourceContext::getTextureManager().createTextureSampler(loaded);
-							ResourceContext::getTextureManager().registerTexture(texKey, *loaded);
-							tex = ResourceContext::getTextureManager().getTexture(texKey);
+							Texture* loaded = resources.getTextureManager().loadTexture(droppedPath,
+																						VulkanCore::getDevice(),
+																						VulkanCore::getPhysicalDevice(),
+																						VulkanCore::getCommandPool(),
+																						VulkanCore::getGraphicsQueue());
+							resources.getTextureManager().createTextureImageView(loaded);
+							resources.getTextureManager().createTextureSampler(loaded);
+							resources.getTextureManager().registerTexture(texKey, *loaded);
+							tex = resources.getTextureManager().getTexture(texKey);
 						}
 
 						// Rebuild or create the material with new albedo texture.
@@ -381,19 +396,19 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						// Update material texture (create material if missing)
 						std::string normPath;
 						normPath = std::filesystem::path(fullPath).generic_string();
-						Material* mat = ResourceContext::getMaterialManager().updateMaterialTexture(normPath, texKey);
+						Material* mat = resources.getMaterialManager().updateMaterialTexture(normPath, texKey);
 						if (!mat) {
 							std::cerr << "Inspector: failed to create/update material for path '" << normPath << "'"
 									  << std::endl;
 						}
 
 						// Persist updated material back to JSON file
-						ResourceContext::getMaterialManager().saveMaterialToFile(fullPath,
-																				 matName,
-																				 texKey,
-																				 mat->properties.ambient,
-																				 mat->properties.shininess,
-																				 mat->properties.specular);
+						resources.getMaterialManager().saveMaterialToFile(fullPath,
+																		  matName,
+																		  texKey,
+																		  mat->properties.ambient,
+																		  mat->properties.shininess,
+																		  mat->properties.specular);
 						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'"
 								  << std::endl;
 					}
@@ -470,18 +485,18 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		if (propertiesChanged) {
 			// Update all frames
 			for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-				ResourceContext::getMaterialManager().updateMaterialProperties(material, i);
+				resources.getMaterialManager().updateMaterialProperties(material, i);
 			}
 
 			// Save to file
 			std::string matName = getMaterialNameFromPath(fullPath);
-			ResourceContext::getMaterialManager().saveMaterialToFile(fullPath,
-																	 matName,
-																	 material->albedoTextureKey,
-																	 material->properties.ambient,
-																	 material->properties.shininess,
-																	 material->properties.specular,
-																	 material->properties.diffuse);
+			resources.getMaterialManager().saveMaterialToFile(fullPath,
+															  matName,
+															  material->albedoTextureKey,
+															  material->properties.ambient,
+															  material->properties.shininess,
+															  material->properties.specular,
+															  material->properties.diffuse);
 		}
 	}
 
@@ -490,7 +505,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 }
 
 void InspectorUi::render() {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	Scene* scene = resources.getSceneManager().getActiveScene();
 
 	ImGui::PushStyleVarX(ImGuiStyleVar_WindowPadding, 0.0f);
 
@@ -601,7 +616,7 @@ void InspectorUi::render() {
 			ImGui::SameLine();
 			if (ImGui::BeginCombo("##Material", currentMatName)) {
 				// Simple combo over all known materials
-				const auto& allMaterials = ResourceContext::getMaterialManager().getAllMaterials();
+				const auto& allMaterials = resources.getMaterialManager().getAllMaterials();
 				for (const auto& kv : allMaterials) {
 					const std::string& matName = kv.first;
 					bool isSelected = (material && matName == material->name);
@@ -631,7 +646,7 @@ void InspectorUi::render() {
 				// Preview the material's albedo texture (look up by key)
 				Texture* previewTex = nullptr;
 				try {
-					previewTex = ResourceContext::getTextureManager().getTexture(material->albedoTextureKey);
+					previewTex = resources.getTextureManager().getTexture(material->albedoTextureKey);
 				} catch (...) {
 					previewTex = nullptr;
 				}
@@ -670,12 +685,11 @@ void InspectorUi::render() {
 								std::string matName = getMaterialNameFromPath(droppedPath);
 
 								// Ensure material exists via MaterialManager
-								Material* mat = ResourceContext::getMaterialManager().loadMaterialFromFile(droppedPath);
+								Material* mat = resources.getMaterialManager().loadMaterialFromFile(droppedPath);
 								if (!mat) {
 									// Fallback: create with default albedo if file not valid yet
-									mat = ResourceContext::getMaterialManager().createMaterial(matName, "default");
-									ResourceContext::getMaterialManager().saveMaterialToFile(
-										droppedPath, matName, "default");
+									mat = resources.getMaterialManager().createMaterial(matName, "default");
+									resources.getMaterialManager().saveMaterialToFile(droppedPath, matName, "default");
 								}
 
 								meshComp->SetMaterial(mat);
@@ -695,19 +709,21 @@ void InspectorUi::render() {
 					ImGui::Separator();
 					ImGui::PopStyleVar();
 
-					const FileEntry fe{material->name, material->filePath};
-					const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
+					// Get icon from AssetBrowser if available
 					ImTextureID iconTex = 0;
-					if (icon.imguiTexture != VK_NULL_HANDLE) {
-						iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+					if (assetBrowser) {
+						const FileEntry fe{material->name, material->filePath};
+						const FileIcon& icon = assetBrowser->GetIconForEntry(fe);
+						if (icon.imguiTexture != VK_NULL_HANDLE) {
+							iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+						}
 					}
 
 					ImGuiTreeNodeFlags matFlags = ImGuiTreeNodeFlags_DefaultOpen;
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
-					if (InspectorUi::drawIconCollapsingHeader(
-							"MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
+					if (drawIconCollapsingHeader("MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
 						ImGui::Dummy(ImVec2(0.0f, 6.0f));
-						InspectorUi::renderMaterialTab(material->filePath);
+						renderMaterialTab(material->filePath);
 					}
 					ImGui::PopStyleVar();
 				}
@@ -901,10 +917,17 @@ void InspectorUi::render() {
 		std::string fileName = p.filename().string();
 
 		ImGui::BeginGroup();
-		const FileEntry fe{fileName, fullPath, std::filesystem::is_directory(p)};
-		const FileIcon& icon = AssetBrowser::GetIconForEntry(fe);
-		if (icon.imguiTexture != VK_NULL_HANDLE) {
-			ImGui::Image(reinterpret_cast<ImTextureID>(icon.imguiTexture), ImVec2(48.0f, 48.0f));
+		ImTextureID iconTex = 0;
+		if (assetBrowser) {
+			const FileEntry fe{fileName, fullPath, std::filesystem::is_directory(p)};
+			const FileIcon& icon = assetBrowser->GetIconForEntry(fe);
+			if (icon.imguiTexture != VK_NULL_HANDLE) {
+				iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+			}
+		}
+
+		if (iconTex != 0) {
+			ImGui::Image(iconTex, ImVec2(48.0f, 48.0f));
 			ImGui::SameLine();
 		}
 		ImGui::TextUnformatted(fileName.c_str());

@@ -1,10 +1,16 @@
 #pragma once
 
+class ResourceContext;
+class InspectorUi;
+
 class SceneUi {
 public:
-	static void render();
+	SceneUi(ResourceContext& resources, InspectorUi& inspector);
+	void render();
 
-	static int selectedEntity;
+	int selectedEntity;
 
 private:
+	ResourceContext& resources;
+	InspectorUi& inspector;
 };

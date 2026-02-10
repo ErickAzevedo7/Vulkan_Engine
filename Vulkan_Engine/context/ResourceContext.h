@@ -10,21 +10,22 @@ class TextureManager;
 /// Groups resource manager initialization and cleanup
 class ResourceContext {
 public:
-	static void init();
-	static void loadDefaults();
+	ResourceContext();
+	~ResourceContext();
 
-	/// Cleanup all resource managers in reverse order of initialization
-	static void cleanup();
+	void init(); // Initialize managers (create Vulkan resources)
+	void cleanup(); // Explicitly cleanup managers (needed before device destruction)
+	void loadDefaults();
 
 	// Access to manager instances
-	static LightManager& getLightManager();
-	static MaterialManager& getMaterialManager();
-	static TextureManager& getTextureManager();
-	static SceneManager& getSceneManager();
+	LightManager& getLightManager();
+	MaterialManager& getMaterialManager();
+	TextureManager& getTextureManager();
+	SceneManager& getSceneManager();
 
 private:
-	static std::unique_ptr<LightManager> lightManager;
-	static std::unique_ptr<MaterialManager> materialManager;
-	static std::unique_ptr<TextureManager> textureManager;
-	static std::unique_ptr<SceneManager> sceneManager;
+	std::unique_ptr<LightManager> lightManager;
+	std::unique_ptr<MaterialManager> materialManager;
+	std::unique_ptr<TextureManager> textureManager;
+	std::unique_ptr<SceneManager> sceneManager;
 };

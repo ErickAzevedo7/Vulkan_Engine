@@ -6,7 +6,6 @@
 #include "Entity.h"
 #include "Scene.h"
 
-
 // Project headers - Components
 #include "components/Transform.h"
 
@@ -67,9 +66,13 @@ VkExtent2D EditorCamera::extent;
 glm::mat4 EditorCamera::viewMatrix;
 glm::mat4 EditorCamera::projMatrix;
 ImGuizmo::OPERATION EditorCamera::currentGizmoOperation = ImGuizmo::TRANSLATE;
+ResourceContext* EditorCamera::resources = nullptr;
+InspectorUi* EditorCamera::inspector = nullptr;
 
-void EditorCamera::init(VulkanCore* core) {
+void EditorCamera::init(VulkanCore* core, ResourceContext* resources, InspectorUi* inspector) {
 	engineCore = core;
+	EditorCamera::resources = resources;
+	EditorCamera::inspector = inspector;
 	int width, height;
 	glfwGetFramebufferSize(engineCore->getWindow(), &width, &height);
 	EditorCamera::lastX = width / 2.0f;
@@ -87,7 +90,9 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	if (!resources)
+		return;
+	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
@@ -195,7 +200,8 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 			id = -1;
 
 		if (id >= 0) {
-			InspectorUi::selectEntity(id);
+			if (inspector)
+				inspector->selectEntity(id);
 		}
 	}
 
@@ -235,7 +241,9 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 }
 
 void EditorCamera::drawGuizmo() {
-	Scene* scene = ResourceContext::getSceneManager().getActiveScene();
+	if (!resources)
+		return;
+	Scene* scene = resources->getSceneManager().getActiveScene();
 	if (!scene)
 		return;
 
@@ -243,7 +251,7 @@ void EditorCamera::drawGuizmo() {
 	if (!entities || entities->empty())
 		return;
 
-	const int selectedId = InspectorUi::getSelectedEntityId();
+	const int selectedId = inspector ? inspector->getSelectedEntityId() : -1;
 	if (selectedId <= 0)
 		return;
 

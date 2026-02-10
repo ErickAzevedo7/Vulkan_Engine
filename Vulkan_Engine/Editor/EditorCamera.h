@@ -5,6 +5,7 @@
 #include <imgui.h>
 
 #include "gizmos/ImGuizmo.h"
+#include "ui/InspectorUi.h" // Needed for InspectorUi type
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/matrix_float4x4.hpp"
@@ -13,6 +14,7 @@
 // Forward declarations
 class MousePick;
 class VulkanCore;
+class ResourceContext; // Forward declaration
 
 extern double deltaTime;
 
@@ -26,7 +28,7 @@ public:
 	static float pitch;
 	static float lastX;
 	static float lastY;
-	void init(VulkanCore* core);
+	void init(VulkanCore* core, ResourceContext* resources, InspectorUi* inspector);
 
 	static void setExtent(VkExtent2D newExtent);
 
@@ -40,6 +42,8 @@ public:
 private:
 	static uint32_t selectedID;
 	VulkanCore* engineCore;
+	static ResourceContext* resources;
+	static InspectorUi* inspector;
 	static bool isDragging;
 	static void updateCursorLoop();
 	static VkExtent2D extent;

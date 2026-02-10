@@ -19,7 +19,11 @@
 // it so descriptor sets can bind it at binding 2.
 
 LightManager::LightManager() {
-	// Constructor - initialize all resources
+	// Constructor
+}
+
+void LightManager::init() {
+	// Initialize all resources
 	uint32_t count = MAX_FRAMES_IN_FLIGHT;
 	lightBuffers.resize(count);
 	lightBufferMem.resize(count);
