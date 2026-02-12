@@ -195,7 +195,7 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 		ImVec2 mouseInViewport = ImVec2(mouseScreenPos.x - viewportScreenPos.x, mouseScreenPos.y - viewportScreenPos.y);
 		int id;
 		if (mouseInViewport.x > 0 && mouseInViewport.y > 0)
-			id = mousePick.getEntityIDAt(mouseInViewport.x, mouseInViewport.y);
+			id = mousePick.getEntityIDAt((int)mouseInViewport.x, (int)mouseInViewport.y);
 		else
 			id = -1;
 

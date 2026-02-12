@@ -24,6 +24,7 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "context/ResourceContext.h"
+#include "core/events/EventBus.h"
 #include "core/vulkancore.h"
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
@@ -52,9 +53,15 @@ public:
 		: inspector(resourceContext), assetBrowser(resourceContext, inspector), sceneUi(resourceContext, inspector) {
 	}
 
+	Core::EventBus eventBus;
+
 	void run() {
 		// Initialize Vulkan
 		engineCore.initWindow();
+
+		// Wire up Event System
+		engineCore.setEventBus(&eventBus);
+
 		engineCore.initVulkan();
 
 		// Initialize ResourceContext managers (create pools/buffers)

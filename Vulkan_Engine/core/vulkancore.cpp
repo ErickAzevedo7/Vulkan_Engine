@@ -9,14 +9,13 @@
 #include <stb_image.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION
+#include <string>
+#include <tiny_obj_loader.h>
+#include <utility>
+
 #include "GLFW/glfw3.h"
 #include "vulkan/vk_platform.h"
 #include "vulkan/vulkan_core.h"
-
-#include <tiny_obj_loader.h>
-
-#include <string>
-#include <utility>
 
 // C++ standard library
 #include <algorithm>
@@ -37,6 +36,9 @@
 #include <glm/gtx/hash.hpp>
 
 // Project headers
+#include "core/events/ApplicationEvents.h"
+#include "core/events/InputEvents.h"
+#include "core/events/MouseEvents.h"
 #include "core/utils/Utils.h"
 #include "managers/MeshManager.h"
 
@@ -107,6 +109,10 @@ void VulkanCore::initWindow() {
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+	glfwSetKeyCallback(window, keyCallback);
+	glfwSetMouseButtonCallback(window, mouseButtonCallback);
+	glfwSetCursorPosCallback(window, cursorPosCallback);
+	glfwSetScrollCallback(window, scrollCallback);
 }
 
 void VulkanCore::initVulkan() {
@@ -317,6 +323,72 @@ VkBool32 VKAPI_CALL VulkanCore::debugCallback(VkDebugUtilsMessageSeverityFlagBit
 void VulkanCore::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<VulkanCore*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
+
+	if (app->eventBus) {
+		Core::WindowResizeEvent event(width, height);
+		app->eventBus->publish(event);
+	}
+}
+
+void VulkanCore::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	auto app = reinterpret_cast<VulkanCore*>(glfwGetWindowUserPointer(window));
+	if (!app->eventBus)
+		return;
+
+	switch (action) {
+	case GLFW_PRESS: {
+		Core::KeyPressedEvent event(key, 0);
+		app->eventBus->publish(event);
+		break;
+	}
+	case GLFW_RELEASE: {
+		Core::KeyReleasedEvent event(key);
+		app->eventBus->publish(event);
+		break;
+	}
+	case GLFW_REPEAT: {
+		Core::KeyPressedEvent event(key, 1);
+		app->eventBus->publish(event);
+		break;
+	}
+	}
+}
+
+void VulkanCore::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	auto app = reinterpret_cast<VulkanCore*>(glfwGetWindowUserPointer(window));
+	if (!app->eventBus)
+		return;
+
+	switch (action) {
+	case GLFW_PRESS: {
+		Core::MouseButtonPressedEvent event(button);
+		app->eventBus->publish(event);
+		break;
+	}
+	case GLFW_RELEASE: {
+		Core::MouseButtonReleasedEvent event(button);
+		app->eventBus->publish(event);
+		break;
+	}
+	}
+}
+
+void VulkanCore::cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+	auto app = reinterpret_cast<VulkanCore*>(glfwGetWindowUserPointer(window));
+	if (!app->eventBus)
+		return;
+
+	Core::MouseMovedEvent event((float)xpos, (float)ypos);
+	app->eventBus->publish(event);
+}
+
+void VulkanCore::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+	auto app = reinterpret_cast<VulkanCore*>(glfwGetWindowUserPointer(window));
+	if (!app->eventBus)
+		return;
+
+	Core::MouseScrolledEvent event((float)xoffset, (float)yoffset);
+	app->eventBus->publish(event);
 }
 
 VkSampleCountFlagBits VulkanCore::getMaxUsableSampleCount() {

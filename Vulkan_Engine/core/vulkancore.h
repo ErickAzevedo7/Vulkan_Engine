@@ -1,13 +1,12 @@
 #pragma once
 
 // External libraries - required for interface
-#include "vulkan/vk_platform.h"
-#include "vulkan/vulkan_core.h"
-
+#include <cstdint>
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include <cstdint>
+#include "vulkan/vk_platform.h"
+#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -19,6 +18,8 @@
 
 // GLM (needed for UniformBufferObject in interface)
 #include <glm/glm.hpp>
+
+#include "events/EventBus.h"
 
 // Forward declarations
 struct Vertex;
@@ -255,4 +256,17 @@ private:
 	std::vector<const char*> getRequiredExtensions();
 
 	void cleanupSwapChain();
+
+public:
+	void setEventBus(Core::EventBus* bus) {
+		eventBus = bus;
+	}
+
+private:
+	Core::EventBus* eventBus = nullptr;
+
+	static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+	static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+	static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+	static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 };
