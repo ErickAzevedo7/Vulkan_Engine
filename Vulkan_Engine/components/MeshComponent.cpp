@@ -11,8 +11,9 @@
 
 #include "glm/ext/vector_float3.hpp"
 
-MeshComponent::MeshComponent(Entity* owner, const std::string& meshName) : Component(), owner(owner), visible(true) {
-	mesh = MeshManager::getMesh(meshName);
+MeshComponent::MeshComponent(Entity* owner, const std::string& meshName, MeshManager& meshManager)
+	: Component(), owner(owner), visible(true) {
+	mesh = meshManager.getMesh(meshName);
 
 	this->material = nullptr;
 
@@ -30,7 +31,8 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 						   VkPipeline pipeline,
 						   VkPipelineLayout pipelineLayout,
 						   uint32_t imageIndex,
-						   int useMousePick) const {
+						   int useMousePick,
+						   MeshManager& meshManager) const {
 	if (!visible || !mesh)
 		return;
 
@@ -56,17 +58,17 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-	VkBuffer vertexBuffers[] = {mesh->vertexBuffer};
+	VkBuffer vertexBuffers[] = {meshManager.getVertexBuffer(*mesh)};
 	VkDeviceSize offsets[] = {0};
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-	vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(commandBuffer, meshManager.getIndexBuffer(*mesh), 0, VK_INDEX_TYPE_UINT32);
 
 	uint32_t maxEntities = 1000;
 	if (id >= maxEntities) {
 		throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
 	}
-	uint32_t dynamicOffset = id * VulkanCore::getDynamicAlignment();
+	uint32_t dynamicOffset = static_cast<uint32_t>(id * VulkanCore::getDynamicAlignment());
 
 	// Bind descriptor sets (for uniforms/textures)
 	vkCmdBindDescriptorSets(commandBuffer,

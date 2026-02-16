@@ -484,8 +484,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		// If properties changed, update GPU buffers and save to file
 		if (propertiesChanged) {
 			// Update all frames
-			for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-				resources.getMaterialManager().updateMaterialProperties(material, i);
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+				resources.getMaterialManager().updateMaterialProperties(material, static_cast<uint32_t>(i));
 			}
 
 			// Save to file

@@ -4,11 +4,17 @@
 #include <vector>
 
 #include "components/LightComponent.h"
+#include "renderer/RenderTypes.h"
 #include "vulkan/vulkan_core.h"
+
+// Forward declaration - use interface, not implementation
+namespace Renderer {
+class GraphicsBuffer;
+}
 
 class LightManager {
 public:
-	LightManager();
+	LightManager(Renderer::GraphicsBuffer* bufferMgr); // Accept interface
 	~LightManager();
 
 	// Update the uniform for a given frame index
@@ -18,7 +24,11 @@ public:
 	// Access to the underlying VkBuffer for descriptor writes
 	VkBuffer getLightBuffer(uint32_t frame);
 
+	// Set buffer manager (for deferred initialization)
+	void setBufferManager(Renderer::GraphicsBuffer* bufferMgr);
+
 private:
-	std::vector<VkBuffer> lightBuffers;
-	std::vector<VkDeviceMemory> lightBufferMem;
+	Renderer::GraphicsBuffer* bufferManager; // Store interface pointer
+	std::vector<Renderer::BufferHandle> lightBuffers;
+	// Removed: std::vector<VkDeviceMemory> lightBufferMem;
 };

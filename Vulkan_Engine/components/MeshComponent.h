@@ -1,26 +1,30 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 #include "Component.h"
 #include "vulkan/vulkan_core.h"
 
-#include <cstdint>
-#include <string>
 
 // Forward declarations
 class Entity;
 struct Mesh;
 struct Material;
 
+class MeshManager; // Forward declaration
+
 class MeshComponent : public Component {
 public:
-	MeshComponent(Entity* owner, const std::string& meshName);
+	MeshComponent(Entity* owner, const std::string& meshName, MeshManager& meshManager);
 	~MeshComponent();
 
 	void render(VkCommandBuffer commandBuffer,
 				VkPipeline pipeline,
 				VkPipelineLayout pipelineLayout,
 				uint32_t imageIndex,
-				int useMousePick) const;
+				int useMousePick,
+				MeshManager& meshManager) const;
 
 	// Accessors
 	Mesh* GetMesh() const;

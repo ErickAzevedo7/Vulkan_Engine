@@ -1,17 +1,17 @@
 #include "MousePick.h"
 
-#include "core/utils/Utils.h"
-#include "managers/MeshManager.h"
-#include "SceneRenderer.h"
-#include "vulkan/vulkan_core.h"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
 
-void MousePick::init(VulkanCore* core) {
+#include "core/utils/Utils.h"
+#include "managers/MeshManager.h"
+#include "SceneRenderer.h"
+#include "vulkan/vulkan_core.h"
+
+void MousePick::init(VulkanCore* core, ResourceContext* resources) {
 	engineCore = core;
 	mousePickExtent = engineCore->getSwapChainExtent();
 
@@ -33,7 +33,7 @@ void MousePick::init(VulkanCore* core) {
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 
-	MeshManager::loadDefaults(VulkanCore::getCommandPool(), VulkanCore::getGraphicsQueue());
+	// MeshManager defaults are now loaded in main.cpp via ResourceContext
 
 	createMousePickRenderPass();
 
@@ -76,7 +76,7 @@ void MousePick::recreateMousePick() {
 }
 
 void MousePick::cleanup() {
-	MeshManager::cleanup();
+	// MeshManager cleanup is handled by ResourceContext
 
 	for (auto framebuffer : mousePickFramebuffers) {
 		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);

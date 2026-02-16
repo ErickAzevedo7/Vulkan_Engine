@@ -6,8 +6,9 @@
 #include <vector>
 
 #include "components/LightComponent.h"
-#include "core/utils/Utils.h"
 #include "core/vulkancore.h"
+#include "renderer/GraphicsBuffer.h" // Use interface, not VulkanBuffer
+#include "renderer/vulkan/VulkanBuffer.h" // Only for getVulkanBuffer()
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -18,37 +19,38 @@
 // light manager: creates a uniform buffer per-frame and exposes
 // it so descriptor sets can bind it at binding 2.
 
-LightManager::LightManager() {
-	// Constructor
+LightManager::LightManager(Renderer::GraphicsBuffer* bufferMgr) : bufferManager(bufferMgr) {
+	// Constructor - store buffer manager reference (interface pointer)
 }
 
 void LightManager::init() {
 	// Initialize all resources
 	uint32_t count = MAX_FRAMES_IN_FLIGHT;
 	lightBuffers.resize(count);
-	lightBufferMem.resize(count);
 
-	// Allocate buffer for: colorIntensity(vec4) + direction(vec4) + positionType(vec4) + ambient(vec4) + diffuse(vec4)
-	// + specular(vec4) + attenuation(3 floats) + cutOff(float) + outerCutOff(float) + useBlinnPhong(int) = 6 vec4s + 6
-	// floats
-	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
+	// Calculate buffer size: 6 vec4s + 6 floats
+	// colorIntensity(vec4) + direction(vec4) + positionType(vec4) + ambient(vec4)
+	// + diffuse(vec4) + specular(vec4) + attenuation(3 floats) + cutOff(float)
+	// + outerCutOff(float) + useBlinnPhong(int)
+	size_t bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
+
+	// Create uniform buffers using abstraction
+	Renderer::BufferDesc desc;
+	desc.size = bufferSize;
+	desc.usage = Renderer::BufferUsage::Uniform;
+	desc.memory = Renderer::MemoryType::CpuToGpu; // CPU-writable for updates
+	desc.debugName = "Light Uniform Buffer";
+
 	for (uint32_t i = 0; i < count; ++i) {
-		Utils::createBuffer(bufferSize,
-							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-							lightBuffers[i],
-							lightBufferMem[i]);
+		lightBuffers[i] = bufferManager->createBuffer(desc);
 	}
 }
 
 LightManager::~LightManager() {
-	// Destructor - automatic cleanup (RAII)
-	for (size_t i = 0; i < lightBuffers.size(); ++i) {
-		if (lightBuffers[i] != VK_NULL_HANDLE) {
-			vkDestroyBuffer(VulkanCore::getDevice(), lightBuffers[i], nullptr);
-		}
-		if (lightBufferMem[i] != VK_NULL_HANDLE) {
-			vkFreeMemory(VulkanCore::getDevice(), lightBufferMem[i], nullptr);
+	// Destructor - cleanup using abstraction (RAII)
+	for (auto& handle : lightBuffers) {
+		if (handle.isValid()) {
+			bufferManager->destroyBuffer(handle);
 		}
 	}
 }
@@ -56,10 +58,9 @@ LightManager::~LightManager() {
 void LightManager::updateLight(uint32_t frame, const LightComponent::LightUniform& u) {
 	if (frame >= lightBuffers.size())
 		return;
-	void* data;
 
-	// Write 6 vec4s: [0]=colorIntensity, [1]=direction, [2]=positionType, [3]=ambient, [4]=diffuse, [5]=specular (THIS
-	// IS TEMPORARY)
+	// Prepare data to upload
+	// Write 6 vec4s: [0]=colorIntensity, [1]=direction, [2]=positionType, [3]=ambient, [4]=diffuse, [5]=specular
 	glm::vec4 v0 = glm::vec4(u.color, u.intensity);
 	glm::vec3 dir = glm::normalize(u.direction);
 	glm::vec4 v1 = glm::vec4(dir, 0.0f);
@@ -76,33 +77,42 @@ void LightManager::updateLight(uint32_t frame, const LightComponent::LightUnifor
 	// Spotlight cutoff angles (stored as cosine for efficient comparison in shader)
 	float cutOff = glm::cos(u.innerCone);
 	float outerCutOff = glm::cos(u.outerCone);
+	int blinnPhongFlag = u.useBlinnPhong;
 
-	VkDeviceSize bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
-	vkMapMemory(VulkanCore::getDevice(), lightBufferMem[frame], 0, bufferSize, 0, &data);
+	// Build buffer data
+	size_t bufferSize = sizeof(glm::vec4) * 6 + sizeof(float) * 6;
+	char tempBuffer[256]; // Stack allocation for small uniform
 
-	memcpy(data, &v0, sizeof(glm::vec4));
-	memcpy(static_cast<char*>(data) + sizeof(glm::vec4) * 1, &v1, sizeof(glm::vec4));
-	memcpy(static_cast<char*>(data) + sizeof(glm::vec4) * 2, &v2, sizeof(glm::vec4));
-	memcpy(static_cast<char*>(data) + sizeof(glm::vec4) * 3, &v3, sizeof(glm::vec4));
-	memcpy(static_cast<char*>(data) + sizeof(glm::vec4) * 4, &v4, sizeof(glm::vec4));
-	memcpy(static_cast<char*>(data) + sizeof(glm::vec4) * 5, &v5, sizeof(glm::vec4));
+	memcpy(tempBuffer, &v0, sizeof(glm::vec4));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 1, &v1, sizeof(glm::vec4));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 2, &v2, sizeof(glm::vec4));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 3, &v3, sizeof(glm::vec4));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 4, &v4, sizeof(glm::vec4));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 5, &v5, sizeof(glm::vec4));
 
-	// Write attenuation values after the padded vec3s
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6, &attKc, sizeof(float));
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float), &attKl, sizeof(float));
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 2, &attKq, sizeof(float));
+	// Write attenuation values after the vec4s
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6, &attKc, sizeof(float));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6 + sizeof(float), &attKl, sizeof(float));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6 + sizeof(float) * 2, &attKq, sizeof(float));
 
 	// Write spotlight cutoff angles
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 3, &cutOff, sizeof(float));
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 4, &outerCutOff, sizeof(float));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6 + sizeof(float) * 3, &cutOff, sizeof(float));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6 + sizeof(float) * 4, &outerCutOff, sizeof(float));
 
 	// Write useBlinnPhong flag
-	int blinnPhongFlag = u.useBlinnPhong;
-	memcpy(reinterpret_cast<char*>(data) + sizeof(glm::vec4) * 6 + sizeof(float) * 5, &blinnPhongFlag, sizeof(int));
+	memcpy(tempBuffer + sizeof(glm::vec4) * 6 + sizeof(float) * 5, &blinnPhongFlag, sizeof(int));
 
-	vkUnmapMemory(VulkanCore::getDevice(), lightBufferMem[frame]);
+	// Update buffer using abstraction
+	bufferManager->updateBuffer(lightBuffers[frame], tempBuffer, bufferSize);
 }
 
 VkBuffer LightManager::getLightBuffer(uint32_t frame) {
-	return lightBuffers.at(frame);
+	// Return underlying Vulkan buffer for descriptor writes
+	// Cast to VulkanBuffer for Vulkan-specific interop (temporary until descriptor abstraction)
+	auto* vulkanBuffer = static_cast<Renderer::VulkanBuffer*>(bufferManager);
+	return vulkanBuffer->getVulkanBuffer(lightBuffers.at(frame));
+}
+
+void LightManager::setBufferManager(Renderer::GraphicsBuffer* bufferMgr) {
+	bufferManager = bufferMgr;
 }

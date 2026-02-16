@@ -2,10 +2,17 @@
 
 #include <memory>
 
+// Forward declarations
 class LightManager;
 class MaterialManager;
 class SceneManager;
 class TextureManager;
+class MeshManager;
+
+// Renderer abstraction
+namespace Renderer {
+class GraphicsBuffer; // Use interface
+}
 
 /// Groups resource manager initialization and cleanup
 class ResourceContext {
@@ -22,10 +29,18 @@ public:
 	MaterialManager& getMaterialManager();
 	TextureManager& getTextureManager();
 	SceneManager& getSceneManager();
+	MeshManager& getMeshManager();
+
+	// Access to rendering abstraction
+	Renderer::GraphicsBuffer& getBufferManager();
 
 private:
 	std::unique_ptr<LightManager> lightManager;
 	std::unique_ptr<MaterialManager> materialManager;
 	std::unique_ptr<TextureManager> textureManager;
 	std::unique_ptr<SceneManager> sceneManager;
+	std::unique_ptr<MeshManager> meshManager;
+
+	// Store as interface pointer for true abstraction
+	std::unique_ptr<Renderer::GraphicsBuffer> bufferManager;
 };

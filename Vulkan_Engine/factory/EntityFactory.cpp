@@ -13,7 +13,6 @@
 
 #include "glm/ext/vector_float3.hpp"
 
-
 Entity& EntityFactory::createEmpty(Scene* scene, const std::string& name) {
 	if (!scene) {
 		throw std::runtime_error("Cannot create entity: scene is null");
@@ -32,7 +31,7 @@ Entity& EntityFactory::createPrimitive(ResourceContext& resources,
 	Entity& entity = scene->createEntity(name);
 
 	// Add mesh component
-	MeshComponent* meshComp = new MeshComponent(&entity, meshName);
+	MeshComponent* meshComp = new MeshComponent(&entity, meshName, resources.getMeshManager());
 	// Set default material
 	if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
 		meshComp->SetMaterial(mat);
@@ -66,7 +65,7 @@ Entity& EntityFactory::createLight(ResourceContext& resources,
 	entity.addComponent(transform);
 
 	// Add mesh component for visualization (small cube)
-	MeshComponent* meshComp = new MeshComponent(&entity, "cube");
+	MeshComponent* meshComp = new MeshComponent(&entity, "cube", resources.getMeshManager());
 	// Set default material
 	if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
 		meshComp->SetMaterial(mat);

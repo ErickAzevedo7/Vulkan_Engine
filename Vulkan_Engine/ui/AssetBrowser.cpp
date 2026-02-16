@@ -43,7 +43,7 @@ std::string truncateText(const std::string& p_text, float p_truncated_width) {
 				break;
 			}
 
-			visible_chars = i;
+			visible_chars = static_cast<int>(i);
 		}
 
 		truncated_text = (p_text.substr(0, visible_chars) + ELLIPSIS).c_str();

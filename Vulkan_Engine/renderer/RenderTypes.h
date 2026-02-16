@@ -27,13 +27,26 @@ struct BufferHandle {
 // Enums
 // ============================================================================
 
-enum class BufferUsage {
-	Vertex, // Vertex buffer
-	Index, // Index buffer
-	Uniform, // Uniform/constant buffer
-	Storage, // Storage/structured buffer
-	Staging // CPU-to-GPU transfer buffer
+enum class BufferUsage : uint32_t {
+	Vertex = 0x01, // Vertex buffer
+	Index = 0x02, // Index buffer
+	Uniform = 0x04, // Uniform/constant buffer
+	Storage = 0x08, // Storage/structured buffer
+	TransferSrc = 0x10, // Source for transfer (staging)
+	TransferDst = 0x20 // Destination for transfer
 };
+
+inline BufferUsage operator|(BufferUsage a, BufferUsage b) {
+	return static_cast<BufferUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
+inline BufferUsage operator&(BufferUsage a, BufferUsage b) {
+	return static_cast<BufferUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+}
+
+inline bool hasFlag(BufferUsage flags, BufferUsage flag) {
+	return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(flag)) != 0;
+}
 
 enum class MemoryType {
 	GpuOnly, // GPU-only memory (best performance)

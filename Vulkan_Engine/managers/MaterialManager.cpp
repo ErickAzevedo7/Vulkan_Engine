@@ -15,9 +15,10 @@
 #include <vector>
 
 #include "context/ResourceContext.h"
-#include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "managers/TextureManager.h"
+#include "renderer/GraphicsBuffer.h"
+#include "renderer/vulkan/VulkanBuffer.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -42,21 +43,19 @@ MaterialManager::MaterialManager(TextureManager& textureManager) : textureManage
 
 void MaterialManager::init() {
 	createDescriptorPool();
-	loadAllFromAssets();
+	// Note: loadAllFromAssets() moved to ResourceContext::loadDefaults()
+	// to ensure textures are loaded first
 }
 
 MaterialManager::~MaterialManager() {
 	// Destructor - automatic cleanup (RAII)
 	for (auto& pair : materials) {
 		Material* mat = pair.second;
-		if (mat) {
+		if (mat && bufferManager) {
 			// Clean up property buffers
-			for (size_t i = 0; i < mat->propertyBuffers.size(); i++) {
-				if (mat->propertyBuffers[i]) {
-					vkDestroyBuffer(VulkanCore::getDevice(), mat->propertyBuffers[i], nullptr);
-				}
-				if (mat->propertyBufferMemory[i]) {
-					vkFreeMemory(VulkanCore::getDevice(), mat->propertyBufferMemory[i], nullptr);
+			for (auto& handle : mat->propertyBuffers) {
+				if (handle.isValid()) {
+					bufferManager->destroyBuffer(handle);
 				}
 			}
 			delete mat;
@@ -241,6 +240,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 			return nullptr;
 		}
 
+		albedoKey = std::filesystem::path(albedoKey).generic_string();
+
 		if (albedoKey.empty()) {
 			albedoKey = textureManager.kDefaultTextureKey;
 		}
@@ -402,7 +403,7 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 
 		// Material properties buffer info
 		VkDescriptorBufferInfo materialPropInfo{};
-		materialPropInfo.buffer = material->propertyBuffers[i];
+		materialPropInfo.buffer = getMaterialPropertyBuffer(material, static_cast<uint32_t>(i));
 		materialPropInfo.offset = 0;
 		materialPropInfo.range = sizeof(MaterialProperties);
 
@@ -442,35 +443,45 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 }
 
 void MaterialManager::createMaterialPropertyBuffers(Material* material) {
-	if (!material)
+	if (!material || !bufferManager)
 		return;
 
 	material->propertyBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	material->propertyBufferMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
-	VkDeviceSize bufferSize = sizeof(MaterialProperties);
+	size_t bufferSize = sizeof(MaterialProperties);
+
+	// Create uniform buffers using abstraction
+	Renderer::BufferDesc desc;
+	desc.size = bufferSize;
+	desc.usage = Renderer::BufferUsage::Uniform;
+	desc.memory = Renderer::MemoryType::CpuToGpu; // CPU-writable for updates
+	desc.debugName = "Material Property Buffer";
+
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		Utils::createBuffer(bufferSize,
-							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-							material->propertyBuffers[i],
-							material->propertyBufferMemory[i]);
+		material->propertyBuffers[i] = bufferManager->createBuffer(desc);
 
 		// Initialize with default properties
-		void* data;
-		vkMapMemory(VulkanCore::getDevice(), material->propertyBufferMemory[i], 0, bufferSize, 0, &data);
-		memcpy(data, &material->properties, sizeof(MaterialProperties));
-		vkUnmapMemory(VulkanCore::getDevice(), material->propertyBufferMemory[i]);
+		bufferManager->updateBuffer(material->propertyBuffers[i], &material->properties, bufferSize);
 	}
 }
 
 void MaterialManager::updateMaterialProperties(Material* material, uint32_t frame) {
-	if (!material || frame >= material->propertyBufferMemory.size())
+	if (!material || !bufferManager || frame >= material->propertyBuffers.size())
 		return;
 
-	void* data;
-	vkMapMemory(
-		VulkanCore::getDevice(), material->propertyBufferMemory[frame], 0, sizeof(MaterialProperties), 0, &data);
-	memcpy(data, &material->properties, sizeof(MaterialProperties));
-	vkUnmapMemory(VulkanCore::getDevice(), material->propertyBufferMemory[frame]);
+	// Update buffer using abstraction
+	bufferManager->updateBuffer(material->propertyBuffers[frame], &material->properties, sizeof(MaterialProperties));
+}
+
+void MaterialManager::setBufferManager(Renderer::GraphicsBuffer* bufferMgr) {
+	bufferManager = bufferMgr;
+}
+
+VkBuffer MaterialManager::getMaterialPropertyBuffer(Material* material, uint32_t frame) {
+	if (!material || !bufferManager || frame >= material->propertyBuffers.size())
+		return VK_NULL_HANDLE;
+
+	// Cast to VulkanBuffer for Vulkan-specific interop (temporary until descriptor abstraction)
+	auto* vulkanBuffer = static_cast<Renderer::VulkanBuffer*>(bufferManager);
+	return vulkanBuffer->getVulkanBuffer(material->propertyBuffers[frame]);
 }

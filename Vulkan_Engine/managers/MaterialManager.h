@@ -5,11 +5,17 @@
 #include <unordered_map>
 #include <vector>
 
+#include "renderer/RenderTypes.h" // For BufferHandle
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
 
 class TextureManager;
+
+// Forward declaration - use interface, not implementation
+namespace Renderer {
+class GraphicsBuffer;
+}
 
 struct MaterialProperties {
 	alignas(16) glm::vec3 ambient{0.15f, 0.15f, 0.15f};
@@ -24,8 +30,8 @@ struct Material {
 	std::string albedoTextureKey;
 	std::vector<VkDescriptorSet> descriptorSets;
 	MaterialProperties properties;
-	std::vector<VkBuffer> propertyBuffers;
-	std::vector<VkDeviceMemory> propertyBufferMemory;
+	std::vector<Renderer::BufferHandle> propertyBuffers; // Use BufferHandle
+	// Removed: std::vector<VkDeviceMemory> propertyBufferMemory;
 };
 
 class MaterialManager {
@@ -53,8 +59,15 @@ public:
 	Material* updateMaterialTexture(const std::string& materialPath, const std::string& texturePath);
 	void updateMaterialProperties(Material* material, uint32_t frame);
 
+	// Set buffer manager (for deferred initialization)
+	void setBufferManager(Renderer::GraphicsBuffer* bufferMgr);
+
+	// Get VkBuffer for descriptor writes (temporary until descriptor abstraction)
+	VkBuffer getMaterialPropertyBuffer(Material* material, uint32_t frame);
+
 private:
 	TextureManager& textureManager;
+	Renderer::GraphicsBuffer* bufferManager = nullptr; // Store interface pointer
 	void createDescriptorPool();
 	void destroyMaterialInternal(const std::string& name);
 	std::unordered_map<std::string, Material*> materials;

@@ -35,6 +35,7 @@
 #include "imgui_impl_vulkan.h"
 #include "managers/LightManager.h"
 #include "managers/MaterialManager.h"
+#include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
 #include "SceneRenderer.h"
@@ -70,12 +71,13 @@ public:
 		// Initialize resource managers (textures, materials, lights)
 		// ResourceContext constructor created the managers, now load content
 		resourceContext.loadDefaults();
+		resourceContext.getMeshManager().loadDefaults(VulkanCore::getCommandPool(), VulkanCore::getGraphicsQueue());
 
 		// Link AssetBrowser to InspectorUi (circular dependency resolution)
 		inspector.setAssetBrowser(&assetBrowser);
 
 		SceneRenderer::init(&engineCore, &resourceContext);
-		mousePick.init(&engineCore);
+		mousePick.init(&engineCore, &resourceContext);
 		viewPort.init(&engineCore, mousePick.getMousePickExtent());
 		outline.init(&engineCore,
 					 mousePick.getMousePickImageViews(),

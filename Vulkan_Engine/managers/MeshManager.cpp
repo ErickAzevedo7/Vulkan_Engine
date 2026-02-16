@@ -1,22 +1,31 @@
 #include "MeshManager.h"
 
-#include "core/utils/Utils.h"
-#include "vulkan/vulkan_core.h"
-
-#include <corecrt_math_defines.h>
-
 #include <array>
 #include <cmath>
+#include <corecrt_math_defines.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-Mesh MeshManager::cube;
-Mesh MeshManager::quad;
-Mesh MeshManager::sphere;
+#include "core/utils/Utils.h"
+#include "renderer/GraphicsBuffer.h"
+#include "renderer/RenderTypes.h"
+#include "renderer/vulkan/VulkanBuffer.h"
+#include "vulkan/vulkan_core.h"
+
+MeshManager::MeshManager() {
+	// Constructor
+}
+
+MeshManager::~MeshManager() {
+	cleanup();
+}
+
+void MeshManager::setBufferManager(Renderer::GraphicsBuffer* bufferMgr) {
+	bufferManager = bufferMgr;
+}
 
 void MeshManager::generateSphere(std::vector<Vertex>& vertices,
 								 std::vector<uint32_t>& indices,
@@ -29,9 +38,11 @@ void MeshManager::generateSphere(std::vector<Vertex>& vertices,
 		for (uint32_t x = 0; x <= X_SEGMENTS; x++) {
 			float xSegment = (float)x / (float)X_SEGMENTS;
 			float ySegment = (float)y / (float)Y_SEGMENTS;
-			float xPos = std::cos(xSegment * 2.0f * M_PI) * std::sin(ySegment * M_PI);
-			float yPos = std::cos(ySegment * M_PI);
-			float zPos = std::sin(xSegment * 2.0f * M_PI) * std::sin(ySegment * M_PI);
+			float xPos =
+				std::cos(xSegment * 2.0f * static_cast<float>(M_PI)) * std::sin(ySegment * static_cast<float>(M_PI));
+			float yPos = std::cos(ySegment * static_cast<float>(M_PI));
+			float zPos =
+				std::sin(xSegment * 2.0f * static_cast<float>(M_PI)) * std::sin(ySegment * static_cast<float>(M_PI));
 
 			vertices.push_back({
 				{xPos * 0.5f, yPos * 0.5f, zPos * 0.5f}, // position
@@ -93,6 +104,9 @@ Mesh* MeshManager::getMesh(std::string name) {
 }
 
 void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue) {
+	if (!bufferManager) {
+		throw std::runtime_error("MeshManager: Buffer manager not set before loadDefaults!");
+	}
 	quad = createMesh(quadVertices, quadIndices, commandPool);
 	cube = createMesh(cubeVertices, cubeIndices, commandPool);
 	std::vector<Vertex> sphereVerts;
@@ -104,9 +118,8 @@ void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue)
 Mesh MeshManager::createMesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices, VkCommandPool commandPool) {
 	Mesh mesh;
 
-	createVertexBuffer(vertices, commandPool, mesh.vertexBuffer, mesh.vertexMemory);
-
-	createIndexBuffer(indices, commandPool, mesh.indexBuffer, mesh.indexMemory);
+	createVertexBuffer(vertices, commandPool, mesh.vertexBuffer);
+	createIndexBuffer(indices, commandPool, mesh.indexBuffer);
 
 	mesh.indexCount = static_cast<uint32_t>(indices.size());
 
@@ -114,90 +127,104 @@ Mesh MeshManager::createMesh(std::vector<Vertex> vertices, std::vector<uint32_t>
 }
 
 void MeshManager::cleanup() {
-	VkDevice device = VulkanCore::getDevice();
+	// RAII cleanup via BufferHandle destruction if manager exists
+	// But we need to explicitly destroy them here if we want to clear them now
+	if (bufferManager) {
+		auto destroyMesh = [&](Mesh& mesh) {
+			if (mesh.vertexBuffer.isValid()) {
+				bufferManager->destroyBuffer(mesh.vertexBuffer);
+				mesh.vertexBuffer = {};
+			}
+			if (mesh.indexBuffer.isValid()) {
+				bufferManager->destroyBuffer(mesh.indexBuffer);
+				mesh.indexBuffer = {};
+			}
+		};
 
-	auto destroyMesh = [device](Mesh& mesh) {
-		if (mesh.vertexBuffer) {
-			vkDestroyBuffer(device, mesh.vertexBuffer, nullptr);
-			mesh.vertexBuffer = VK_NULL_HANDLE;
-		}
-		if (mesh.vertexMemory) {
-			vkFreeMemory(device, mesh.vertexMemory, nullptr);
-			mesh.vertexMemory = VK_NULL_HANDLE;
-		}
-		if (mesh.indexBuffer) {
-			vkDestroyBuffer(device, mesh.indexBuffer, nullptr);
-			mesh.indexBuffer = VK_NULL_HANDLE;
-		}
-		if (mesh.indexMemory) {
-			vkFreeMemory(device, mesh.indexMemory, nullptr);
-			mesh.indexMemory = VK_NULL_HANDLE;
-		}
-	};
+		destroyMesh(quad);
+		destroyMesh(cube);
+		destroyMesh(sphere);
+	}
+}
 
-	destroyMesh(quad);
-	destroyMesh(cube);
-	destroyMesh(sphere);
+VkBuffer MeshManager::getVertexBuffer(const Mesh& mesh) {
+	if (!bufferManager || !mesh.vertexBuffer.isValid())
+		return VK_NULL_HANDLE;
+	return static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(mesh.vertexBuffer);
+}
+
+VkBuffer MeshManager::getIndexBuffer(const Mesh& mesh) {
+	if (!bufferManager || !mesh.indexBuffer.isValid())
+		return VK_NULL_HANDLE;
+	return static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(mesh.indexBuffer);
 }
 
 void MeshManager::createVertexBuffer(std::vector<Vertex> vertices,
 									 VkCommandPool commandPool,
-									 VkBuffer& vertexBuffer,
-									 VkDeviceMemory& vertexBufferMemory) {
+									 Renderer::BufferHandle& vertexBuffer) {
+	if (!bufferManager)
+		return;
+
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	Utils::createBuffer(bufferSize,
-						VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-						VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						stagingBuffer,
-						stagingBufferMemory);
+	// Create staging buffer (CPU -> GPU)
+	Renderer::BufferDesc stagingDesc;
+	stagingDesc.size = bufferSize;
+	stagingDesc.usage = Renderer::BufferUsage::TransferSrc;
+	stagingDesc.memory = Renderer::MemoryType::CpuToGpu;
 
-	void* data;
-	vkMapMemory(VulkanCore::getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, vertices.data(), (size_t)bufferSize);
-	vkUnmapMemory(VulkanCore::getDevice(), stagingBufferMemory);
+	Renderer::BufferHandle stagingBuffer = bufferManager->createBuffer(stagingDesc);
+	bufferManager->updateBuffer(stagingBuffer, vertices.data(), bufferSize);
 
-	Utils::createBuffer(bufferSize,
-						VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-						vertexBuffer,
-						vertexBufferMemory);
+	// Create GPU-only vertex buffer
+	Renderer::BufferDesc vertexDesc;
+	vertexDesc.size = bufferSize;
+	vertexDesc.usage = Renderer::BufferUsage::Vertex | Renderer::BufferUsage::TransferDst;
+	vertexDesc.memory = Renderer::MemoryType::GpuOnly;
 
-	Utils::copyBuffer(commandPool, stagingBuffer, vertexBuffer, bufferSize);
+	vertexBuffer = bufferManager->createBuffer(vertexDesc);
 
-	vkDestroyBuffer(VulkanCore::getDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), stagingBufferMemory, nullptr);
+	// Copy from staging to vertex buffer using Utils (needs VkBuffer handles)
+	VkBuffer srcVk = static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(stagingBuffer);
+	VkBuffer dstVk = static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(vertexBuffer);
+
+	Utils::copyBuffer(commandPool, srcVk, dstVk, bufferSize);
+
+	// Cleanup staging buffer
+	bufferManager->destroyBuffer(stagingBuffer);
 }
 
 void MeshManager::createIndexBuffer(std::vector<uint32_t> indices,
 									VkCommandPool commandPool,
-									VkBuffer& indexBuffer,
-									VkDeviceMemory& indexBufferMemory) {
+									Renderer::BufferHandle& indexBuffer) {
+	if (!bufferManager)
+		return;
+
 	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	Utils::createBuffer(bufferSize,
-						VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-						VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						stagingBuffer,
-						stagingBufferMemory);
+	// Create staging buffer (CPU -> GPU)
+	Renderer::BufferDesc stagingDesc;
+	stagingDesc.size = bufferSize;
+	stagingDesc.usage = Renderer::BufferUsage::TransferSrc;
+	stagingDesc.memory = Renderer::MemoryType::CpuToGpu;
 
-	void* data;
-	vkMapMemory(VulkanCore::getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, indices.data(), (size_t)bufferSize);
-	vkUnmapMemory(VulkanCore::getDevice(), stagingBufferMemory);
+	Renderer::BufferHandle stagingBuffer = bufferManager->createBuffer(stagingDesc);
+	bufferManager->updateBuffer(stagingBuffer, indices.data(), bufferSize);
 
-	Utils::createBuffer(bufferSize,
-						VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-						indexBuffer,
-						indexBufferMemory);
+	// Create GPU-only index buffer
+	Renderer::BufferDesc indexDesc;
+	indexDesc.size = bufferSize;
+	indexDesc.usage = Renderer::BufferUsage::Index | Renderer::BufferUsage::TransferDst;
+	indexDesc.memory = Renderer::MemoryType::GpuOnly;
 
-	Utils::copyBuffer(commandPool, stagingBuffer, indexBuffer, bufferSize);
+	indexBuffer = bufferManager->createBuffer(indexDesc);
 
-	vkDestroyBuffer(VulkanCore::getDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), stagingBufferMemory, nullptr);
+	// Copy from staging to index buffer
+	VkBuffer srcVk = static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(stagingBuffer);
+	VkBuffer dstVk = static_cast<Renderer::VulkanBuffer*>(bufferManager)->getVulkanBuffer(indexBuffer);
+
+	Utils::copyBuffer(commandPool, srcVk, dstVk, bufferSize);
+
+	// Cleanup staging buffer
+	bufferManager->destroyBuffer(stagingBuffer);
 }

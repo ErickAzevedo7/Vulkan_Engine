@@ -1,9 +1,11 @@
 #pragma once
+#include <cstdint>
+#include <vector>
+
 #include "core/vulkancore.h"
 #include "vulkan/vulkan_core.h"
 
-#include <cstdint>
-#include <vector>
+class ResourceContext; // Forward declaration
 
 class MousePick {
 public:
@@ -11,7 +13,7 @@ public:
 	std::vector<VkImageView> mousePickImageViews;
 	std::vector<VkCommandBuffer> mousePickCommandBuffers;
 
-	void init(VulkanCore* core);
+	void init(VulkanCore* core, ResourceContext* resources);
 	void recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void cleanupFramebuffers();
 	void recreateMousePick();

@@ -1,15 +1,14 @@
 #pragma once
 
-#include "vulkan/vulkan_core.h"
-
-#include <glm/gtx/hash.hpp>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <glm/gtx/hash.hpp>
 #include <string>
 #include <vector>
+
+#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float2.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -19,6 +18,12 @@ class VulkanCore;
 
 // Project headers
 #include "core/vulkancore.h"
+#include "renderer/RenderTypes.h" // For BufferHandle
+
+// Forward declaration
+namespace Renderer {
+class GraphicsBuffer;
+}
 
 struct Vertex {
 	glm::vec3 pos;
@@ -44,10 +49,8 @@ template<> struct hash<Vertex> {
 } // namespace std
 
 struct Mesh {
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexMemory;
+	Renderer::BufferHandle vertexBuffer;
+	Renderer::BufferHandle indexBuffer;
 	uint32_t indexCount;
 	std::string name;
 };
@@ -102,31 +105,40 @@ const std::vector<uint32_t> quadIndices = {0, 1, 2, 2, 3, 0};
 
 class MeshManager {
 public:
-	static Mesh quad;
-	static Mesh cube;
-	static Mesh sphere;
+	MeshManager();
+	~MeshManager();
 
-	static void loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue);
+	Mesh quad;
+	Mesh cube;
+	Mesh sphere;
 
-	static Mesh createMesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices, VkCommandPool commandPool);
+	void loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue);
+
+	Mesh createMesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices, VkCommandPool commandPool);
 
 	static void generateSphere(std::vector<Vertex>& vertices,
 							   std::vector<uint32_t>& indices,
 							   uint32_t X_SEGMENTS,
 							   uint32_t Y_SEGMENTS);
 
-	static Mesh* getMesh(std::string name);
+	Mesh* getMesh(std::string name);
 
-	static void cleanup();
+	void cleanup();
+
+	// Set buffer manager (deferred initialization)
+	void setBufferManager(Renderer::GraphicsBuffer* bufferMgr);
+
+	// Get VkBuffer for rendering (temporary until command buffer abstraction)
+	VkBuffer getVertexBuffer(const Mesh& mesh);
+	VkBuffer getIndexBuffer(const Mesh& mesh);
 
 private:
-	static void createVertexBuffer(std::vector<Vertex> vertices,
-								   VkCommandPool commandPool,
-								   VkBuffer& vertexBuffer,
-								   VkDeviceMemory& vertexBufferMemory);
+	Renderer::GraphicsBuffer* bufferManager = nullptr;
+	std::unordered_map<std::string, Mesh*> meshes; // Keep track of meshes if needed, or just rely on public members
 
-	static void createIndexBuffer(std::vector<uint32_t> indices,
-								  VkCommandPool commandPool,
-								  VkBuffer& indexBuffer,
-								  VkDeviceMemory& indexBufferMemory);
+	void
+	createVertexBuffer(std::vector<Vertex> vertices, VkCommandPool commandPool, Renderer::BufferHandle& vertexBuffer);
+
+	void
+	createIndexBuffer(std::vector<uint32_t> indices, VkCommandPool commandPool, Renderer::BufferHandle& indexBuffer);
 };

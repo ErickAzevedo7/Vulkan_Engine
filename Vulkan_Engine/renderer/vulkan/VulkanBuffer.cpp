@@ -192,20 +192,22 @@ uint32_t VulkanBuffer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags
 }
 
 VkBufferUsageFlags VulkanBuffer::getVulkanBufferUsage(BufferUsage usage) {
-	switch (usage) {
-	case BufferUsage::Vertex:
-		return VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	case BufferUsage::Index:
-		return VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	case BufferUsage::Uniform:
-		return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	case BufferUsage::Storage:
-		return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-	case BufferUsage::Staging:
-		return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	default:
-		return 0;
-	}
+	VkBufferUsageFlags flags = 0;
+
+	if (hasFlag(usage, BufferUsage::Vertex))
+		flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	if (hasFlag(usage, BufferUsage::Index))
+		flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	if (hasFlag(usage, BufferUsage::Uniform))
+		flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	if (hasFlag(usage, BufferUsage::Storage))
+		flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	if (hasFlag(usage, BufferUsage::TransferSrc))
+		flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	if (hasFlag(usage, BufferUsage::TransferDst))
+		flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+	return flags;
 }
 
 VkMemoryPropertyFlags VulkanBuffer::getVulkanMemoryProperties(MemoryType memoryType) {
