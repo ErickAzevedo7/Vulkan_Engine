@@ -1,6 +1,7 @@
 #include "ResourceContext.h"
 
 #include <memory>
+#include <utility>
 
 #include "core/vulkancore.h"
 #include "managers/LightManager.h"
@@ -9,6 +10,7 @@
 #include "managers/SceneManager.h"
 #include "managers/TextureManager.h"
 #include "renderer/vulkan/VulkanBuffer.h"
+#include "renderer/vulkan/VulkanResourceBinder.h"
 
 ResourceContext::ResourceContext() {
 	// Constructor - just allocate managers, defer Vulkan initialization
@@ -28,6 +30,11 @@ void ResourceContext::init() {
 	auto vulkanBuffer = std::make_unique<Renderer::VulkanBuffer>();
 	vulkanBuffer->initialize(VulkanCore::getDevice(), VulkanCore::getPhysicalDevice());
 	bufferManager = std::move(vulkanBuffer);
+
+	// Initialize resource binder SECOND (needs device and buffer manager)
+	auto vulkanBinder = std::make_unique<Renderer::VulkanResourceBinder>();
+	vulkanBinder->initialize(VulkanCore::getDevice(), bufferManager.get());
+	resourceBinder = std::move(vulkanBinder);
 
 	// Set the buffer manager for managers (deferred from constructor)
 	lightManager->setBufferManager(bufferManager.get());
@@ -53,6 +60,7 @@ void ResourceContext::cleanup() {
 
 	// Cleanup buffer manager last (RAII - destructor will call shutdown)
 	// No need to cast - just reset the unique_ptr
+	resourceBinder.reset(); // Cleanup binder before buffer manager
 	bufferManager.reset();
 }
 
@@ -94,4 +102,8 @@ MeshManager& ResourceContext::getMeshManager() {
 
 Renderer::GraphicsBuffer& ResourceContext::getBufferManager() {
 	return *bufferManager;
+}
+
+Renderer::GraphicsResourceBinder& ResourceContext::getResourceBinder() {
+	return *resourceBinder;
 }

@@ -176,6 +176,7 @@
     <ClCompile Include="core\vulkancore.cpp" />
     <ClCompile Include="core\events\EventBus.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanBuffer.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanResourceBinder.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\LightComponent.h" />
@@ -221,7 +222,9 @@
     <ClInclude Include="core\events\MouseEvents.h" />
     <ClInclude Include="renderer\RenderTypes.h" />
     <ClInclude Include="renderer\GraphicsBuffer.h" />
+    <ClInclude Include="renderer\GraphicsResourceBinder.h" />
     <ClInclude Include="renderer\vulkan\VulkanBuffer.h" />
+    <ClInclude Include="renderer\vulkan\VulkanResourceBinder.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />

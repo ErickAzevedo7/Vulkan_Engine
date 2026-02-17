@@ -12,7 +12,8 @@ class MeshManager;
 // Renderer abstraction
 namespace Renderer {
 class GraphicsBuffer; // Use interface
-}
+class GraphicsResourceBinder;
+} // namespace Renderer
 
 /// Groups resource manager initialization and cleanup
 class ResourceContext {
@@ -33,6 +34,7 @@ public:
 
 	// Access to rendering abstraction
 	Renderer::GraphicsBuffer& getBufferManager();
+	Renderer::GraphicsResourceBinder& getResourceBinder();
 
 private:
 	std::unique_ptr<LightManager> lightManager;
@@ -43,4 +45,5 @@ private:
 
 	// Store as interface pointer for true abstraction
 	std::unique_ptr<Renderer::GraphicsBuffer> bufferManager;
+	std::unique_ptr<Renderer::GraphicsResourceBinder> resourceBinder;
 };
