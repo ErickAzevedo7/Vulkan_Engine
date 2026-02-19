@@ -45,7 +45,13 @@ void SceneRenderer::renderEntity(const Entity* entity,
 		return;
 	}
 
-	meshComp->render(commandBuffer, pipeline, pipelineLayout, imageIndex, useMousePick, resources->getMeshManager());
+	meshComp->render(commandBuffer,
+					 pipeline,
+					 pipelineLayout,
+					 imageIndex,
+					 useMousePick,
+					 resources->getMeshManager(),
+					 resources->getResourceBinder());
 }
 
 void SceneRenderer::renderOutlineSelected(VkCommandBuffer commandBuffer,

@@ -6,9 +6,11 @@
 #include "Component.h"
 #include "vulkan/vulkan_core.h"
 
-
 // Forward declarations
 class Entity;
+namespace Renderer {
+class GraphicsResourceBinder;
+}
 struct Mesh;
 struct Material;
 
@@ -24,7 +26,8 @@ public:
 				VkPipelineLayout pipelineLayout,
 				uint32_t imageIndex,
 				int useMousePick,
-				MeshManager& meshManager) const;
+				MeshManager& meshManager,
+				Renderer::GraphicsResourceBinder& binder) const; // Added binder
 
 	// Accessors
 	Mesh* GetMesh() const;

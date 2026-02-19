@@ -54,6 +54,36 @@ struct ResourceSetLayoutHandle {
 	}
 };
 
+// Texture Handle
+struct TextureHandle {
+	uint64_t id = 0;
+
+	bool isValid() const {
+		return id != 0;
+	}
+	bool operator==(const TextureHandle& other) const {
+		return id == other.id;
+	}
+	bool operator!=(const TextureHandle& other) const {
+		return id != other.id;
+	}
+};
+
+// Sampler Handle
+struct SamplerHandle {
+	uint64_t id = 0;
+
+	bool isValid() const {
+		return id != 0;
+	}
+	bool operator==(const SamplerHandle& other) const {
+		return id == other.id;
+	}
+	bool operator!=(const SamplerHandle& other) const {
+		return id != other.id;
+	}
+};
+
 // ============================================================================
 // Enums
 // ============================================================================
@@ -94,6 +124,41 @@ struct BufferDesc {
 	BufferUsage usage = BufferUsage::Vertex;
 	MemoryType memory = MemoryType::GpuOnly;
 	const char* debugName = nullptr; // Optional debug name
+};
+
+enum class TextureFormat {
+	R8G8B8A8_UNORM,
+	R8G8B8A8_SRGB,
+	// Add others as needed
+};
+
+struct TextureDesc {
+	uint32_t width = 1;
+	uint32_t height = 1;
+	uint32_t depth = 1;
+	uint32_t mipLevels = 1;
+	uint32_t arrayLayers = 1;
+	TextureFormat format = TextureFormat::R8G8B8A8_UNORM;
+	BufferUsage usage = BufferUsage::TransferDst |
+						BufferUsage::Uniform; // Reusing BufferUsage bitflags slightly loose, ideally TextureUsage
+	const char* debugName = nullptr;
+};
+
+enum class Filter { Nearest, Linear };
+enum class SamplerAddressMode { Repeat, MirroredRepeat, ClampToEdge, ClampToBorder };
+enum class SamplerMipmapMode { Nearest, Linear };
+
+struct SamplerDesc {
+	Filter minFilter = Filter::Linear;
+	Filter magFilter = Filter::Linear;
+	SamplerAddressMode addressModeU = SamplerAddressMode::Repeat;
+	SamplerAddressMode addressModeV = SamplerAddressMode::Repeat;
+	SamplerAddressMode addressModeW = SamplerAddressMode::Repeat;
+	SamplerMipmapMode mipmapMode = SamplerMipmapMode::Linear;
+	bool enableAnisotropy = true;
+	float maxAnisotropy = 16.0f;
+	float minLod = 0.0f;
+	float maxLod = 1000.0f; // VK_LOD_CLAMP_NONE
 };
 
 // ============================================================================
@@ -154,10 +219,11 @@ struct ResourceBufferBinding {
 };
 
 // Image/Texture resource binding for updates (temporary until texture abstraction)
+// Image/Texture resource binding for updates
 struct ResourceImageBinding {
 	uint32_t binding; // Which binding slot (matches shader)
-	void* imageView; // Temporary: API-specific image view
-	void* sampler; // Temporary: API-specific sampler
+	TextureHandle texture;
+	SamplerHandle sampler;
 };
 
 } // namespace Renderer

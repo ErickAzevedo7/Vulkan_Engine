@@ -3,6 +3,7 @@
 #include "Component.h"
 
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 #include "glm/trigonometric.hpp"
 
 // Forward declarations
@@ -46,22 +47,20 @@ public:
 	}
 
 	// Uniform layout for GPU upload (aligned)
+	// Uniform layout for GPU upload (aligned to std140)
 	struct alignas(16) LightUniform {
-		int type;
-		glm::vec3 position; // world-space
-		glm::vec3 direction;
-		glm::vec3 color;
-		float intensity;
-		float range;
-		float innerCone;
-		float outerCone;
-		glm::vec3 ambient;
-		glm::vec3 diffuse;
-		glm::vec3 specular;
+		glm::vec4 colorIntensity; // rgb=color, a=intensity
+		glm::vec4 direction;      // xyz=direction, w=pad
+		glm::vec4 positionType;   // xyz=position, w=type (0=directional,1=point,2=spot)
+		glm::vec4 ambient;        // rgb=ambient, w=pad
+		glm::vec4 diffuse;        // rgb=diffuse, w=pad
+		glm::vec4 specular;       // rgb=specular, w=pad
 		float attenuationKc;
 		float attenuationKl;
 		float attenuationKq;
-		int useBlinnPhong; // 1 = Blinn-Phong, 0 = Phong
+		float cutOff;        // inner cone angle (cosine)
+		float outerCutOff;   // outer cone angle (cosine)
+		int useBlinnPhong;   // 1 = Blinn-Phong, 0 = Phong
 	};
 
 	LightUniform getLightUniform() const;

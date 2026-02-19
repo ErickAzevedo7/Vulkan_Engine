@@ -11,6 +11,8 @@
 
 namespace Renderer {
 
+class GraphicsTexture; // Forward declaration
+
 /**
  * Vulkan implementation of GraphicsResourceBinder.
  * Maps ResourceSet abstraction to Vulkan descriptor sets.
@@ -24,8 +26,9 @@ public:
 	 * Initialize the Vulkan resource binder.
 	 * @param device Vulkan device
 	 * @param bufferMgr Pointer to buffer manager for BufferHandle -> VkBuffer lookups
+	 * @param textureMgr Pointer to texture manager for TextureHandle -> VkImageView lookups
 	 */
-	void initialize(VkDevice device, GraphicsBuffer* bufferMgr);
+	void initialize(VkDevice device, GraphicsBuffer* bufferMgr, GraphicsTexture* textureMgr);
 
 	/**
 	 * Shutdown and cleanup all resources.
@@ -66,6 +69,7 @@ private:
 	VkDevice device = VK_NULL_HANDLE;
 	VkDescriptorPool pool = VK_NULL_HANDLE;
 	GraphicsBuffer* bufferManager = nullptr;
+	GraphicsTexture* textureManager = nullptr;
 
 	// Handle -> Vulkan resource maps
 	std::unordered_map<uint64_t, VkDescriptorSet> sets;

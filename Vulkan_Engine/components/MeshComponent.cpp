@@ -7,6 +7,8 @@
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
+#include "renderer/GraphicsResourceBinder.h" // Added
+#include "renderer/RenderTypes.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -32,7 +34,8 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 						   VkPipelineLayout pipelineLayout,
 						   uint32_t imageIndex,
 						   int useMousePick,
-						   MeshManager& meshManager) const {
+						   MeshManager& meshManager,
+						   Renderer::GraphicsResourceBinder& binder) const { // Added binder
 	if (!visible || !mesh)
 		return;
 
@@ -70,15 +73,13 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 	}
 	uint32_t dynamicOffset = static_cast<uint32_t>(id * VulkanCore::getDynamicAlignment());
 
+	// Retrieve native handle from binder
+	Renderer::ResourceSetHandle frameSet = material->resourceSets[VulkanCore::getCurrentFrame()];
+	VkDescriptorSet vkSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
+
 	// Bind descriptor sets (for uniforms/textures)
-	vkCmdBindDescriptorSets(commandBuffer,
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							pipelineLayout,
-							0,
-							1,
-							&material->descriptorSets[VulkanCore::getCurrentFrame()],
-							1,
-							&dynamicOffset);
+	vkCmdBindDescriptorSets(
+		commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &vkSet, 1, &dynamicOffset);
 
 	// Issue draw call
 	vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);

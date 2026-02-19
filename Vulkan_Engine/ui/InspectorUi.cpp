@@ -1,6 +1,7 @@
 #include "InspectorUi.h"
 
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -21,6 +22,7 @@
 #include "imgui_internal.h"
 #include "managers/MaterialManager.h"
 #include "managers/TextureManager.h"
+#include "renderer/vulkan/VulkanTexture.h"
 #include "Scene.h"
 #include "ui/AssetBrowser.h"
 #include "vulkan/vulkan_core.h"
@@ -28,6 +30,7 @@
 #include "glm/ext/quaternion_float.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
+
 
 // Initialize constants
 // Constants are initialized in the constructor/header
@@ -43,11 +46,8 @@ InspectorUi::~InspectorUi() {
 }
 
 void InspectorUi::releaseImGuiTextureSets() {
-	if (imguiTextureSets.empty())
-		return;
-	// Logic to free sets if needed, though ImGui_ImplVulkan typically handles shutdown
-	// or we just clear the list.
 	imguiTextureSets.clear();
+	imguiTextureCache.clear();
 }
 
 static bool Inspector_GetHeaderOpen(ImGuiID id, bool default_open) {
@@ -146,15 +146,8 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 						tex = resources.getTextureManager().getTexture(texKey);
 					} catch (...) {
 						// Load new texture and register it under the full path key
-						Texture* loaded = resources.getTextureManager().loadTexture(assetPath,
-																					VulkanCore::getDevice(),
-																					VulkanCore::getPhysicalDevice(),
-																					VulkanCore::getCommandPool(),
-																					VulkanCore::getGraphicsQueue());
-						resources.getTextureManager().createTextureImageView(loaded);
-						resources.getTextureManager().createTextureSampler(loaded);
-						resources.getTextureManager().registerTexture(texKey, *loaded);
-						tex = resources.getTextureManager().getTexture(texKey);
+						// Load new texture and register it under the full path key
+						tex = resources.getTextureManager().loadTexture(assetPath);
 					}
 
 					// Create or reuse a material that uses this texture.
@@ -214,15 +207,23 @@ VkDescriptorSet InspectorUi::getOrCreateImGuiTextureSet(Texture* texture) {
 	if (it != imguiTextureCache.end())
 		return it->second;
 
-	// Texture must have a valid image view and sampler
-	if (texture->imageView == VK_NULL_HANDLE || texture->sampler == VK_NULL_HANDLE)
+	// Valid handle check
+	if (!texture->handle.isValid() || !texture->sampler.isValid())
 		return VK_NULL_HANDLE;
 
-	// Create a new ImGui texture descriptor set and cache it
-	VkDescriptorSet set =
-		ImGui_ImplVulkan_AddTexture(texture->sampler, texture->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	VkDescriptorSet set = VK_NULL_HANDLE;
+	auto* tm = &resources.getTextureManager();
+	if (auto* vt = static_cast<Renderer::VulkanTexture*>(tm->getGraphicsTexture())) {
+		VkSampler sampler = vt->getSampler(texture->sampler);
+		VkImageView view = vt->getImageView(texture->handle);
+		if (sampler != VK_NULL_HANDLE && view != VK_NULL_HANDLE) {
+			set = ImGui_ImplVulkan_AddTexture(sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+	}
 
-	imguiTextureCache.emplace(texture, set);
+	if (set != VK_NULL_HANDLE) {
+		imguiTextureCache.emplace(texture, set);
+	}
 	return set;
 }
 
@@ -343,7 +344,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			previewTex = nullptr;
 		}
 
-		if (previewTex && previewTex->imageView != VK_NULL_HANDLE && previewTex->sampler != VK_NULL_HANDLE) {
+		if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
 			ImVec2 innerMin2(min2.x + 2.0f, min2.y + 2.0f);
 			ImVec2 innerMax2(max2.x - 2.0f, max2.y - 2.0f);
 			VkDescriptorSet texSet2 = getOrCreateImGuiTextureSet(previewTex);
@@ -380,15 +381,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						try {
 							tex = resources.getTextureManager().getTexture(texKey);
 						} catch (...) {
-							Texture* loaded = resources.getTextureManager().loadTexture(droppedPath,
-																						VulkanCore::getDevice(),
-																						VulkanCore::getPhysicalDevice(),
-																						VulkanCore::getCommandPool(),
-																						VulkanCore::getGraphicsQueue());
-							resources.getTextureManager().createTextureImageView(loaded);
-							resources.getTextureManager().createTextureSampler(loaded);
-							resources.getTextureManager().registerTexture(texKey, *loaded);
-							tex = resources.getTextureManager().getTexture(texKey);
+							tex = resources.getTextureManager().loadTexture(droppedPath);
 						}
 
 						// Rebuild or create the material with new albedo texture.
@@ -651,10 +644,13 @@ void InspectorUi::render() {
 					previewTex = nullptr;
 				}
 
-				if (previewTex && previewTex->imageView != VK_NULL_HANDLE && previewTex->sampler != VK_NULL_HANDLE) {
+				if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
 					ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
 					ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
+
+					// Resolve handle to VkDescriptorSet via getOrCreateImGuiTextureSet
 					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
+
 					if (texSet != VK_NULL_HANDLE) {
 						dl->AddImage(reinterpret_cast<ImTextureID>(texSet), innerMin, innerMax);
 					}

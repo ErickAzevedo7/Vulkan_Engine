@@ -79,6 +79,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -109,6 +110,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -177,6 +179,7 @@
     <ClCompile Include="core\events\EventBus.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanResourceBinder.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\LightComponent.h" />
@@ -225,6 +228,8 @@
     <ClInclude Include="renderer\GraphicsResourceBinder.h" />
     <ClInclude Include="renderer\vulkan\VulkanBuffer.h" />
     <ClInclude Include="renderer\vulkan\VulkanResourceBinder.h" />
+    <ClInclude Include="renderer\vulkan\VulkanTexture.h" />
+    <ClInclude Include="renderer\GraphicsTexture.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />

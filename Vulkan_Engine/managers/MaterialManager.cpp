@@ -1,6 +1,5 @@
 #include "MaterialManager.h"
 
-#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -9,15 +8,17 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
+#include "managers/LightManager.h"
 #include "managers/TextureManager.h"
 #include "renderer/GraphicsBuffer.h"
+#include "renderer/GraphicsResourceBinder.h" // Added
+#include "renderer/RenderTypes.h"
 #include "renderer/vulkan/VulkanBuffer.h"
 #include "vulkan/vulkan_core.h"
 
@@ -39,10 +40,10 @@ static std::string normalizeKey(const std::string& s) {
 
 MaterialManager::MaterialManager(TextureManager& textureManager) : textureManager(textureManager) {
 	// Constructor
+	pendingKill.resize(MAX_FRAMES_IN_FLIGHT);
 }
 
 void MaterialManager::init() {
-	createDescriptorPool();
 	// Note: loadAllFromAssets() moved to ResourceContext::loadDefaults()
 	// to ensure textures are loaded first
 }
@@ -51,20 +52,35 @@ MaterialManager::~MaterialManager() {
 	// Destructor - automatic cleanup (RAII)
 	for (auto& pair : materials) {
 		Material* mat = pair.second;
-		if (mat && bufferManager) {
-			// Clean up property buffers
-			for (auto& handle : mat->propertyBuffers) {
-				if (handle.isValid()) {
-					bufferManager->destroyBuffer(handle);
+		if (mat) {
+			if (bufferManager) {
+				// Clean up property buffers
+				for (auto& handle : mat->propertyBuffers) {
+					if (handle.isValid()) {
+						bufferManager->destroyBuffer(handle);
+					}
 				}
 			}
+
+			// Free resource sets
+			if (resourceBinder) {
+				for (auto& set : mat->resourceSets) {
+					resourceBinder->freeSet(set);
+				}
+			}
+
 			delete mat;
 		}
 	}
 	materials.clear();
-	if (descriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(VulkanCore::getDevice(), descriptorPool, nullptr);
+
+	// Destroy layouts
+	if (resourceBinder) {
+		for (auto& pair : layoutCache) {
+			resourceBinder->destroyLayout(pair.second);
+		}
 	}
+	layoutCache.clear();
 }
 
 void MaterialManager::loadDefault() {
@@ -305,43 +321,31 @@ void MaterialManager::destroyMaterialInternal(const std::string& name) {
 
 	Material* mat = it->second;
 	if (mat) {
-		if (!mat->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
-			vkFreeDescriptorSets(VulkanCore::getDevice(),
-								 descriptorPool,
-								 static_cast<uint32_t>(mat->descriptorSets.size()),
-								 mat->descriptorSets.data());
+		if (resourceBinder) {
+			for (auto& set : mat->resourceSets) {
+				resourceBinder->freeSet(set);
+			}
 		}
+
+		if (bufferManager) {
+			for (auto& handle : mat->propertyBuffers) {
+				if (handle.isValid()) {
+					bufferManager->destroyBuffer(handle);
+				}
+			}
+		}
+
 		delete mat;
 	}
 	materials.erase(it);
 }
 
-void MaterialManager::createDescriptorPool() {
-	// Allow many materials; each material needs MAX_FRAMES_IN_FLIGHT sets.
-	const uint32_t maxMaterials = 100; // adjust as needed
-	const uint32_t totalSets = maxMaterials * MAX_FRAMES_IN_FLIGHT;
-
-	std::array<VkDescriptorPoolSize, 3> poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	poolSizes[0].descriptorCount = totalSets;
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = totalSets;
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[2].descriptorCount = totalSets * 2; // Light + Material properties
-
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = totalSets;
-	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-
-	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create descriptor pool!");
-	}
-}
-
 void MaterialManager::createDescriptorSets(const std::string& texturePath, const std::string& materialPath) {
+	if (!resourceBinder || !bufferManager) {
+		std::cerr << "MaterialManager::createDescriptorSets: dependencies not set" << std::endl;
+		return;
+	}
+
 	// Get existing material from map
 	std::string mapKey = normalizeKey(materialPath);
 	auto it = materials.find(mapKey);
@@ -353,92 +357,138 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 
 	Material* material = it->second;
 
-	// Free any existing descriptor sets before reallocating
-	if (!material->descriptorSets.empty() && descriptorPool != VK_NULL_HANDLE) {
-		vkFreeDescriptorSets(VulkanCore::getDevice(),
-							 descriptorPool,
-							 static_cast<uint32_t>(material->descriptorSets.size()),
-							 material->descriptorSets.data());
+	// Free any existing resource sets
+	// Free any existing resource sets (DEFERRED)
+	if (!material->resourceSets.empty()) {
+		for (size_t i = 0; i < material->resourceSets.size(); i++) {
+			if (i < pendingKill.size()) {
+				pendingKill[i].push_back(material->resourceSets[i]);
+			}
+		}
 	}
 
-	material->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	material->resourceSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-	// Allocate descriptor sets
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, VulkanCore::getDescriptorSetLayout());
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	allocInfo.pSetLayouts = layouts.data();
+	// Get or create layout
+	std::string layoutKey = "StandardMaterial";
+	Renderer::ResourceSetLayoutHandle layout;
 
-	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo, material->descriptorSets.data()) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate descriptor sets!");
+	if (layoutCache.find(layoutKey) != layoutCache.end()) {
+		layout = layoutCache[layoutKey];
+	} else {
+		Renderer::ResourceSetLayoutDesc desc;
+
+		// Binding 0: Material properties (UBO) - Vertex + Fragment
+		Renderer::ResourceBinding binding0;
+		binding0.binding = 0;
+		binding0.type = Renderer::ResourceType::UniformBufferDynamic; // Changing to Dynamic to match Pipeline
+		binding0.count = 1;
+		binding0.stages = Renderer::ShaderStage::Vertex; // Vertex only to match VulkanCore pipeline
+
+		// Binding 1: Albedo Texture (Sampler) - Fragment
+		Renderer::ResourceBinding binding1;
+		binding1.binding = 1;
+		binding1.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding1.count = 1;
+		binding1.stages = Renderer::ShaderStage::Fragment;
+
+		// Binding 2: Light Buffer (UBO) - Fragment
+		Renderer::ResourceBinding binding2;
+		binding2.binding = 2;
+		binding2.type = Renderer::ResourceType::UniformBuffer; // Or StorageBuffer if it was? Uniform in main.cpp
+		binding2.count = 1;
+		binding2.stages = Renderer::ShaderStage::Fragment;
+
+		// Binding 3: Material Properties (UBO) - Fragment
+		Renderer::ResourceBinding binding3;
+		binding3.binding = 3;
+		binding3.type = Renderer::ResourceType::UniformBuffer;
+		binding3.count = 1;
+		binding3.stages = Renderer::ShaderStage::Fragment; // Access in fragment shader?
+
+		// Wait, `MaterialManager` should only manage Material-specific resources?
+		// Global UBO (Binding 0) is usually set once or shared.
+		// But if the shader expects one set, we must provide all bindings in that set.
+
+		// This refactoring reveals a design choice: Are we keeping one monolithic descriptor set?
+		// Yes, for now.
+
+		desc.bindings.push_back(binding0); // Global UBO
+		desc.bindings.push_back(binding1); // Texture
+		desc.bindings.push_back(binding2); // Light Buffer
+
+		// Material UBO
+		desc.bindings.push_back(binding3); // Material UBO
+
+		layout = resourceBinder->createLayout(desc);
+		layoutCache[layoutKey] = layout;
 	}
 
-	// Update descriptor sets with bindings
+	// Allocate and update sets
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		material->resourceSets[i] = resourceBinder->allocateSet(layout);
+
+		// Prepare bindings
+		std::vector<Renderer::ResourceBufferBinding> bufferBindings;
+		std::vector<Renderer::ResourceImageBinding> imageBindings;
+
+		// 1. Global UBO (Binding 0)
+		// We use the native handle escape hatch to update the Global UBO manually
+		// because it is managed by VulkanCore and not yet wrapped in a BufferHandle.
+
+		// Binding 1: Texture
+		Texture* texture = nullptr;
+		try {
+			texture = textureManager.getTexture(texturePath);
+		} catch (...) {
+			texture = textureManager.getTexture(textureManager.kDefaultTextureKey);
+		}
+
+		Renderer::ResourceImageBinding texBinding;
+		texBinding.binding = 1;
+		texBinding.texture = texture->handle;
+		texBinding.sampler = texture->sampler;
+		imageBindings.push_back(texBinding);
+
+		// Binding 3: Material Properties
+		Renderer::ResourceBufferBinding matBinding;
+		matBinding.binding = 3;
+		matBinding.buffer = material->propertyBuffers[i]; // BufferHandle
+		matBinding.offset = 0;
+		matBinding.range = sizeof(MaterialProperties);
+		bufferBindings.push_back(matBinding);
+
+		// Binding 2: Light Buffer (from LightManager)
+		if (lightManager) {
+			Renderer::ResourceBufferBinding lightBinding;
+			lightBinding.binding = 2;
+			lightBinding.buffer = lightManager->getLightBufferHandle(static_cast<uint32_t>(i));
+			lightBinding.offset = 0;
+			lightBinding.range = ~0ull; // Whole buffer
+			bufferBindings.push_back(lightBinding);
+		}
+
+		// Update via Binder
+		resourceBinder->updateSet(material->resourceSets[i], bufferBindings, imageBindings);
+
+		// Update Binding 0 (Global UBO) Manually
+		VkDescriptorSet vkSet =
+			*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
+
 		VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
-		Texture* texture = nullptr;
-		try {
-			texture = textureManager.getTexture(texturePath);
-		} catch (const std::exception& e) {
-			std::cerr << "MaterialManager::createDescriptorSets: texture '" << texturePath
-					  << "' not found, falling back to default: " << e.what() << std::endl;
-			try {
-				texture = textureManager.getTexture(textureManager.kDefaultTextureKey);
-			} catch (...) {
-				std::cerr << "MaterialManager::createDescriptorSets: failed to get default texture '"
-						  << textureManager.kDefaultTextureKey << "'" << std::endl;
-				throw;
-			}
-		}
-		VkDescriptorImageInfo imageInfo{};
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = texture->imageView;
-		imageInfo.sampler = texture->sampler;
+		VkWriteDescriptorSet uboWrite{};
+		uboWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		uboWrite.dstSet = vkSet;
+		uboWrite.dstBinding = 0;
+		uboWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Original was dynamic
+		uboWrite.descriptorCount = 1;
+		uboWrite.pBufferInfo = &bufferInfo;
 
-		// Material properties buffer info
-		VkDescriptorBufferInfo materialPropInfo{};
-		materialPropInfo.buffer = getMaterialPropertyBuffer(material, static_cast<uint32_t>(i));
-		materialPropInfo.offset = 0;
-		materialPropInfo.range = sizeof(MaterialProperties);
-
-		std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = material->descriptorSets[i];
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &bufferInfo;
-		descriptorWrites[0].pImageInfo = nullptr; // Optional
-		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
-
-		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = material->descriptorSets[i];
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].descriptorCount = 1;
-		descriptorWrites[1].pImageInfo = &imageInfo;
-
-		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[2].dstSet = material->descriptorSets[i];
-		descriptorWrites[2].dstBinding = 3;
-		descriptorWrites[2].dstArrayElement = 0;
-		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[2].descriptorCount = 1;
-		descriptorWrites[2].pBufferInfo = &materialPropInfo;
-
-		vkUpdateDescriptorSets(VulkanCore::getDevice(),
-							   static_cast<uint32_t>(descriptorWrites.size()),
-							   descriptorWrites.data(),
-							   0,
-							   nullptr);
+		vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &uboWrite, 0, nullptr);
 	}
 }
 
@@ -477,6 +527,10 @@ void MaterialManager::setBufferManager(Renderer::GraphicsBuffer* bufferMgr) {
 	bufferManager = bufferMgr;
 }
 
+void MaterialManager::setResourceBinder(Renderer::GraphicsResourceBinder* binder) {
+	resourceBinder = binder;
+}
+
 VkBuffer MaterialManager::getMaterialPropertyBuffer(Material* material, uint32_t frame) {
 	if (!material || !bufferManager || frame >= material->propertyBuffers.size())
 		return VK_NULL_HANDLE;
@@ -484,4 +538,19 @@ VkBuffer MaterialManager::getMaterialPropertyBuffer(Material* material, uint32_t
 	// Cast to VulkanBuffer for Vulkan-specific interop (temporary until descriptor abstraction)
 	auto* vulkanBuffer = static_cast<Renderer::VulkanBuffer*>(bufferManager);
 	return vulkanBuffer->getVulkanBuffer(material->propertyBuffers[frame]);
+}
+
+void MaterialManager::setLightManager(LightManager* lightMgr) {
+	lightManager = lightMgr;
+}
+
+void MaterialManager::cleanupPendingResources(uint32_t frameIndex) {
+	if (frameIndex >= pendingKill.size() || !resourceBinder)
+		return;
+
+	auto& queue = pendingKill[frameIndex];
+	for (auto& set : queue) {
+		resourceBinder->freeSet(set);
+	}
+	queue.clear();
 }

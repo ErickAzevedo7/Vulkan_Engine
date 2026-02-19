@@ -12,6 +12,7 @@ class MeshManager;
 // Renderer abstraction
 namespace Renderer {
 class GraphicsBuffer; // Use interface
+class GraphicsTexture;
 class GraphicsResourceBinder;
 } // namespace Renderer
 
@@ -45,5 +46,6 @@ private:
 
 	// Store as interface pointer for true abstraction
 	std::unique_ptr<Renderer::GraphicsBuffer> bufferManager;
+	std::unique_ptr<Renderer::GraphicsTexture> graphicsTexture; // Texture backend
 	std::unique_ptr<Renderer::GraphicsResourceBinder> resourceBinder;
 };

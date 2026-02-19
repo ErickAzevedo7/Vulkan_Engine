@@ -132,6 +132,11 @@ public:
 						&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()],
 						VK_TRUE,
 						UINT64_MAX);
+
+		// Cleanup resources from the previous cycle of this frame
+		// Safe to do now because fence wait returned
+		resourceContext.getMaterialManager().cleanupPendingResources(VulkanCore::getCurrentFrame());
+
 		uint32_t imageIndex;
 		VkResult result = vkAcquireNextImageKHR(VulkanCore::getDevice(),
 												engineCore.getSwapChain(),
@@ -178,35 +183,9 @@ public:
 			}
 			if (!foundLight) {
 				// no lights in scene: make sure shader receives zero intensity
-				lu.color = glm::vec3(0.0f);
-				lu.intensity = 0.0f;
+				lu.colorIntensity = glm::vec4(0.0f);
 			}
 			resourceContext.getLightManager().updateLight(frame, lu);
-
-			// Update all material descriptor sets for this frame to point binding 2 to the light buffer
-			const auto& mats = resourceContext.getMaterialManager().getAllMaterials();
-			for (const auto& pair : mats) {
-				Material* mat = pair.second;
-				if (!mat)
-					continue;
-				if (mat->descriptorSets.size() <= frame)
-					continue;
-				VkDescriptorBufferInfo lightInfo{};
-				lightInfo.buffer = resourceContext.getLightManager().getLightBuffer(frame);
-				lightInfo.offset = 0;
-				// LightManager now allocates: 6 vec4s + 5 floats (3 attenuation + 2 cutoff angles)
-				lightInfo.range = sizeof(glm::vec4) * 6 + sizeof(float) * 5;
-
-				VkWriteDescriptorSet write{};
-				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				write.dstSet = mat->descriptorSets[frame];
-				write.dstBinding = 2;
-				write.dstArrayElement = 0;
-				write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				write.descriptorCount = 1;
-				write.pBufferInfo = &lightInfo;
-				vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &write, 0, nullptr);
-			}
 		}
 
 		mousePick.recordMousePickCommandBuffer(mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],

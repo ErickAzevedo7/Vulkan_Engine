@@ -23,6 +23,7 @@ public:
 
 	// Access to the underlying VkBuffer for descriptor writes
 	VkBuffer getLightBuffer(uint32_t frame);
+	Renderer::BufferHandle getLightBufferHandle(uint32_t frame) const;
 
 	// Set buffer manager (for deferred initialization)
 	void setBufferManager(Renderer::GraphicsBuffer* bufferMgr);

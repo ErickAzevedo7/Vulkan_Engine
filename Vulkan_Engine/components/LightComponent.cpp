@@ -4,6 +4,8 @@
 #include "Entity.h"
 
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
+#include "glm/trigonometric.hpp"
 
 LightComponent::LightComponent(Entity* owner, LightType type) : Component(), owner(owner), type(type) {
 }
@@ -21,34 +23,29 @@ void LightComponent::setType(LightType t) {
 
 LightComponent::LightUniform LightComponent::getLightUniform() const {
 	LightUniform u{};
-	u.type = static_cast<int>(type);
+	glm::vec3 dir = direction;
+	glm::vec3 pos = glm::vec3(0.0f);
 
 	// try to fetch position from owner's transform if available
 	if (owner) {
 		if (auto tcomp = owner->getComponent<Transform>()) {
-			u.position = tcomp->position;
+			pos = tcomp->position;
 			// forward direction by transform rotation
-			u.direction = tcomp->rotation * direction;
-		} else {
-			u.position = glm::vec3(0.0f);
-			u.direction = direction;
+			dir = tcomp->rotation * direction;
 		}
-	} else {
-		u.position = glm::vec3(0.0f);
-		u.direction = direction;
 	}
 
-	u.color = color;
-	u.intensity = intensity;
-	u.range = range;
-	u.innerCone = innerConeAngle;
-	u.outerCone = outerConeAngle;
-	u.ambient = ambient;
-	u.diffuse = diffuse;
-	u.specular = specular;
+	u.colorIntensity = glm::vec4(color, intensity);
+	u.direction = glm::vec4(dir, 0.0f);
+	u.positionType = glm::vec4(pos, static_cast<float>(static_cast<int>(type)));
+	u.ambient = glm::vec4(ambient, 0.0f);
+	u.diffuse = glm::vec4(diffuse, 0.0f);
+	u.specular = glm::vec4(specular, 0.0f);
 	u.attenuationKc = attenuationKc;
 	u.attenuationKl = attenuationKl;
 	u.attenuationKq = attenuationKq;
+	u.cutOff = glm::cos(innerConeAngle);
+	u.outerCutOff = glm::cos(outerConeAngle);
 	u.useBlinnPhong = useBlinnPhong ? 1 : 0;
 
 	return u;

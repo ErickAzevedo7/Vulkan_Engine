@@ -16,7 +16,9 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
 #include "managers/TextureManager.h"
+#include "renderer/vulkan/VulkanTexture.h"
 #include "vulkan/vulkan_core.h"
+
 
 AssetBrowser::AssetBrowser(ResourceContext& resources, InspectorUi& inspector)
 	: resources(resources), inspector(inspector) {
@@ -250,7 +252,7 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		{
 			// Prefer real thumbnail texture if this is an image file already loaded
 			const ThumbnailTexture* thumbTex = getThumbnailForEntry(fe);
-			if (thumbTex && thumbTex->imageView != VK_NULL_HANDLE && thumbTex->sampler != VK_NULL_HANDLE) {
+			if (thumbTex && thumbTex->handle.isValid() && thumbTex->sampler.isValid()) {
 				VkDescriptorSet thumbSet = VK_NULL_HANDLE;
 				std::string thumbKey;
 				thumbKey = std::filesystem::path(fe.fullPath).generic_string();
@@ -258,9 +260,14 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 				if (it != thumbnailDescriptorSets.end()) {
 					thumbSet = it->second;
 				} else {
-					thumbSet = ImGui_ImplVulkan_AddTexture(
-						thumbTex->sampler, thumbTex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-					thumbnailDescriptorSets[thumbKey] = thumbSet;
+					auto* tm = &resources.getTextureManager();
+					if (auto* vt = static_cast<Renderer::VulkanTexture*>(tm->getGraphicsTexture())) {
+						VkSampler sampler = vt->getSampler(thumbTex->sampler);
+						VkImageView imageView = vt->getImageView(thumbTex->handle);
+						thumbSet =
+							ImGui_ImplVulkan_AddTexture(sampler, imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+						thumbnailDescriptorSets[thumbKey] = thumbSet;
+					}
 				}
 				ImGui::Image(reinterpret_cast<ImTextureID>(thumbSet), ImVec2(iconSize, iconSize));
 			} else {
@@ -359,12 +366,18 @@ void AssetBrowser::InitFileIcons() {
 	folderIcon.texture = folder;
 
 	// Criar VkDescriptorSet para ImGui a partir dos VkImageView/VkSampler
-	auto makeImguiTexture = [](Texture* tex) -> VkDescriptorSet {
+	auto makeImguiTexture = [&](Texture* tex) -> VkDescriptorSet {
 		if (!tex) {
 			return VK_NULL_HANDLE;
 		}
 
-		return ImGui_ImplVulkan_AddTexture(tex->sampler, tex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		auto* tm = &resources.getTextureManager();
+		if (auto* vt = static_cast<Renderer::VulkanTexture*>(tm->getGraphicsTexture())) {
+			VkSampler sampler = vt->getSampler(tex->sampler);
+			VkImageView imageView = vt->getImageView(tex->handle);
+			return ImGui_ImplVulkan_AddTexture(sampler, imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+		return VK_NULL_HANDLE;
 	};
 
 	defaultFileIcon.imguiTexture = makeImguiTexture(defaultFileIcon.texture);

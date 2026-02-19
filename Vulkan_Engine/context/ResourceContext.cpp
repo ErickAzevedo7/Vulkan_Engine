@@ -1,7 +1,9 @@
 #include "ResourceContext.h"
 
+#include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "core/vulkancore.h"
 #include "managers/LightManager.h"
@@ -11,6 +13,8 @@
 #include "managers/TextureManager.h"
 #include "renderer/vulkan/VulkanBuffer.h"
 #include "renderer/vulkan/VulkanResourceBinder.h"
+#include "renderer/vulkan/VulkanTexture.h"
+#include "vulkan/vulkan_core.h"
 
 ResourceContext::ResourceContext() {
 	// Constructor - just allocate managers, defer Vulkan initialization
@@ -31,14 +35,38 @@ void ResourceContext::init() {
 	vulkanBuffer->initialize(VulkanCore::getDevice(), VulkanCore::getPhysicalDevice());
 	bufferManager = std::move(vulkanBuffer);
 
-	// Initialize resource binder SECOND (needs device and buffer manager)
+	// Initialize texture backend SECOND (needs device, queue, command pool)
+	auto vulkanTexture = std::make_unique<Renderer::VulkanTexture>();
+	vulkanTexture->initialize(VulkanCore::getDevice(),
+							  VulkanCore::getPhysicalDevice(),
+							  VulkanCore::getCommandPool(),
+							  VulkanCore::getGraphicsQueue());
+	graphicsTexture = std::move(vulkanTexture);
+
+	// Initialize resource binder THIRD (needs device, buffer manager, and texture manager)
 	auto vulkanBinder = std::make_unique<Renderer::VulkanResourceBinder>();
-	vulkanBinder->initialize(VulkanCore::getDevice(), bufferManager.get());
+	vulkanBinder->initialize(VulkanCore::getDevice(), bufferManager.get(), graphicsTexture.get());
+
+	// Create descriptor pool (moved from MaterialManager)
+	// Allow many materials; each material needs MAX_FRAMES_IN_FLIGHT sets.
+	const uint32_t maxMaterials = 1000;
+	const uint32_t totalSets = maxMaterials * MAX_FRAMES_IN_FLIGHT;
+
+	std::vector<VkDescriptorPoolSize> poolSizes;
+	poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, totalSets});
+	poolSizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, totalSets});
+	poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, totalSets * 2}); // Light + Material props
+
+	vulkanBinder->createPool(totalSets * 2, poolSizes); // *2 for safety
+
 	resourceBinder = std::move(vulkanBinder);
 
-	// Set the buffer manager for managers (deferred from constructor)
+	// Set the buffer manager and binder for managers (deferred from constructor)
 	lightManager->setBufferManager(bufferManager.get());
 	materialManager->setBufferManager(bufferManager.get());
+	materialManager->setResourceBinder(resourceBinder.get());
+	materialManager->setLightManager(lightManager.get());
+	textureManager->setGraphicsTexture(graphicsTexture.get());
 	meshManager->setBufferManager(bufferManager.get());
 
 	// Initialize managers that require Vulkan context (device/queues must be ready)
@@ -61,6 +89,7 @@ void ResourceContext::cleanup() {
 	// Cleanup buffer manager last (RAII - destructor will call shutdown)
 	// No need to cast - just reset the unique_ptr
 	resourceBinder.reset(); // Cleanup binder before buffer manager
+	graphicsTexture.reset(); // Cleanup texture backend
 	bufferManager.reset();
 }
 

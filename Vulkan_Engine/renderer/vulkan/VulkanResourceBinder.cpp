@@ -10,15 +10,18 @@
 #include "vulkan/vulkan_core.h"
 #include "VulkanBuffer.h"
 
+#include "VulkanTexture.h"
+
 namespace Renderer {
 
 VulkanResourceBinder::~VulkanResourceBinder() {
 	shutdown();
 }
 
-void VulkanResourceBinder::initialize(VkDevice device_, GraphicsBuffer* bufferMgr) {
+void VulkanResourceBinder::initialize(VkDevice device_, GraphicsBuffer* bufferMgr, GraphicsTexture* textureMgr) {
 	device = device_;
 	bufferManager = bufferMgr;
+	textureManager = textureMgr;
 }
 
 void VulkanResourceBinder::shutdown() {
@@ -52,6 +55,7 @@ void VulkanResourceBinder::shutdown() {
 
 	device = VK_NULL_HANDLE;
 	bufferManager = nullptr;
+	textureManager = nullptr;
 }
 
 void VulkanResourceBinder::createPool(uint32_t maxSets, const std::vector<VkDescriptorPoolSize>& poolSizes) {
@@ -240,10 +244,19 @@ void VulkanResourceBinder::updateImageBindings(ResourceSetHandle set,
 	imageInfos.reserve(bindings.size());
 
 	for (const auto& binding : bindings) {
+		VkImageView vkImageView = VK_NULL_HANDLE;
+		VkSampler vkSampler = VK_NULL_HANDLE;
+
+		if (textureManager) {
+			auto* vt = static_cast<VulkanTexture*>(textureManager);
+			vkImageView = vt->getImageView(binding.texture);
+			vkSampler = vt->getSampler(binding.sampler);
+		}
+
 		VkDescriptorImageInfo imageInfo{};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = static_cast<VkImageView>(binding.imageView);
-		imageInfo.sampler = static_cast<VkSampler>(binding.sampler);
+		imageInfo.imageView = vkImageView;
+		imageInfo.sampler = vkSampler;
 		imageInfos.push_back(imageInfo);
 
 		VkWriteDescriptorSet write{};
@@ -311,10 +324,19 @@ void VulkanResourceBinder::updateSet(ResourceSetHandle set,
 
 	// Add image bindings
 	for (const auto& binding : imageBindings) {
+		VkImageView vkImageView = VK_NULL_HANDLE;
+		VkSampler vkSampler = VK_NULL_HANDLE;
+
+		if (textureManager) {
+			auto* vt = static_cast<VulkanTexture*>(textureManager);
+			vkImageView = vt->getImageView(binding.texture);
+			vkSampler = vt->getSampler(binding.sampler);
+		}
+
 		VkDescriptorImageInfo imageInfo{};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = static_cast<VkImageView>(binding.imageView);
-		imageInfo.sampler = static_cast<VkSampler>(binding.sampler);
+		imageInfo.imageView = vkImageView;
+		imageInfo.sampler = vkSampler;
 		imageInfos.push_back(imageInfo);
 
 		VkWriteDescriptorSet write{};
