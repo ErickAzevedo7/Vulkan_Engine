@@ -12,6 +12,7 @@
 #include "managers/SceneManager.h"
 #include "managers/TextureManager.h"
 #include "renderer/vulkan/VulkanBuffer.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "renderer/vulkan/VulkanResourceBinder.h"
 #include "renderer/vulkan/VulkanTexture.h"
 #include "vulkan/vulkan_core.h"
@@ -29,8 +30,20 @@ ResourceContext::ResourceContext() {
 	meshManager = std::make_unique<MeshManager>();
 }
 
-void ResourceContext::init() {
-	// Initialize buffer manager FIRST (Vulkan device is now ready)
+void ResourceContext::init(VulkanCore* engineCore) {
+	// Initialize GraphicsDevice FIRST (wraps VulkanCore handles for injection)
+	auto vulkanDevice = std::make_unique<Renderer::VulkanDevice>();
+	vulkanDevice->initialize(VulkanCore::getDevice(),
+							 VulkanCore::getPhysicalDevice(),
+							 VulkanCore::getGraphicsQueue(),
+							 engineCore->getPresentQueue(),
+							 VulkanCore::getCommandPool(),
+							 engineCore->getGraphicsQueueFamily(),
+							 VulkanCore::getDynamicAlignment(),
+							 VulkanCore::getmsaaSamples());
+	graphicsDevice = std::move(vulkanDevice);
+
+	// Initialize buffer manager SECOND (Vulkan device is now ready)
 	auto vulkanBuffer = std::make_unique<Renderer::VulkanBuffer>();
 	vulkanBuffer->initialize(VulkanCore::getDevice(), VulkanCore::getPhysicalDevice());
 	bufferManager = std::move(vulkanBuffer);
@@ -91,6 +104,7 @@ void ResourceContext::cleanup() {
 	resourceBinder.reset(); // Cleanup binder before buffer manager
 	graphicsTexture.reset(); // Cleanup texture backend
 	bufferManager.reset();
+	graphicsDevice.reset(); // Cleanup device wrapper last
 }
 
 ResourceContext::~ResourceContext() {
@@ -135,4 +149,8 @@ Renderer::GraphicsBuffer& ResourceContext::getBufferManager() {
 
 Renderer::GraphicsResourceBinder& ResourceContext::getResourceBinder() {
 	return *resourceBinder;
+}
+
+Renderer::GraphicsDevice& ResourceContext::getDevice() {
+	return *graphicsDevice;
 }

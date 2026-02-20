@@ -7,7 +7,7 @@
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
-#include "renderer/GraphicsResourceBinder.h" // Added
+#include "renderer/GraphicsResourceBinder.h"
 #include "renderer/RenderTypes.h"
 #include "vulkan/vulkan_core.h"
 
@@ -32,10 +32,11 @@ MeshComponent::~MeshComponent() {
 void MeshComponent::render(VkCommandBuffer commandBuffer,
 						   VkPipeline pipeline,
 						   VkPipelineLayout pipelineLayout,
-						   uint32_t imageIndex,
+						   uint32_t currentFrame,
+						   uint64_t dynamicAlignment,
 						   int useMousePick,
 						   MeshManager& meshManager,
-						   Renderer::GraphicsResourceBinder& binder) const { // Added binder
+						   Renderer::GraphicsResourceBinder& binder) const {
 	if (!visible || !mesh)
 		return;
 
@@ -71,10 +72,10 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 	if (id >= maxEntities) {
 		throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
 	}
-	uint32_t dynamicOffset = static_cast<uint32_t>(id * VulkanCore::getDynamicAlignment());
+	uint32_t dynamicOffset = static_cast<uint32_t>(id * dynamicAlignment);
 
 	// Retrieve native handle from binder
-	Renderer::ResourceSetHandle frameSet = material->resourceSets[VulkanCore::getCurrentFrame()];
+	Renderer::ResourceSetHandle frameSet = material->resourceSets[currentFrame];
 	VkDescriptorSet vkSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
 
 	// Bind descriptor sets (for uniforms/textures)

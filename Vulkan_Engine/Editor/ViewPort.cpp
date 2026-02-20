@@ -1,5 +1,10 @@
 #include "ViewPort.h"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "gridPlane/GridPlane.h"
@@ -7,10 +12,6 @@
 #include "skybox/Skybox.h"
 #include "vulkan/vulkan_core.h"
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <stdexcept>
 
 void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
 	engineCore = core;
@@ -424,7 +425,11 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32
 
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
-	SceneRenderer::renderScene(commandBuffer, engineCore->getPipeline(), engineCore->getPipelineLayout(), imageIndex);
+	SceneRenderer::renderScene(commandBuffer,
+							   engineCore->getPipeline(),
+							   engineCore->getPipelineLayout(),
+							   VulkanCore::getCurrentFrame(),
+							   VulkanCore::getDynamicAlignment());
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GridPlane::getGridPlanePipeline());
 

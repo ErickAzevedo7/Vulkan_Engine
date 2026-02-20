@@ -22,14 +22,15 @@ void SceneRenderer::init(VulkanCore* engineCore, ResourceContext* resources) {
 void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
-								uint32_t imageIndex) {
+								uint32_t currentFrame,
+								uint64_t dynamicAlignment) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
 
-		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 0);
+		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 0);
 	}
 }
 
@@ -37,7 +38,8 @@ void SceneRenderer::renderEntity(const Entity* entity,
 								 VkCommandBuffer commandBuffer,
 								 VkPipeline pipeline,
 								 VkPipelineLayout pipelineLayout,
-								 uint32_t imageIndex,
+								 uint32_t currentFrame,
+								 uint64_t dynamicAlignment,
 								 int useMousePick) {
 	const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
@@ -48,7 +50,8 @@ void SceneRenderer::renderEntity(const Entity* entity,
 	meshComp->render(commandBuffer,
 					 pipeline,
 					 pipelineLayout,
-					 imageIndex,
+					 currentFrame,
+					 dynamicAlignment,
 					 useMousePick,
 					 resources->getMeshManager(),
 					 resources->getResourceBinder());
@@ -84,13 +87,14 @@ void SceneRenderer::renderOutlineSelected(VkCommandBuffer commandBuffer,
 void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
 									VkPipeline pipeline,
 									VkPipelineLayout pipelineLayout,
-									uint32_t imageIndex) {
+									uint32_t currentFrame,
+									uint64_t dynamicAlignment) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
 
-		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, imageIndex, 1);
+		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 1);
 	}
 }

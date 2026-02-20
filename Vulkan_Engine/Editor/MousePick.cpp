@@ -355,7 +355,11 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint
 	scissor.extent = mousePickExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	SceneRenderer::renderMousePick(commandBuffer, mousePickPipeline, engineCore->getPipelineLayout(), imageIndex);
+	SceneRenderer::renderMousePick(commandBuffer,
+								   mousePickPipeline,
+								   engineCore->getPipelineLayout(),
+								   VulkanCore::getCurrentFrame(),
+								   VulkanCore::getDynamicAlignment());
 
 	vkCmdEndRenderPass(commandBuffer);
 

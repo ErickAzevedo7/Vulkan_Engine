@@ -180,6 +180,7 @@
     <ClCompile Include="renderer\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanResourceBinder.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanTexture.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanDevice.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\LightComponent.h" />
@@ -230,6 +231,8 @@
     <ClInclude Include="renderer\vulkan\VulkanResourceBinder.h" />
     <ClInclude Include="renderer\vulkan\VulkanTexture.h" />
     <ClInclude Include="renderer\GraphicsTexture.h" />
+    <ClInclude Include="renderer\GraphicsDevice.h" />
+    <ClInclude Include="renderer\vulkan\VulkanDevice.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />

@@ -66,7 +66,7 @@ public:
 		engineCore.initVulkan();
 
 		// Initialize ResourceContext managers (create pools/buffers)
-		resourceContext.init();
+		resourceContext.init(&engineCore);
 
 		// Initialize resource managers (textures, materials, lights)
 		// ResourceContext constructor created the managers, now load content

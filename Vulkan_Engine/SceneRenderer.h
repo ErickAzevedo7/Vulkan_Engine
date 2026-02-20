@@ -3,7 +3,6 @@
 
 #include "vulkan/vulkan_core.h"
 
-
 // Forward declarations
 class ResourceContext; // Forward declaration
 class VulkanCore;
@@ -17,13 +16,15 @@ public:
 	static void renderScene(VkCommandBuffer commandBuffer,
 							VkPipeline pipeline,
 							VkPipelineLayout pipelineLayout,
-							uint32_t imageIndex);
+							uint32_t currentFrame,
+							uint64_t dynamicAlignment);
 
 	static void renderEntity(const Entity* entity,
 							 VkCommandBuffer commandBuffer,
 							 VkPipeline pipeline,
 							 VkPipelineLayout pipelineLayout,
-							 uint32_t imageIndex,
+							 uint32_t currentFrame,
+							 uint64_t dynamicAlignment,
 							 int useMousePick);
 	static void renderOutlineSelected(VkCommandBuffer commandBuffer,
 									  VkPipeline outlinePipeline,
@@ -32,7 +33,8 @@ public:
 	static void renderMousePick(VkCommandBuffer commandBuffer,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
-								uint32_t imageIndex);
+								uint32_t currentFrame,
+								uint64_t dynamicAlignment);
 
 private:
 	static VulkanCore* engineCore;
