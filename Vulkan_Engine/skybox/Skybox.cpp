@@ -1,22 +1,21 @@
 #include "skybox.h"
 
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "vulkan/vulkan_core.h"
-
-#include <stb_image.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stb_image.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "renderer/vulkan/VulkanDevice.h"
+#include "vulkan/vulkan_core.h"
+
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
-
 
 // initialize static members
 VkImage Skybox::skyboxImage;
@@ -33,8 +32,10 @@ VkPipeline Skybox::skyboxPipeline;
 VkPipelineLayout Skybox::skyboxPipelineLayout;
 std::vector<VkBuffer> Skybox::skyboxUniformBuffers;
 std::vector<VkDeviceMemory> Skybox::skyboxUniformBuffersMemory;
+Renderer::VulkanDevice* Skybox::vulkanDevice = nullptr;
 
-void Skybox::init(VkCommandPool commandPool, VkRenderPass renderPass) {
+void Skybox::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass) {
+	vulkanDevice = device;
 	loadSkyboxTextures(commandPool);
 	createSkyboxImageViews();
 	createSkyboxSampler();
@@ -45,20 +46,20 @@ void Skybox::init(VkCommandPool commandPool, VkRenderPass renderPass) {
 }
 
 void Skybox::cleanup() {
-	vkDestroySampler(VulkanCore::getDevice(), skyboxSampler, nullptr);
-	vkDestroyImageView(VulkanCore::getDevice(), skyboxImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), skyboxImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), skyboxImageMemory, nullptr);
+	vkDestroySampler(vulkanDevice->getDevice(), skyboxSampler, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), skyboxImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), skyboxImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), skyboxImageMemory, nullptr);
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(VulkanCore::getDevice(), skyboxUniformBuffers[i], nullptr);
-		vkFreeMemory(VulkanCore::getDevice(), skyboxUniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(vulkanDevice->getDevice(), skyboxUniformBuffers[i], nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[i], nullptr);
 	}
-	vkDestroyDescriptorPool(VulkanCore::getDevice(), skyboxDescriptorPool, nullptr);
-	vkDestroyDescriptorSetLayout(VulkanCore::getDevice(), skyboxDescriptorSetLayout, nullptr);
-	vkDestroyBuffer(VulkanCore::getDevice(), skyboxVertexBuffer, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), skyboxVertexBufferMemory, nullptr);
-	vkDestroyPipeline(VulkanCore::getDevice(), skyboxPipeline, nullptr);
-	vkDestroyPipelineLayout(VulkanCore::getDevice(), skyboxPipelineLayout, nullptr);
+	vkDestroyDescriptorPool(vulkanDevice->getDevice(), skyboxDescriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(vulkanDevice->getDevice(), skyboxDescriptorSetLayout, nullptr);
+	vkDestroyBuffer(vulkanDevice->getDevice(), skyboxVertexBuffer, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), skyboxVertexBufferMemory, nullptr);
+	vkDestroyPipeline(vulkanDevice->getDevice(), skyboxPipeline, nullptr);
+	vkDestroyPipelineLayout(vulkanDevice->getDevice(), skyboxPipelineLayout, nullptr);
 }
 
 std::vector<VkDescriptorSet> Skybox::getSkyboxDescriptorSet() {
@@ -83,9 +84,9 @@ void Skybox::updateSkyboxUniformBuffer(uint32_t currentImage, const glm::mat4& v
 	ubo.proj = proj;
 
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), skyboxUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+	vkMapMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
 	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(VulkanCore::getDevice(), skyboxUniformBuffersMemory[currentImage]);
+	vkUnmapMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[currentImage]);
 }
 
 void Skybox::createSkyboxUniformBuffers() {
@@ -171,7 +172,7 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_TRUE; // enable sample shading in the pipeline
 	multisampling.minSampleShading = .2f; // min fraction for sample shading; closer to one is smoother
-	multisampling.rasterizationSamples = VulkanCore::getmsaaSamples();
+	multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples());
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -216,7 +217,7 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-	if (vkCreatePipelineLayout(VulkanCore::getDevice(), &pipelineLayoutInfo, nullptr, &skyboxPipelineLayout) !=
+	if (vkCreatePipelineLayout(vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &skyboxPipelineLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
@@ -240,12 +241,12 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			VulkanCore::getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skyboxPipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skyboxPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
-	vkDestroyShaderModule(VulkanCore::getDevice(), fragShaderModule, nullptr);
-	vkDestroyShaderModule(VulkanCore::getDevice(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), vertShaderModule, nullptr);
 }
 
 void Skybox::createSkyboxVertexBuffer(VkCommandPool commandPool) {
@@ -258,17 +259,17 @@ void Skybox::createSkyboxVertexBuffer(VkCommandPool commandPool) {
 						stagingBuffer,
 						stagingBufferMemory);
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+	vkMapMemory(vulkanDevice->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
 	memcpy(data, skyboxVertices.data(), (size_t)bufferSize);
-	vkUnmapMemory(VulkanCore::getDevice(), stagingBufferMemory);
+	vkUnmapMemory(vulkanDevice->getDevice(), stagingBufferMemory);
 	Utils::createBuffer(bufferSize,
 						VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 						skyboxVertexBuffer,
 						skyboxVertexBufferMemory);
 	Utils::copyBuffer(commandPool, stagingBuffer, skyboxVertexBuffer, bufferSize);
-	vkDestroyBuffer(VulkanCore::getDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), stagingBufferMemory, nullptr);
+	vkDestroyBuffer(vulkanDevice->getDevice(), stagingBuffer, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
 }
 
 void Skybox::createDescriptorSet() {
@@ -284,7 +285,7 @@ void Skybox::createDescriptorSet() {
 	poolInfo.pPoolSizes = &poolSizes;
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr, &skyboxDescriptorPool) != VK_SUCCESS) {
+	if (vkCreateDescriptorPool(vulkanDevice->getDevice(), &poolInfo, nullptr, &skyboxDescriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
 
@@ -306,7 +307,7 @@ void Skybox::createDescriptorSet() {
 	layoutInfo.bindingCount = 2;
 	layoutInfo.pBindings = samplerLayoutBinding.data();
 
-	if (vkCreateDescriptorSetLayout(VulkanCore::getDevice(), &layoutInfo, nullptr, &skyboxDescriptorSetLayout) !=
+	if (vkCreateDescriptorSetLayout(vulkanDevice->getDevice(), &layoutInfo, nullptr, &skyboxDescriptorSetLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor set layout!");
 	}
@@ -319,7 +320,7 @@ void Skybox::createDescriptorSet() {
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo, skyboxDescriptorSet.data()) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(vulkanDevice->getDevice(), &allocInfo, skyboxDescriptorSet.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate descriptor sets!");
 	}
 
@@ -354,7 +355,7 @@ void Skybox::createDescriptorSet() {
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(VulkanCore::getDevice(),
+		vkUpdateDescriptorSets(vulkanDevice->getDevice(),
 							   static_cast<uint32_t>(descriptorWrites.size()),
 							   descriptorWrites.data(),
 							   0,
@@ -381,7 +382,7 @@ void Skybox::createSkyboxSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 0.0f;
 
-	if (vkCreateSampler(VulkanCore::getDevice(), &samplerInfo, nullptr, &skyboxSampler) != VK_SUCCESS) {
+	if (vkCreateSampler(vulkanDevice->getDevice(), &samplerInfo, nullptr, &skyboxSampler) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create cubemap sampler!");
 	}
 }
@@ -399,22 +400,22 @@ void Skybox::createSkyboxImage(VkCommandPool commandPool, uint32_t width, uint32
 	imageCreateCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	imageCreateCI.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-	vkCreateImage(VulkanCore::getDevice(), &imageCreateCI, nullptr, &skyboxImage);
+	vkCreateImage(vulkanDevice->getDevice(), &imageCreateCI, nullptr, &skyboxImage);
 
 	VkMemoryRequirements memRequirements;
 	VkMemoryAllocateInfo memAllocInfo{};
 	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	// VkDeviceMemory dstImageMemory;
-	vkGetImageMemoryRequirements(VulkanCore::getDevice(), skyboxImage, &memRequirements);
+	vkGetImageMemoryRequirements(vulkanDevice->getDevice(), skyboxImage, &memRequirements);
 	memAllocInfo.allocationSize = memRequirements.size;
 	// Memory must be host visible to copy from
 	memAllocInfo.memoryTypeIndex =
 		Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	if (vkAllocateMemory(VulkanCore::getDevice(), &memAllocInfo, nullptr, &skyboxImageMemory) != VK_SUCCESS) {
+	if (vkAllocateMemory(vulkanDevice->getDevice(), &memAllocInfo, nullptr, &skyboxImageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate image memory!");
 	}
-	vkBindImageMemory(VulkanCore::getDevice(), skyboxImage, skyboxImageMemory, 0);
+	vkBindImageMemory(vulkanDevice->getDevice(), skyboxImage, skyboxImageMemory, 0);
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -423,7 +424,7 @@ void Skybox::createSkyboxImage(VkCommandPool commandPool, uint32_t width, uint32
 	allocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer copyCmd;
-	vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, &copyCmd);
+	vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, &copyCmd);
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -460,10 +461,10 @@ void Skybox::createSkyboxImage(VkCommandPool commandPool, uint32_t width, uint32
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &copyCmd;
 
-	vkQueueSubmit(VulkanCore::getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(VulkanCore::getGraphicsQueue());
+	vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
 
-	vkFreeCommandBuffers(VulkanCore::getDevice(), commandPool, 1, &copyCmd);
+	vkFreeCommandBuffers(vulkanDevice->getDevice(), commandPool, 1, &copyCmd);
 }
 
 void Skybox::createSkyboxImageViews() {
@@ -478,7 +479,7 @@ void Skybox::createSkyboxImageViews() {
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 6;
 
-	if (vkCreateImageView(VulkanCore::getDevice(), &viewInfo, nullptr, &skyboxImageView) != VK_SUCCESS) {
+	if (vkCreateImageView(vulkanDevice->getDevice(), &viewInfo, nullptr, &skyboxImageView) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create texture image view!");
 	}
 }
@@ -521,12 +522,12 @@ void Skybox::loadSkyboxTextures(VkCommandPool commandPool) {
 						stagingBufferMemory);
 
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
+	vkMapMemory(vulkanDevice->getDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
 	for (size_t i = 0; i < faces.size(); i++) {
 		memcpy(static_cast<char*>(data) + layerSize * i, facePixels[i], static_cast<size_t>(layerSize));
 		stbi_image_free(facePixels[i]);
 	}
-	vkUnmapMemory(VulkanCore::getDevice(), stagingBufferMemory);
+	vkUnmapMemory(vulkanDevice->getDevice(), stagingBufferMemory);
 
 	Utils::transitionImageLayout(skyboxImage,
 								 VK_FORMAT_R8G8B8A8_SRGB,
@@ -571,6 +572,6 @@ void Skybox::loadSkyboxTextures(VkCommandPool commandPool) {
 								 commandPool,
 								 6);
 
-	vkDestroyBuffer(VulkanCore::getDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), stagingBufferMemory, nullptr);
+	vkDestroyBuffer(vulkanDevice->getDevice(), stagingBuffer, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
 }

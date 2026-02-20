@@ -8,11 +8,13 @@
 
 #include "core/utils/Utils.h"
 #include "managers/MeshManager.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
 
-void MousePick::init(VulkanCore* core, ResourceContext* resources) {
+void MousePick::init(VulkanCore* core, Renderer::VulkanDevice* device, ResourceContext* resources) {
 	engineCore = core;
+	vulkanDevice = device;
 	mousePickExtent = engineCore->getSwapChainExtent();
 
 	createMousePickImage();
@@ -26,10 +28,10 @@ void MousePick::init(VulkanCore* core, ResourceContext* resources) {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = VulkanCore::getCommandPool();
+	allocInfo.commandPool = vulkanDevice->getCommandPool();
 	allocInfo.commandBufferCount = static_cast<uint32_t>(mousePickCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, mousePickCommandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, mousePickCommandBuffers.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 
@@ -44,24 +46,24 @@ void MousePick::init(VulkanCore* core, ResourceContext* resources) {
 
 void MousePick::cleanupFramebuffers() {
 	for (auto framebuffer : mousePickFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
 	for (auto imageView : mousePickImageViews) {
-		vkDestroyImageView(VulkanCore::getDevice(), imageView, nullptr);
+		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
 	}
 
 	for (auto image : mousePickImages) {
-		vkDestroyImage(VulkanCore::getDevice(), image, nullptr);
+		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
 	}
 
 	for (auto memory : mousePickImageMemory) {
-		vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
 	}
 
-	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
 }
 
 void MousePick::recreateMousePick() {
@@ -79,28 +81,28 @@ void MousePick::cleanup() {
 	// MeshManager cleanup is handled by ResourceContext
 
 	for (auto framebuffer : mousePickFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
 	for (auto imageView : mousePickImageViews) {
-		vkDestroyImageView(VulkanCore::getDevice(), imageView, nullptr);
+		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
 	}
 
 	for (auto image : mousePickImages) {
-		vkDestroyImage(VulkanCore::getDevice(), image, nullptr);
+		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
 	}
 
 	for (auto memory : mousePickImageMemory) {
-		vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
 	}
 
-	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
 
-	vkDestroyRenderPass(VulkanCore::getDevice(), mousePickRenderPass, nullptr);
+	vkDestroyRenderPass(vulkanDevice->getDevice(), mousePickRenderPass, nullptr);
 
-	vkDestroyPipeline(VulkanCore::getDevice(), mousePickPipeline, nullptr);
+	vkDestroyPipeline(vulkanDevice->getDevice(), mousePickPipeline, nullptr);
 }
 
 void MousePick::createMousePickImage() {
@@ -129,31 +131,32 @@ void MousePick::createMousePickImage() {
 
 		// Create the image
 		// VkImage dstImage;
-		vkCreateImage(VulkanCore::getDevice(), &imageCreateCI, nullptr, &mousePickImages[i]);
+		vkCreateImage(vulkanDevice->getDevice(), &imageCreateCI, nullptr, &mousePickImages[i]);
 		// Create memory to back up the image
 		VkMemoryRequirements memRequirements;
 		VkMemoryAllocateInfo memAllocInfo{};
 		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		// VkDeviceMemory dstImageMemory;
-		vkGetImageMemoryRequirements(VulkanCore::getDevice(), mousePickImages[i], &memRequirements);
+		vkGetImageMemoryRequirements(vulkanDevice->getDevice(), mousePickImages[i], &memRequirements);
 		memAllocInfo.allocationSize = memRequirements.size;
 		// Memory must be host visible to copy from
 		memAllocInfo.memoryTypeIndex =
 			Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		if (vkAllocateMemory(VulkanCore::getDevice(), &memAllocInfo, nullptr, &mousePickImageMemory[i]) != VK_SUCCESS) {
+		if (vkAllocateMemory(vulkanDevice->getDevice(), &memAllocInfo, nullptr, &mousePickImageMemory[i]) !=
+			VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate image memory!");
 		}
-		vkBindImageMemory(VulkanCore::getDevice(), mousePickImages[i], mousePickImageMemory[i], 0);
+		vkBindImageMemory(vulkanDevice->getDevice(), mousePickImages[i], mousePickImageMemory[i], 0);
 
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = VulkanCore::getCommandPool();
+		allocInfo.commandPool = vulkanDevice->getCommandPool();
 		allocInfo.commandBufferCount = 1;
 
 		VkCommandBuffer copyCmd;
-		vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, &copyCmd);
+		vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, &copyCmd);
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -190,10 +193,10 @@ void MousePick::createMousePickImage() {
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &copyCmd;
 
-		vkQueueSubmit(VulkanCore::getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(VulkanCore::getGraphicsQueue());
+		vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+		vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
 
-		vkFreeCommandBuffers(VulkanCore::getDevice(), VulkanCore::getCommandPool(), 1, &copyCmd);
+		vkFreeCommandBuffers(vulkanDevice->getDevice(), vulkanDevice->getCommandPool(), 1, &copyCmd);
 	}
 }
 
@@ -225,7 +228,7 @@ void MousePick::createDepthResources() {
 								 VK_IMAGE_LAYOUT_UNDEFINED,
 								 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 								 1,
-								 VulkanCore::getCommandPool());
+								 vulkanDevice->getCommandPool());
 }
 
 void MousePick::createMousePickRenderPass() {
@@ -283,7 +286,7 @@ void MousePick::createMousePickRenderPass() {
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(VulkanCore::getDevice(), &renderPassInfo, nullptr, &mousePickRenderPass) != VK_SUCCESS) {
+	if (vkCreateRenderPass(vulkanDevice->getDevice(), &renderPassInfo, nullptr, &mousePickRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create render pass!");
 	}
 }
@@ -303,7 +306,7 @@ void MousePick::createMousePickFramebuffers() {
 		framebufferInfo.height = mousePickExtent.height;
 		framebufferInfo.layers = 1;
 
-		if (vkCreateFramebuffer(VulkanCore::getDevice(), &framebufferInfo, nullptr, &mousePickFramebuffers[i]) !=
+		if (vkCreateFramebuffer(vulkanDevice->getDevice(), &framebufferInfo, nullptr, &mousePickFramebuffers[i]) !=
 			VK_SUCCESS) {
 			throw std::runtime_error("failed to create framebuffer!");
 		}
@@ -373,18 +376,18 @@ void MousePick::createMousePickCommandBuffers() {
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = VulkanCore::getCommandPool();
+	allocInfo.commandPool = vulkanDevice->getCommandPool();
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = static_cast<uint32_t>(mousePickCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, mousePickCommandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, mousePickCommandBuffers.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate viewport command buffers!");
 	}
 }
 
 uint32_t MousePick::getEntityIDAt(int x, int y) {
 	VkImage srcImage = mousePickImages[imageIndex];
-	VkDevice device = VulkanCore::getDevice();
+	VkDevice device = vulkanDevice->getDevice();
 
 	// Create a buffer to copy the pixel to
 	VkDeviceSize pixelSize = 4; // BGRA8
@@ -414,7 +417,7 @@ uint32_t MousePick::getEntityIDAt(int x, int y) {
 	VkCommandBufferAllocateInfo cmdBufAllocInfo{};
 	cmdBufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	cmdBufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllocInfo.commandPool = VulkanCore::getCommandPool();
+	cmdBufAllocInfo.commandPool = vulkanDevice->getCommandPool();
 	cmdBufAllocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer cmdBuffer;
@@ -499,8 +502,8 @@ uint32_t MousePick::getEntityIDAt(int x, int y) {
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &cmdBuffer;
 
-	vkQueueSubmit(VulkanCore::getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(VulkanCore::getGraphicsQueue());
+	vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
 
 	// Map and read the pixel
 	uint8_t* data;
@@ -515,7 +518,7 @@ uint32_t MousePick::getEntityIDAt(int x, int y) {
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	// Cleanup
-	vkFreeCommandBuffers(device, VulkanCore::getCommandPool(), 1, &cmdBuffer);
+	vkFreeCommandBuffers(device, vulkanDevice->getCommandPool(), 1, &cmdBuffer);
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 
@@ -547,7 +550,7 @@ void MousePick::createGraphicsPipeline() {
 	createInfo.codeSize = vertShaderCode.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
 
-	if (vkCreateShaderModule(VulkanCore::getDevice(), &createInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
+	if (vkCreateShaderModule(vulkanDevice->getDevice(), &createInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
 	}
 
@@ -555,7 +558,7 @@ void MousePick::createGraphicsPipeline() {
 	createInfo.codeSize = fragShaderCode.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
 
-	if (vkCreateShaderModule(VulkanCore::getDevice(), &createInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
+	if (vkCreateShaderModule(vulkanDevice->getDevice(), &createInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
 	}
 
@@ -660,10 +663,10 @@ void MousePick::createGraphicsPipeline() {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			VulkanCore::getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mousePickPipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mousePickPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
-	vkDestroyShaderModule(VulkanCore::getDevice(), fragShaderModule, nullptr);
-	vkDestroyShaderModule(VulkanCore::getDevice(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), vertShaderModule, nullptr);
 }

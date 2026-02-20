@@ -1,14 +1,18 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-#include <glm/glm.hpp>
+namespace Renderer {
+class VulkanDevice;
+}
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
+
 
 // Vertex structure
 struct SkyboxVertex {
@@ -43,7 +47,7 @@ const std::vector<SkyboxVertex> skyboxVertices = {
 
 class Skybox {
 public:
-	static void init(VkCommandPool commandPool, VkRenderPass renderPass);
+	static void init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass);
 
 	static void cleanup();
 
@@ -68,6 +72,7 @@ private:
 	static std::string path;
 	static VkBuffer skyboxVertexBuffer;
 	static VkDeviceMemory skyboxVertexBufferMemory;
+	static Renderer::VulkanDevice* vulkanDevice;
 	static VkPipeline skyboxPipeline;
 	static VkPipelineLayout skyboxPipelineLayout;
 	static std::vector<VkBuffer> skyboxUniformBuffers;

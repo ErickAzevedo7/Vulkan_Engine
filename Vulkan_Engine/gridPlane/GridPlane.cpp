@@ -1,16 +1,17 @@
 #include "GridPlane.h"
 
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "managers/MeshManager.h"
-#include "vulkan/vulkan_core.h"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "managers/MeshManager.h"
+#include "renderer/vulkan/VulkanDevice.h"
+#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -27,23 +28,25 @@ std::vector<VkBuffer> GridPlane::gridPlaneUniformBuffers;
 std::vector<VkDeviceMemory> GridPlane::gridPlaneUniformBuffersMemory;
 std::vector<VkBuffer> GridPlane::gridParamsUniformBuffers;
 std::vector<VkDeviceMemory> GridPlane::gridParamsUniformBuffersMemory;
+Renderer::VulkanDevice* GridPlane::vulkanDevice = nullptr;
 
-void GridPlane::init(VkCommandPool commandPool, VkRenderPass renderPass) {
+void GridPlane::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass) {
+	vulkanDevice = device;
 	createGridPlaneUniformBuffers();
 	createDescriptorSets();
 	createGridPlanePipeline(renderPass);
 }
 
 void GridPlane::cleanup() {
-	vkDestroyPipeline(VulkanCore::getDevice(), gridPLanePipeline, nullptr);
-	vkDestroyPipelineLayout(VulkanCore::getDevice(), gridPlanePipelineLayout, nullptr);
-	vkDestroyDescriptorPool(VulkanCore::getDevice(), gridPlaneDescriptorPool, nullptr);
-	vkDestroyDescriptorSetLayout(VulkanCore::getDevice(), gridPlaneDescriptorSetLayout, nullptr);
+	vkDestroyPipeline(vulkanDevice->getDevice(), gridPLanePipeline, nullptr);
+	vkDestroyPipelineLayout(vulkanDevice->getDevice(), gridPlanePipelineLayout, nullptr);
+	vkDestroyDescriptorPool(vulkanDevice->getDevice(), gridPlaneDescriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(vulkanDevice->getDevice(), gridPlaneDescriptorSetLayout, nullptr);
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(VulkanCore::getDevice(), gridPlaneUniformBuffers[i], nullptr);
-		vkFreeMemory(VulkanCore::getDevice(), gridPlaneUniformBuffersMemory[i], nullptr);
-		vkDestroyBuffer(VulkanCore::getDevice(), gridParamsUniformBuffers[i], nullptr);
-		vkFreeMemory(VulkanCore::getDevice(), gridParamsUniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(vulkanDevice->getDevice(), gridPlaneUniformBuffers[i], nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), gridPlaneUniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(vulkanDevice->getDevice(), gridParamsUniformBuffers[i], nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), gridParamsUniformBuffersMemory[i], nullptr);
 	}
 }
 
@@ -70,9 +73,9 @@ void GridPlane::updateUniformBuffer(uint32_t currentImage,
 	ubo.proj = proj;
 
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), gridPlaneUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+	vkMapMemory(vulkanDevice->getDevice(), gridPlaneUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
 	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(VulkanCore::getDevice(), gridPlaneUniformBuffersMemory[currentImage]);
+	vkUnmapMemory(vulkanDevice->getDevice(), gridPlaneUniformBuffersMemory[currentImage]);
 }
 
 void GridPlane::updateGridParamsBuffer(unsigned int currentImage,
@@ -90,9 +93,9 @@ void GridPlane::updateGridParamsBuffer(unsigned int currentImage,
 	ubo.gGridColorThin = gridColorThin;
 	ubo.gGridColorThick = gridColorThick;
 	void* data;
-	vkMapMemory(VulkanCore::getDevice(), gridParamsUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+	vkMapMemory(vulkanDevice->getDevice(), gridParamsUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
 	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(VulkanCore::getDevice(), gridParamsUniformBuffersMemory[currentImage]);
+	vkUnmapMemory(vulkanDevice->getDevice(), gridParamsUniformBuffersMemory[currentImage]);
 }
 
 void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
@@ -162,7 +165,7 @@ void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VulkanCore::getmsaaSamples();
+	multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples());
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -195,7 +198,7 @@ void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &gridPlaneDescriptorSetLayout;
 
-	if (vkCreatePipelineLayout(VulkanCore::getDevice(), &pipelineLayoutInfo, nullptr, &gridPlanePipelineLayout) !=
+	if (vkCreatePipelineLayout(vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &gridPlanePipelineLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create grid pipeline layout!");
 	}
@@ -224,12 +227,12 @@ void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			VulkanCore::getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &gridPLanePipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &gridPLanePipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create grid graphics pipeline!");
 	}
 
-	vkDestroyShaderModule(VulkanCore::getDevice(), vertShaderModule, nullptr);
-	vkDestroyShaderModule(VulkanCore::getDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), fragShaderModule, nullptr);
 }
 
 void GridPlane::createDescriptorSets() {
@@ -245,7 +248,7 @@ void GridPlane::createDescriptorSets() {
 	poolInfo.pPoolSizes = &poolSizes;
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr, &gridPlaneDescriptorPool) != VK_SUCCESS) {
+	if (vkCreateDescriptorPool(vulkanDevice->getDevice(), &poolInfo, nullptr, &gridPlaneDescriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
 
@@ -270,7 +273,7 @@ void GridPlane::createDescriptorSets() {
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
-	if (vkCreateDescriptorSetLayout(VulkanCore::getDevice(), &layoutInfo, nullptr, &gridPlaneDescriptorSetLayout) !=
+	if (vkCreateDescriptorSetLayout(vulkanDevice->getDevice(), &layoutInfo, nullptr, &gridPlaneDescriptorSetLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor set layout!");
 	}
@@ -283,7 +286,7 @@ void GridPlane::createDescriptorSets() {
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo, gridPlaneDescriptorSets.data()) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(vulkanDevice->getDevice(), &allocInfo, gridPlaneDescriptorSets.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate descriptor sets!");
 	}
 
@@ -315,7 +318,7 @@ void GridPlane::createDescriptorSets() {
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].pBufferInfo = &gridParamsBufferInfo;
 
-		vkUpdateDescriptorSets(VulkanCore::getDevice(),
+		vkUpdateDescriptorSets(vulkanDevice->getDevice(),
 							   static_cast<uint32_t>(descriptorWrites.size()),
 							   descriptorWrites.data(),
 							   0,

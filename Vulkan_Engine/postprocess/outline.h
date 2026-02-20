@@ -1,17 +1,20 @@
 #pragma once
 
-#include "core/vulkancore.h"
-#include "vulkan/vulkan_core.h"
-
 #include <cstdint>
 #include <vector>
+
+#include "vulkan/vulkan_core.h"
+
+namespace Renderer {
+class VulkanDevice;
+}
 
 class Outline {
 public:
 	std::vector<VkImageView> outlineColorImageViews;
 	std::vector<VkCommandBuffer> outlineCommandBuffers;
 
-	void init(VulkanCore* core,
+	void init(Renderer::VulkanDevice* device,
 			  std::vector<VkImageView> IDimageViews,
 			  std::vector<VkImageView> outlineColorImageViews,
 			  VkExtent2D viewportExtent);
@@ -28,7 +31,7 @@ private:
 	VkPipeline outlinePipeline;
 	VkPipelineLayout outlinePipelineLayout;
 	uint32_t imageIndex;
-	VulkanCore* engineCore;
+	Renderer::VulkanDevice* vulkanDevice;
 	VkRenderPass outlineRenderPass;
 	std::vector<VkFramebuffer> outlineFramebuffers;
 	VkDescriptorSetLayout outlineDescriptorSetLayout;

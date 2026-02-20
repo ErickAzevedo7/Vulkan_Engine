@@ -1,10 +1,14 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "core/vulkancore.h"
 #include "vulkan/vulkan_core.h"
 
-#include <cstdint>
-#include <vector>
+namespace Renderer {
+class VulkanDevice;
+}
 
 class ViewPort {
 public:
@@ -12,7 +16,7 @@ public:
 	std::vector<VkImageView> m_ViewportImageViews;
 	std::vector<VkCommandBuffer> m_ViewportCommandBuffers;
 
-	void init(VulkanCore* core, VkExtent2D viewportExtent);
+	void init(VulkanCore* core, Renderer::VulkanDevice* device, VkExtent2D viewportExtent);
 
 	void createViewportImage();
 
@@ -32,6 +36,7 @@ private:
 	std::vector<VkImage> m_ViewportImages;
 	std::vector<VkDeviceMemory> m_DstImageMemory;
 	VulkanCore* engineCore;
+	Renderer::VulkanDevice* vulkanDevice;
 	VkRenderPass m_ViewportRenderPass;
 	VkCommandPool m_ViewportCommandPool;
 	std::vector<VkFramebuffer> m_ViewportFramebuffers;

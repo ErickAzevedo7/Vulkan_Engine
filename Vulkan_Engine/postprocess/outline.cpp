@@ -1,21 +1,22 @@
 #include "outline.h"
 
-#include "core/utils/Utils.h"
-#include "core/vulkancore.h"
-#include "SceneRenderer.h"
-#include "vulkan/vulkan_core.h"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
 
-void Outline::init(VulkanCore* core,
+#include "core/utils/Utils.h"
+#include "core/vulkancore.h"
+#include "renderer/vulkan/VulkanDevice.h"
+#include "SceneRenderer.h"
+#include "vulkan/vulkan_core.h"
+
+void Outline::init(Renderer::VulkanDevice* device,
 				   std::vector<VkImageView> IDimageViews,
 				   std::vector<VkImageView> outlineColorImageViews,
 				   VkExtent2D viewportExtent) {
-	engineCore = core;
+	vulkanDevice = device;
 
 	this->IDimageViews = IDimageViews;
 	this->viewportExtent = viewportExtent;
@@ -26,10 +27,10 @@ void Outline::init(VulkanCore* core,
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = VulkanCore::getCommandPool();
+	allocInfo.commandPool = vulkanDevice->getCommandPool();
 	allocInfo.commandBufferCount = static_cast<uint32_t>(outlineCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, outlineCommandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, outlineCommandBuffers.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 
@@ -93,7 +94,7 @@ void Outline::recordOutlineCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
 void Outline::cleanupFramebuffers() {
 	for (auto framebuffer : outlineFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 }
 
@@ -124,20 +125,20 @@ void Outline::recreateOutline(std::vector<VkImageView> IDimageViews,
 		descriptorWrite.descriptorCount = 1;
 		descriptorWrite.pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &descriptorWrite, 0, nullptr);
+		vkUpdateDescriptorSets(vulkanDevice->getDevice(), 1, &descriptorWrite, 0, nullptr);
 	}
 }
 
 void Outline::cleanup() {
 	for (auto framebuffer : outlineFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
-	vkDestroyPipeline(VulkanCore::getDevice(), outlinePipeline, nullptr);
-	vkDestroyRenderPass(VulkanCore::getDevice(), outlineRenderPass, nullptr);
-	vkDestroyPipelineLayout(VulkanCore::getDevice(), outlinePipelineLayout, nullptr);
-	vkDestroyDescriptorSetLayout(VulkanCore::getDevice(), outlineDescriptorSetLayout, nullptr);
-	vkDestroyDescriptorPool(VulkanCore::getDevice(), outlineDescriptorPool, nullptr);
-	vkDestroySampler(VulkanCore::getDevice(), outlineSampler, nullptr);
+	vkDestroyPipeline(vulkanDevice->getDevice(), outlinePipeline, nullptr);
+	vkDestroyRenderPass(vulkanDevice->getDevice(), outlineRenderPass, nullptr);
+	vkDestroyPipelineLayout(vulkanDevice->getDevice(), outlinePipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkanDevice->getDevice(), outlineDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorPool(vulkanDevice->getDevice(), outlineDescriptorPool, nullptr);
+	vkDestroySampler(vulkanDevice->getDevice(), outlineSampler, nullptr);
 }
 
 void Outline::createOutlineRenderPass() {
@@ -178,7 +179,7 @@ void Outline::createOutlineRenderPass() {
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(VulkanCore::getDevice(), &renderPassInfo, nullptr, &outlineRenderPass) != VK_SUCCESS) {
+	if (vkCreateRenderPass(vulkanDevice->getDevice(), &renderPassInfo, nullptr, &outlineRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create render pass!");
 	}
 }
@@ -195,7 +196,7 @@ void Outline::createOutlineFramebuffers() {
 		framebufferInfo.width = viewportExtent.width;
 		framebufferInfo.height = viewportExtent.height;
 		framebufferInfo.layers = 1;
-		if (vkCreateFramebuffer(VulkanCore::getDevice(), &framebufferInfo, nullptr, &outlineFramebuffers[i]) !=
+		if (vkCreateFramebuffer(vulkanDevice->getDevice(), &framebufferInfo, nullptr, &outlineFramebuffers[i]) !=
 			VK_SUCCESS) {
 			throw std::runtime_error("failed to create framebuffer!");
 		}
@@ -214,7 +215,7 @@ void Outline::createGraphicsPipeline() {
 	createInfo.codeSize = vertShaderCode.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
 
-	if (vkCreateShaderModule(VulkanCore::getDevice(), &createInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
+	if (vkCreateShaderModule(vulkanDevice->getDevice(), &createInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
 	}
 
@@ -222,7 +223,7 @@ void Outline::createGraphicsPipeline() {
 	createInfo.codeSize = fragShaderCode.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
 
-	if (vkCreateShaderModule(VulkanCore::getDevice(), &createInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
+	if (vkCreateShaderModule(vulkanDevice->getDevice(), &createInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
 	}
 
@@ -319,7 +320,7 @@ void Outline::createGraphicsPipeline() {
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-	if (vkCreatePipelineLayout(VulkanCore::getDevice(), &pipelineLayoutInfo, nullptr, &outlinePipelineLayout) !=
+	if (vkCreatePipelineLayout(vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &outlinePipelineLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
@@ -341,12 +342,12 @@ void Outline::createGraphicsPipeline() {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			VulkanCore::getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outlinePipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outlinePipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
-	vkDestroyShaderModule(VulkanCore::getDevice(), fragShaderModule, nullptr);
-	vkDestroyShaderModule(VulkanCore::getDevice(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vulkanDevice->getDevice(), vertShaderModule, nullptr);
 }
 
 void Outline::createOutlineDescriptorSets() {
@@ -363,7 +364,7 @@ void Outline::createOutlineDescriptorSets() {
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &samplerLayoutBinding;
 
-	if (vkCreateDescriptorSetLayout(VulkanCore::getDevice(), &layoutInfo, nullptr, &outlineDescriptorSetLayout) !=
+	if (vkCreateDescriptorSetLayout(vulkanDevice->getDevice(), &layoutInfo, nullptr, &outlineDescriptorSetLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create outline descriptor set layout!");
 	}
@@ -378,7 +379,7 @@ void Outline::createOutlineDescriptorSets() {
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	if (vkAllocateDescriptorSets(VulkanCore::getDevice(), &allocInfo, outlineDescriptorSets.data()) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(vulkanDevice->getDevice(), &allocInfo, outlineDescriptorSets.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate outline descriptor set!");
 	}
 
@@ -398,7 +399,7 @@ void Outline::createOutlineDescriptorSets() {
 		descriptorWrite.descriptorCount = 1;
 		descriptorWrite.pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &descriptorWrite, 0, nullptr);
+		vkUpdateDescriptorSets(vulkanDevice->getDevice(), 1, &descriptorWrite, 0, nullptr);
 	}
 }
 
@@ -421,7 +422,7 @@ void Outline::createOutlineSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 0.0f;
 
-	if (vkCreateSampler(VulkanCore::getDevice(), &samplerInfo, nullptr, &outlineSampler) != VK_SUCCESS) {
+	if (vkCreateSampler(vulkanDevice->getDevice(), &samplerInfo, nullptr, &outlineSampler) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create outline sampler!");
 	}
 }
@@ -440,7 +441,7 @@ void Outline::createDescriptorPool() {
 	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-	if (vkCreateDescriptorPool(VulkanCore::getDevice(), &poolInfo, nullptr, &outlineDescriptorPool) != VK_SUCCESS) {
+	if (vkCreateDescriptorPool(vulkanDevice->getDevice(), &poolInfo, nullptr, &outlineDescriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
 }

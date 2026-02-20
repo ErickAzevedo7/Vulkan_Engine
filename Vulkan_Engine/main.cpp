@@ -38,6 +38,7 @@
 #include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
 #include "ui/InspectorUi.h"
@@ -77,9 +78,12 @@ public:
 		inspector.setAssetBrowser(&assetBrowser);
 
 		SceneRenderer::init(&engineCore, &resourceContext);
-		mousePick.init(&engineCore, &resourceContext);
-		viewPort.init(&engineCore, mousePick.getMousePickExtent());
-		outline.init(&engineCore,
+		mousePick.init(
+			&engineCore, static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
+		viewPort.init(&engineCore,
+					  static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+					  mousePick.getMousePickExtent());
+		outline.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					 mousePick.getMousePickImageViews(),
 					 viewPort.m_ViewportImageViews,
 					 mousePick.getMousePickExtent());

@@ -5,6 +5,9 @@
 #include "core/vulkancore.h"
 #include "vulkan/vulkan_core.h"
 
+namespace Renderer {
+class VulkanDevice;
+}
 class ResourceContext; // Forward declaration
 
 class MousePick {
@@ -13,7 +16,7 @@ public:
 	std::vector<VkImageView> mousePickImageViews;
 	std::vector<VkCommandBuffer> mousePickCommandBuffers;
 
-	void init(VulkanCore* core, ResourceContext* resources);
+	void init(VulkanCore* core, Renderer::VulkanDevice* device, ResourceContext* resources);
 	void recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void cleanupFramebuffers();
 	void recreateMousePick();
@@ -31,6 +34,7 @@ private:
 	std::vector<VkImage> mousePickImages;
 	std::vector<VkDeviceMemory> mousePickImageMemory;
 	VulkanCore* engineCore;
+	Renderer::VulkanDevice* vulkanDevice;
 	VkRenderPass mousePickRenderPass;
 	std::vector<VkFramebuffer> mousePickFramebuffers;
 	VkImage depthImage;

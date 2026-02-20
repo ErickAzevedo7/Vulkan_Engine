@@ -8,13 +8,14 @@
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "gridPlane/GridPlane.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "skybox/Skybox.h"
 #include "vulkan/vulkan_core.h"
 
-
-void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
+void ViewPort::init(VulkanCore* core, Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 	engineCore = core;
+	vulkanDevice = device;
 	this->viewportExtent = viewportExtent;
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
@@ -22,7 +23,7 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
 	commandPoolCreateInfo.queueFamilyIndex = engineCore->getGraphicsQueueFamily();
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	if (vkCreateCommandPool(VulkanCore::getDevice(), &commandPoolCreateInfo, nullptr, &m_ViewportCommandPool) !=
+	if (vkCreateCommandPool(vulkanDevice->getDevice(), &commandPoolCreateInfo, nullptr, &m_ViewportCommandPool) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("Could not create graphics command pool");
 	}
@@ -40,7 +41,8 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
 	allocInfo.commandPool = m_ViewportCommandPool;
 	allocInfo.commandBufferCount = (uint32_t)m_ViewportCommandBuffers.size();
 
-	if (vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, m_ViewportCommandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, m_ViewportCommandBuffers.data()) !=
+		VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 
@@ -48,34 +50,34 @@ void ViewPort::init(VulkanCore* core, VkExtent2D viewportExtent) {
 
 	createViewportFramebuffers();
 
-	GridPlane::init(m_ViewportCommandPool, m_ViewportRenderPass);
-	Skybox::init(m_ViewportCommandPool, m_ViewportRenderPass);
+	GridPlane::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
+	Skybox::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
 }
 
 void ViewPort::cleanupFramebuffers() {
 	for (auto framebuffer : m_ViewportFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
 	for (auto imageView : m_ViewportImageViews) {
-		vkDestroyImageView(VulkanCore::getDevice(), imageView, nullptr);
+		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
 	}
 
 	for (auto image : m_ViewportImages) {
-		vkDestroyImage(VulkanCore::getDevice(), image, nullptr);
+		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
 	}
 
 	for (auto memory : m_DstImageMemory) {
-		vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
 	}
 
-	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
 
-	vkDestroyImageView(VulkanCore::getDevice(), colorImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), colorImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), colorImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), colorImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), colorImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), colorImageMemory, nullptr);
 }
 
 void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
@@ -97,32 +99,32 @@ void ViewPort::cleanup() {
 	Skybox::cleanup();
 
 	for (auto framebuffer : m_ViewportFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
 	for (auto imageView : m_ViewportImageViews) {
-		vkDestroyImageView(VulkanCore::getDevice(), imageView, nullptr);
+		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
 	}
 
 	for (auto image : m_ViewportImages) {
-		vkDestroyImage(VulkanCore::getDevice(), image, nullptr);
+		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
 	}
 
 	for (auto memory : m_DstImageMemory) {
-		vkFreeMemory(VulkanCore::getDevice(), memory, nullptr);
+		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
 	}
 
-	vkDestroyImageView(VulkanCore::getDevice(), depthImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), depthImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), depthImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
 
-	vkDestroyImageView(VulkanCore::getDevice(), colorImageView, nullptr);
-	vkDestroyImage(VulkanCore::getDevice(), colorImage, nullptr);
-	vkFreeMemory(VulkanCore::getDevice(), colorImageMemory, nullptr);
+	vkDestroyImageView(vulkanDevice->getDevice(), colorImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), colorImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), colorImageMemory, nullptr);
 
-	vkDestroyCommandPool(VulkanCore::getDevice(), m_ViewportCommandPool, nullptr);
+	vkDestroyCommandPool(vulkanDevice->getDevice(), m_ViewportCommandPool, nullptr);
 
-	vkDestroyRenderPass(VulkanCore::getDevice(), m_ViewportRenderPass, nullptr);
+	vkDestroyRenderPass(vulkanDevice->getDevice(), m_ViewportRenderPass, nullptr);
 }
 
 void ViewPort::createColorResources() {
@@ -131,7 +133,7 @@ void ViewPort::createColorResources() {
 	Utils::createImage(viewportExtent.width,
 					   viewportExtent.height,
 					   1,
-					   VulkanCore::getmsaaSamples(),
+					   static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples()),
 					   colorFormat,
 					   VK_IMAGE_TILING_OPTIMAL,
 					   VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -147,7 +149,7 @@ void ViewPort::createDepthResources() {
 	Utils::createImage(viewportExtent.width,
 					   viewportExtent.height,
 					   1,
-					   VulkanCore::getmsaaSamples(),
+					   static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples()),
 					   depthFormat,
 					   VK_IMAGE_TILING_OPTIMAL,
 					   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -189,22 +191,22 @@ void ViewPort::createViewportImage() {
 
 		// Create the image
 		// VkImage dstImage;
-		vkCreateImage(VulkanCore::getDevice(), &imageCreateCI, nullptr, &m_ViewportImages[i]);
+		vkCreateImage(vulkanDevice->getDevice(), &imageCreateCI, nullptr, &m_ViewportImages[i]);
 		// Create memory to back up the image
 		VkMemoryRequirements memRequirements;
 		VkMemoryAllocateInfo memAllocInfo{};
 		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		// VkDeviceMemory dstImageMemory;
-		vkGetImageMemoryRequirements(VulkanCore::getDevice(), m_ViewportImages[i], &memRequirements);
+		vkGetImageMemoryRequirements(vulkanDevice->getDevice(), m_ViewportImages[i], &memRequirements);
 		memAllocInfo.allocationSize = memRequirements.size;
 		// Memory must be host visible to copy from
 		memAllocInfo.memoryTypeIndex =
 			Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		if (vkAllocateMemory(VulkanCore::getDevice(), &memAllocInfo, nullptr, &m_DstImageMemory[i]) != VK_SUCCESS) {
+		if (vkAllocateMemory(vulkanDevice->getDevice(), &memAllocInfo, nullptr, &m_DstImageMemory[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate image memory!");
 		}
-		vkBindImageMemory(VulkanCore::getDevice(), m_ViewportImages[i], m_DstImageMemory[i], 0);
+		vkBindImageMemory(vulkanDevice->getDevice(), m_ViewportImages[i], m_DstImageMemory[i], 0);
 
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -213,7 +215,7 @@ void ViewPort::createViewportImage() {
 		allocInfo.commandBufferCount = 1;
 
 		VkCommandBuffer copyCmd;
-		vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, &copyCmd);
+		vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, &copyCmd);
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -250,10 +252,10 @@ void ViewPort::createViewportImage() {
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &copyCmd;
 
-		vkQueueSubmit(VulkanCore::getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(VulkanCore::getGraphicsQueue());
+		vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+		vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
 
-		vkFreeCommandBuffers(VulkanCore::getDevice(), m_ViewportCommandPool, 1, &copyCmd);
+		vkFreeCommandBuffers(vulkanDevice->getDevice(), m_ViewportCommandPool, 1, &copyCmd);
 	}
 }
 
@@ -334,7 +336,7 @@ void ViewPort::createViewportRenderPass() {
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(VulkanCore::getDevice(), &renderPassInfo, nullptr, &m_ViewportRenderPass) != VK_SUCCESS) {
+	if (vkCreateRenderPass(vulkanDevice->getDevice(), &renderPassInfo, nullptr, &m_ViewportRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create render pass!");
 	}
 }
@@ -358,7 +360,7 @@ void ViewPort::createViewportFramebuffers() {
 		framebufferInfo.height = viewportExtent.height;
 		framebufferInfo.layers = 1;
 
-		if (vkCreateFramebuffer(VulkanCore::getDevice(), &framebufferInfo, nullptr, &m_ViewportFramebuffers[i]) !=
+		if (vkCreateFramebuffer(vulkanDevice->getDevice(), &framebufferInfo, nullptr, &m_ViewportFramebuffers[i]) !=
 			VK_SUCCESS) {
 			throw std::runtime_error("failed to create framebuffer!");
 		}
@@ -460,7 +462,8 @@ void ViewPort::createViewportCommandBuffers() {
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = static_cast<uint32_t>(m_ViewportCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(VulkanCore::getDevice(), &allocInfo, m_ViewportCommandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, m_ViewportCommandBuffers.data()) !=
+		VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate viewport command buffers!");
 	}
 }

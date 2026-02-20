@@ -1,6 +1,10 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
+namespace Renderer {
+class VulkanDevice;
+}
+
 #include <vector>
 
 #include "glm/ext/matrix_float4x4.hpp"
@@ -18,7 +22,7 @@ struct GridParamsUBO {
 
 class GridPlane {
 public:
-	static void init(VkCommandPool commandPool, VkRenderPass renderPass);
+	static void init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass);
 
 	static void cleanup();
 
@@ -41,6 +45,7 @@ public:
 									   const glm::vec4& gridColorThick);
 
 private:
+	static Renderer::VulkanDevice* vulkanDevice;
 	static VkPipeline gridPLanePipeline;
 	static VkPipelineLayout gridPlanePipelineLayout;
 	static VkDescriptorPool gridPlaneDescriptorPool;
