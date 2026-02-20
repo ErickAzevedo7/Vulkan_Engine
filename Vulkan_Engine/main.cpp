@@ -78,10 +78,8 @@ public:
 		inspector.setAssetBrowser(&assetBrowser);
 
 		SceneRenderer::init(&engineCore, &resourceContext);
-		mousePick.init(
-			&engineCore, static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
-		viewPort.init(&engineCore,
-					  static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+		mousePick.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
+		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					  mousePick.getMousePickExtent());
 		outline.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					 mousePick.getMousePickImageViews(),

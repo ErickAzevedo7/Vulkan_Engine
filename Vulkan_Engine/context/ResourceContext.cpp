@@ -40,7 +40,13 @@ void ResourceContext::init(VulkanCore* engineCore) {
 							 VulkanCore::getCommandPool(),
 							 engineCore->getGraphicsQueueFamily(),
 							 VulkanCore::getDynamicAlignment(),
-							 VulkanCore::getmsaaSamples());
+							 VulkanCore::getmsaaSamples(),
+							 engineCore->getSwapChainImageFormat(),
+							 VulkanCore::getSwapChainExtent(),
+							 static_cast<uint32_t>(VulkanCore::getSwapChainImageViews().size()),
+							 engineCore->findDepthFormat(),
+							 engineCore->getPipeline(),
+							 engineCore->getPipelineLayout());
 	graphicsDevice = std::move(vulkanDevice);
 
 	// Initialize buffer manager SECOND (Vulkan device is now ready)

@@ -12,10 +12,9 @@
 #include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
 
-void MousePick::init(VulkanCore* core, Renderer::VulkanDevice* device, ResourceContext* resources) {
-	engineCore = core;
+void MousePick::init(Renderer::VulkanDevice* device, ResourceContext* resources) {
 	vulkanDevice = device;
-	mousePickExtent = engineCore->getSwapChainExtent();
+	mousePickExtent = vulkanDevice->getSwapChainExtent();
 
 	createMousePickImage();
 
@@ -106,10 +105,10 @@ void MousePick::cleanup() {
 }
 
 void MousePick::createMousePickImage() {
-	mousePickImages.resize(engineCore->getSwapChainImageViews().size());
-	mousePickImageMemory.resize(engineCore->getSwapChainImageViews().size());
+	mousePickImages.resize(vulkanDevice->getSwapChainImageCount());
+	mousePickImageMemory.resize(vulkanDevice->getSwapChainImageCount());
 
-	for (uint32_t i = 0; i < engineCore->getSwapChainImageViews().size(); i++) {
+	for (uint32_t i = 0; i < vulkanDevice->getSwapChainImageCount(); i++) {
 		// Create the linear tiled destination image to copy to and to read the
 		// memory from
 		VkImageCreateInfo imageCreateCI{};
@@ -209,7 +208,7 @@ void MousePick::createMousePickImageViews() {
 }
 
 void MousePick::createDepthResources() {
-	VkFormat depthFormat = engineCore->findDepthFormat();
+	VkFormat depthFormat = vulkanDevice->findDepthFormat();
 
 	Utils::createImage(mousePickExtent.width,
 					   mousePickExtent.height,
@@ -243,7 +242,7 @@ void MousePick::createMousePickRenderPass() {
 	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 	VkAttachmentDescription depthAttachment{};
-	depthAttachment.format = engineCore->findDepthFormat();
+	depthAttachment.format = vulkanDevice->findDepthFormat();
 	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -360,7 +359,7 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint
 
 	SceneRenderer::renderMousePick(commandBuffer,
 								   mousePickPipeline,
-								   engineCore->getPipelineLayout(),
+								   vulkanDevice->getPipelineLayout(),
 								   VulkanCore::getCurrentFrame(),
 								   VulkanCore::getDynamicAlignment());
 
@@ -646,7 +645,7 @@ void MousePick::createGraphicsPipeline() {
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.flags = VK_PIPELINE_CREATE_DERIVATIVE_BIT;
-	pipelineInfo.basePipelineHandle = engineCore->getPipeline();
+	pipelineInfo.basePipelineHandle = vulkanDevice->getPipeline();
 	pipelineInfo.basePipelineIndex = -1;
 	pipelineInfo.stageCount = 2;
 	pipelineInfo.pStages = shaderStages;
@@ -658,7 +657,7 @@ void MousePick::createGraphicsPipeline() {
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.layout = engineCore->getPipelineLayout();
+	pipelineInfo.layout = vulkanDevice->getPipelineLayout();
 	pipelineInfo.renderPass = mousePickRenderPass;
 	pipelineInfo.subpass = 0;
 

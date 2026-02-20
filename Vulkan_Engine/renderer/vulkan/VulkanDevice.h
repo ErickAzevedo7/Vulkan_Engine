@@ -3,7 +3,6 @@
 #include "renderer/GraphicsDevice.h"
 #include "vulkan/vulkan_core.h"
 
-
 namespace Renderer {
 
 /**
@@ -23,7 +22,16 @@ public:
 					VkCommandPool commandPool,
 					uint32_t graphicsQueueFamily,
 					VkDeviceSize dynamicAlignment,
-					VkSampleCountFlagBits msaaSamples);
+					VkSampleCountFlagBits msaaSamples,
+					VkFormat swapchainImageFormat,
+					VkExtent2D swapchainExtent,
+					uint32_t swapchainImageCount,
+					VkFormat depthFormat,
+					VkPipeline pipeline,
+					VkPipelineLayout pipelineLayout);
+
+	/** Call after swapchain recreation to update extent/image count. */
+	void updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount);
 
 	// --- GraphicsDevice interface ---
 
@@ -55,6 +63,27 @@ public:
 		return commandPool;
 	}
 
+	// --- Swapchain / presentation queries ---
+
+	VkFormat getSwapChainImageFormat() const {
+		return swapchainImageFormat;
+	}
+	VkExtent2D getSwapChainExtent() const {
+		return swapchainExtent;
+	}
+	uint32_t getSwapChainImageCount() const {
+		return swapchainImageCount;
+	}
+	VkFormat findDepthFormat() const {
+		return depthFormat;
+	}
+	VkPipeline getPipeline() const {
+		return pipeline;
+	}
+	VkPipelineLayout getPipelineLayout() const {
+		return pipelineLayout;
+	}
+
 private:
 	VkDevice device = VK_NULL_HANDLE;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -64,6 +93,14 @@ private:
 	uint32_t graphicsQueueFamilyIndex = 0;
 	VkDeviceSize dynamicAlignmentValue = 0;
 	VkSampleCountFlagBits msaaSamplesValue = VK_SAMPLE_COUNT_1_BIT;
+
+	// Swapchain / presentation state
+	VkFormat swapchainImageFormat = VK_FORMAT_UNDEFINED;
+	VkExtent2D swapchainExtent = {0, 0};
+	uint32_t swapchainImageCount = 0;
+	VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 };
 
 } // namespace Renderer

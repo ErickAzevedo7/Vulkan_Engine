@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "core/vulkancore.h"
 #include "vulkan/vulkan_core.h"
 
 namespace Renderer {
@@ -16,7 +15,7 @@ public:
 	std::vector<VkImageView> mousePickImageViews;
 	std::vector<VkCommandBuffer> mousePickCommandBuffers;
 
-	void init(VulkanCore* core, Renderer::VulkanDevice* device, ResourceContext* resources);
+	void init(Renderer::VulkanDevice* device, ResourceContext* resources);
 	void recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void cleanupFramebuffers();
 	void recreateMousePick();
@@ -33,7 +32,6 @@ private:
 	uint32_t imageIndex;
 	std::vector<VkImage> mousePickImages;
 	std::vector<VkDeviceMemory> mousePickImageMemory;
-	VulkanCore* engineCore;
 	Renderer::VulkanDevice* vulkanDevice;
 	VkRenderPass mousePickRenderPass;
 	std::vector<VkFramebuffer> mousePickFramebuffers;

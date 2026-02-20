@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "core/vulkancore.h"
 #include "vulkan/vulkan_core.h"
 
 namespace Renderer {
@@ -16,7 +15,7 @@ public:
 	std::vector<VkImageView> m_ViewportImageViews;
 	std::vector<VkCommandBuffer> m_ViewportCommandBuffers;
 
-	void init(VulkanCore* core, Renderer::VulkanDevice* device, VkExtent2D viewportExtent);
+	void init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent);
 
 	void createViewportImage();
 
@@ -35,7 +34,6 @@ public:
 private:
 	std::vector<VkImage> m_ViewportImages;
 	std::vector<VkDeviceMemory> m_DstImageMemory;
-	VulkanCore* engineCore;
 	Renderer::VulkanDevice* vulkanDevice;
 	VkRenderPass m_ViewportRenderPass;
 	VkCommandPool m_ViewportCommandPool;

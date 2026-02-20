@@ -13,14 +13,13 @@
 #include "skybox/Skybox.h"
 #include "vulkan/vulkan_core.h"
 
-void ViewPort::init(VulkanCore* core, Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
-	engineCore = core;
+void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 	vulkanDevice = device;
 	this->viewportExtent = viewportExtent;
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCreateInfo.queueFamilyIndex = engineCore->getGraphicsQueueFamily();
+	commandPoolCreateInfo.queueFamilyIndex = vulkanDevice->getGraphicsQueueFamily();
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	if (vkCreateCommandPool(vulkanDevice->getDevice(), &commandPoolCreateInfo, nullptr, &m_ViewportCommandPool) !=
@@ -128,7 +127,7 @@ void ViewPort::cleanup() {
 }
 
 void ViewPort::createColorResources() {
-	VkFormat colorFormat = engineCore->getSwapChainImageFormat();
+	VkFormat colorFormat = vulkanDevice->getSwapChainImageFormat();
 
 	Utils::createImage(viewportExtent.width,
 					   viewportExtent.height,
@@ -144,7 +143,7 @@ void ViewPort::createColorResources() {
 }
 
 void ViewPort::createDepthResources() {
-	VkFormat depthFormat = engineCore->findDepthFormat();
+	VkFormat depthFormat = vulkanDevice->findDepthFormat();
 
 	Utils::createImage(viewportExtent.width,
 					   viewportExtent.height,
@@ -167,10 +166,10 @@ void ViewPort::createDepthResources() {
 }
 
 void ViewPort::createViewportImage() {
-	m_ViewportImages.resize(engineCore->getSwapChainImageViews().size());
-	m_DstImageMemory.resize(engineCore->getSwapChainImageViews().size());
+	m_ViewportImages.resize(vulkanDevice->getSwapChainImageCount());
+	m_DstImageMemory.resize(vulkanDevice->getSwapChainImageCount());
 
-	for (uint32_t i = 0; i < engineCore->getSwapChainImageViews().size(); i++) {
+	for (uint32_t i = 0; i < vulkanDevice->getSwapChainImageCount(); i++) {
 		// Create the linear tiled destination image to copy to and to read the
 		// memory from
 		VkImageCreateInfo imageCreateCI{};
@@ -269,8 +268,8 @@ void ViewPort::createViewportImageViews() {
 
 void ViewPort::createViewportRenderPass() {
 	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = engineCore->getSwapChainImageFormat();
-	colorAttachment.samples = engineCore->getmsaaSamples();
+	colorAttachment.format = vulkanDevice->getSwapChainImageFormat();
+	colorAttachment.samples = static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples());
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -279,8 +278,8 @@ void ViewPort::createViewportRenderPass() {
 	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription depthAttachment{};
-	depthAttachment.format = engineCore->findDepthFormat();
-	depthAttachment.samples = engineCore->getmsaaSamples();
+	depthAttachment.format = vulkanDevice->findDepthFormat();
+	depthAttachment.samples = static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples());
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -289,7 +288,7 @@ void ViewPort::createViewportRenderPass() {
 	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription colorAttachmentResolve{};
-	colorAttachmentResolve.format = engineCore->getSwapChainImageFormat();
+	colorAttachmentResolve.format = vulkanDevice->getSwapChainImageFormat();
 	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -428,8 +427,8 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
 	SceneRenderer::renderScene(commandBuffer,
-							   engineCore->getPipeline(),
-							   engineCore->getPipelineLayout(),
+							   vulkanDevice->getPipeline(),
+							   vulkanDevice->getPipelineLayout(),
 							   VulkanCore::getCurrentFrame(),
 							   VulkanCore::getDynamicAlignment());
 

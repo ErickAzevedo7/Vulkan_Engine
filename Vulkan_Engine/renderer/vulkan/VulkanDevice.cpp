@@ -9,7 +9,13 @@ void VulkanDevice::initialize(VkDevice device,
 							  VkCommandPool commandPool,
 							  uint32_t graphicsQueueFamily,
 							  VkDeviceSize dynamicAlignment,
-							  VkSampleCountFlagBits msaaSamples) {
+							  VkSampleCountFlagBits msaaSamples,
+							  VkFormat swapchainImageFormat,
+							  VkExtent2D swapchainExtent,
+							  uint32_t swapchainImageCount,
+							  VkFormat depthFormat,
+							  VkPipeline pipeline,
+							  VkPipelineLayout pipelineLayout) {
 	this->device = device;
 	this->physicalDevice = physicalDevice;
 	this->graphicsQueue = graphicsQueue;
@@ -18,6 +24,17 @@ void VulkanDevice::initialize(VkDevice device,
 	this->graphicsQueueFamilyIndex = graphicsQueueFamily;
 	this->dynamicAlignmentValue = dynamicAlignment;
 	this->msaaSamplesValue = msaaSamples;
+	this->swapchainImageFormat = swapchainImageFormat;
+	this->swapchainExtent = swapchainExtent;
+	this->swapchainImageCount = swapchainImageCount;
+	this->depthFormat = depthFormat;
+	this->pipeline = pipeline;
+	this->pipelineLayout = pipelineLayout;
+}
+
+void VulkanDevice::updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount) {
+	swapchainExtent = newExtent;
+	swapchainImageCount = newImageCount;
 }
 
 void* VulkanDevice::getNativeDevice() const {
