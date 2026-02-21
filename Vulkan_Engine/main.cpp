@@ -389,7 +389,8 @@ private:
 
 	void init() {
 		// Initialize UI Manager (ImGui)
-		uiManager.init(&engineCore);
+		uiManager.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+					   engineCore.getSwapChainImageViews());
 	}
 
 	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ImageIndex) {
@@ -401,7 +402,7 @@ private:
 		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
 
-		uiManager.recreateFramebuffers();
+		uiManager.recreateFramebuffers(engineCore.getSwapChainImageViews());
 		mousePick.recreateMousePick();
 		viewPort.recreateViewport(mousePick.getMousePickExtent());
 		outline.recreateOutline(

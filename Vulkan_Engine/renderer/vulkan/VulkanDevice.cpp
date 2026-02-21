@@ -4,10 +4,10 @@
 
 #include "vulkan/vulkan_core.h"
 
-
 namespace Renderer {
 
-void VulkanDevice::initialize(VkDevice device,
+void VulkanDevice::initialize(VkInstance instance,
+							  VkDevice device,
 							  VkPhysicalDevice physicalDevice,
 							  VkQueue graphicsQueue,
 							  VkQueue presentQueue,
@@ -21,7 +21,9 @@ void VulkanDevice::initialize(VkDevice device,
 							  VkFormat depthFormat,
 							  VkPipeline pipeline,
 							  VkPipelineLayout pipelineLayout,
-							  GLFWwindow* window) {
+							  GLFWwindow* window,
+							  uint32_t minImageCount) {
+	this->instance = instance;
 	this->device = device;
 	this->physicalDevice = physicalDevice;
 	this->graphicsQueue = graphicsQueue;
@@ -37,6 +39,7 @@ void VulkanDevice::initialize(VkDevice device,
 	this->pipeline = pipeline;
 	this->pipelineLayout = pipelineLayout;
 	this->window = window;
+	this->minImageCount = minImageCount;
 }
 
 void VulkanDevice::updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount) {

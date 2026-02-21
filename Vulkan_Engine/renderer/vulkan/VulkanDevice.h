@@ -5,7 +5,6 @@
 #include "renderer/GraphicsDevice.h"
 #include "vulkan/vulkan_core.h"
 
-
 struct GLFWwindow;
 
 namespace Renderer {
@@ -20,7 +19,8 @@ public:
 	VulkanDevice() = default;
 	~VulkanDevice() override = default;
 
-	void initialize(VkDevice device,
+	void initialize(VkInstance instance,
+					VkDevice device,
 					VkPhysicalDevice physicalDevice,
 					VkQueue graphicsQueue,
 					VkQueue presentQueue,
@@ -34,7 +34,8 @@ public:
 					VkFormat depthFormat,
 					VkPipeline pipeline,
 					VkPipelineLayout pipelineLayout,
-					GLFWwindow* window);
+					GLFWwindow* window,
+					uint32_t minImageCount);
 
 	/** Call after swapchain recreation to update extent/image count. */
 	void updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount);
@@ -52,6 +53,10 @@ public:
 	void waitIdle() override;
 
 	// --- Convenience typed accessors (Vulkan-specific, for internal use) ---
+
+	VkInstance getInstance() const {
+		return instance;
+	}
 
 	VkDevice getDevice() const {
 		return device;
@@ -80,6 +85,9 @@ public:
 	uint32_t getSwapChainImageCount() const {
 		return swapchainImageCount;
 	}
+	uint32_t getMinImageCount() const {
+		return minImageCount;
+	}
 	VkFormat findDepthFormat() const {
 		return depthFormat;
 	}
@@ -97,6 +105,7 @@ public:
 	}
 
 private:
+	VkInstance instance = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkQueue graphicsQueue = VK_NULL_HANDLE;
@@ -110,6 +119,7 @@ private:
 	VkFormat swapchainImageFormat = VK_FORMAT_UNDEFINED;
 	VkExtent2D swapchainExtent = {0, 0};
 	uint32_t swapchainImageCount = 0;
+	uint32_t minImageCount = 2;
 	VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;

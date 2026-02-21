@@ -5,17 +5,18 @@
 
 #include "vulkan/vulkan_core.h"
 
-
-// Forward declarations
-class VulkanCore;
+namespace Renderer {
+class VulkanDevice;
+}
 
 /// Manages ImGui initialization, rendering, and cleanup
 /// Handles all Vulkan-ImGui integration
 class UIManager {
 public:
 	/// Initialize ImGui context, fonts, styling, and Vulkan integration
-	/// @param engineCore Pointer to VulkanCore for accessing Vulkan resources
-	void init(VulkanCore* engineCore);
+	/// @param vulkanDevice Pointer to VulkanDevice for accessing Vulkan resources
+	/// @param swapchainImageViews List of active swapchain image views
+	void init(Renderer::VulkanDevice* vulkanDevice, const std::vector<VkImageView>& swapchainImageViews);
 
 	/// Begin a new ImGui frame
 	/// Should be called at the start of each frame before rendering UI
@@ -31,14 +32,14 @@ public:
 		return imGuiCommandBuffers;
 	}
 
-	/// Recreate framebuffers (called when swap chain is recreated)
-	void recreateFramebuffers();
+	/// @param swapchainImageViews Current swapchain image views
+	void recreateFramebuffers(const std::vector<VkImageView>& swapchainImageViews);
 
 	/// Cleanup all ImGui resources
 	void cleanup();
 
 private:
-	VulkanCore* engineCore = nullptr;
+	Renderer::VulkanDevice* vulkanDevice = nullptr;
 	VkResult err;
 
 	VkCommandPool imGuiCommandPool = VK_NULL_HANDLE;
@@ -52,7 +53,7 @@ private:
 	void createDescriptorPool();
 	void createRenderPass();
 	void createCommandPool();
-	void createCommandBuffers();
-	void createFramebuffers();
+	void createCommandBuffers(uint32_t imageCount);
+	void createFramebuffers(const std::vector<VkImageView>& swapchainImageViews);
 	void cleanupFramebuffers();
 };

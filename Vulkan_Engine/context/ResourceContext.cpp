@@ -33,7 +33,12 @@ ResourceContext::ResourceContext() {
 void ResourceContext::init(VulkanCore* engineCore) {
 	// Initialize GraphicsDevice FIRST (wraps VulkanCore handles for injection)
 	auto vulkanDevice = std::make_unique<Renderer::VulkanDevice>();
-	vulkanDevice->initialize(VulkanCore::getDevice(),
+	// minImageCount represents the swapchain capability limits for ImGui init bounds
+	SwapChainSupportDetails swapChainSupport = engineCore->querySwapChainSupport(VulkanCore::getPhysicalDevice());
+	uint32_t minImageCount = swapChainSupport.capabilities.minImageCount;
+
+	vulkanDevice->initialize(engineCore->getInstance(),
+							 VulkanCore::getDevice(),
 							 VulkanCore::getPhysicalDevice(),
 							 VulkanCore::getGraphicsQueue(),
 							 engineCore->getPresentQueue(),
@@ -47,7 +52,8 @@ void ResourceContext::init(VulkanCore* engineCore) {
 							 engineCore->findDepthFormat(),
 							 engineCore->getPipeline(),
 							 engineCore->getPipelineLayout(),
-							 engineCore->getWindow());
+							 engineCore->getWindow(),
+							 minImageCount);
 	graphicsDevice = std::move(vulkanDevice);
 
 	// Initialize buffer manager SECOND (Vulkan device is now ready)

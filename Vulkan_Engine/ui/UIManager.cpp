@@ -6,11 +6,12 @@
 #include <cstdio>
 #include <stdexcept>
 #include <stdio.h>
+#include <vector>
 
-#include "core/vulkancore.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "vulkan/vulkan_core.h"
 
 // Font paths
@@ -25,8 +26,8 @@ void UIManager::checkVkResult(VkResult err) {
 		abort();
 }
 
-void UIManager::init(VulkanCore* core) {
-	this->engineCore = core;
+void UIManager::init(Renderer::VulkanDevice* device, const std::vector<VkImageView>& swapchainImageViews) {
+	this->vulkanDevice = device;
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -65,24 +66,20 @@ void UIManager::init(VulkanCore* core) {
 	createDescriptorPool();
 	createRenderPass();
 	createCommandPool();
-	createCommandBuffers();
-	createFramebuffers();
+	createCommandBuffers(static_cast<uint32_t>(swapchainImageViews.size()));
+	createFramebuffers(swapchainImageViews);
 
 	// Setup Platform/Renderer backends
-	ImGui_ImplGlfw_InitForVulkan(engineCore->getWindow(), true);
+	ImGui_ImplGlfw_InitForVulkan(vulkanDevice->getWindow(), true);
 
-	SwapChainSupportDetails swapChainSupport = engineCore->querySwapChainSupport(VulkanCore::getPhysicalDevice());
-	uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-	if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
-		imageCount = swapChainSupport.capabilities.maxImageCount;
-	}
+	uint32_t imageCount = vulkanDevice->getMinImageCount() + 1;
 
 	ImGui_ImplVulkan_InitInfo init_info{};
-	init_info.Instance = engineCore->getInstance();
-	init_info.PhysicalDevice = VulkanCore::getPhysicalDevice();
-	init_info.Device = VulkanCore::getDevice();
-	init_info.QueueFamily = engineCore->getGraphicsQueueFamily();
-	init_info.Queue = VulkanCore::getGraphicsQueue();
+	init_info.Instance = vulkanDevice->getInstance();
+	init_info.PhysicalDevice = vulkanDevice->getPhysicalDevice();
+	init_info.Device = vulkanDevice->getDevice();
+	init_info.QueueFamily = vulkanDevice->getGraphicsQueueFamily();
+	init_info.Queue = vulkanDevice->getGraphicsQueue();
 	init_info.PipelineCache = VK_NULL_HANDLE;
 	init_info.DescriptorPool = imguiDescriptorPool;
 	init_info.PipelineInfoMain.RenderPass = imGuiRenderPass;
@@ -114,8 +111,8 @@ void UIManager::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 	info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	info.renderPass = imGuiRenderPass;
 	info.framebuffer = imGuiFramebuffers[imageIndex];
-	info.renderArea.extent.width = engineCore->getSwapChainExtent().width;
-	info.renderArea.extent.height = engineCore->getSwapChainExtent().height;
+	info.renderArea.extent.width = vulkanDevice->getSwapChainExtent().width;
+	info.renderArea.extent.height = vulkanDevice->getSwapChainExtent().height;
 	info.clearValueCount = 1;
 	VkClearValue clearValue{};
 	clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -131,29 +128,29 @@ void UIManager::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 	checkVkResult(err);
 }
 
-void UIManager::recreateFramebuffers() {
+void UIManager::recreateFramebuffers(const std::vector<VkImageView>& swapchainImageViews) {
 	cleanupFramebuffers();
-	createFramebuffers();
+	createFramebuffers(swapchainImageViews);
 }
 
 void UIManager::cleanup() {
 	for (auto framebuffer : imGuiFramebuffers) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
-	vkDestroyRenderPass(VulkanCore::getDevice(), imGuiRenderPass, nullptr);
+	vkDestroyRenderPass(vulkanDevice->getDevice(), imGuiRenderPass, nullptr);
 
-	vkFreeCommandBuffers(VulkanCore::getDevice(),
+	vkFreeCommandBuffers(vulkanDevice->getDevice(),
 						 imGuiCommandPool,
 						 static_cast<uint32_t>(imGuiCommandBuffers.size()),
 						 imGuiCommandBuffers.data());
-	vkDestroyCommandPool(VulkanCore::getDevice(), imGuiCommandPool, nullptr);
+	vkDestroyCommandPool(vulkanDevice->getDevice(), imGuiCommandPool, nullptr);
 
 	// Resources to destroy when the program ends
 	ImGui_ImplVulkan_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
-	vkDestroyDescriptorPool(VulkanCore::getDevice(), imguiDescriptorPool, nullptr);
+	vkDestroyDescriptorPool(vulkanDevice->getDevice(), imguiDescriptorPool, nullptr);
 }
 
 void UIManager::setupImGuiStyle() {
@@ -254,13 +251,13 @@ void UIManager::createDescriptorPool() {
 		pool_info.maxSets += pool_size.descriptorCount;
 	pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
 	pool_info.pPoolSizes = pool_sizes;
-	err = vkCreateDescriptorPool(VulkanCore::getDevice(), &pool_info, nullptr, &imguiDescriptorPool);
+	err = vkCreateDescriptorPool(vulkanDevice->getDevice(), &pool_info, nullptr, &imguiDescriptorPool);
 	checkVkResult(err);
 }
 
 void UIManager::createRenderPass() {
 	VkAttachmentDescription attachment{};
-	attachment.format = engineCore->getSwapChainImageFormat();
+	attachment.format = vulkanDevice->getSwapChainImageFormat();
 	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -295,7 +292,7 @@ void UIManager::createRenderPass() {
 	info.dependencyCount = 1;
 	info.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(VulkanCore::getDevice(), &info, nullptr, &imGuiRenderPass) != VK_SUCCESS) {
+	if (vkCreateRenderPass(vulkanDevice->getDevice(), &info, nullptr, &imGuiRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("Could not create Dear ImGui's render pass");
 	}
 }
@@ -303,28 +300,28 @@ void UIManager::createRenderPass() {
 void UIManager::createCommandPool() {
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCreateInfo.queueFamilyIndex = engineCore->getGraphicsQueueFamily();
+	commandPoolCreateInfo.queueFamilyIndex = vulkanDevice->getGraphicsQueueFamily();
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	if (vkCreateCommandPool(VulkanCore::getDevice(), &commandPoolCreateInfo, nullptr, &imGuiCommandPool) !=
+	if (vkCreateCommandPool(vulkanDevice->getDevice(), &commandPoolCreateInfo, nullptr, &imGuiCommandPool) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("Could not create graphics command pool");
 	}
 }
 
-void UIManager::createCommandBuffers() {
-	imGuiCommandBuffers.resize(engineCore->getSwapChainImageViews().size());
+void UIManager::createCommandBuffers(uint32_t imageCount) {
+	imGuiCommandBuffers.resize(imageCount);
 
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferAllocateInfo.commandPool = imGuiCommandPool;
 	commandBufferAllocateInfo.commandBufferCount = static_cast<uint32_t>(imGuiCommandBuffers.size());
-	vkAllocateCommandBuffers(VulkanCore::getDevice(), &commandBufferAllocateInfo, imGuiCommandBuffers.data());
+	vkAllocateCommandBuffers(vulkanDevice->getDevice(), &commandBufferAllocateInfo, imGuiCommandBuffers.data());
 }
 
-void UIManager::createFramebuffers() {
-	imGuiFramebuffers.resize(engineCore->getSwapChainImageViews().size());
+void UIManager::createFramebuffers(const std::vector<VkImageView>& swapchainImageViews) {
+	imGuiFramebuffers.resize(swapchainImageViews.size());
 
 	VkImageView attachment[1];
 	VkFramebufferCreateInfo frameBufferCreateInfo = {};
@@ -332,18 +329,18 @@ void UIManager::createFramebuffers() {
 	frameBufferCreateInfo.renderPass = imGuiRenderPass;
 	frameBufferCreateInfo.attachmentCount = 1;
 	frameBufferCreateInfo.pAttachments = attachment;
-	frameBufferCreateInfo.width = engineCore->getSwapChainExtent().width;
-	frameBufferCreateInfo.height = engineCore->getSwapChainExtent().height;
+	frameBufferCreateInfo.width = vulkanDevice->getSwapChainExtent().width;
+	frameBufferCreateInfo.height = vulkanDevice->getSwapChainExtent().height;
 	frameBufferCreateInfo.layers = 1;
-	for (uint32_t i = 0; i < engineCore->getSwapChainImageViews().size(); i++) {
-		attachment[0] = engineCore->getSwapChainImageViews()[i];
-		err = vkCreateFramebuffer(VulkanCore::getDevice(), &frameBufferCreateInfo, nullptr, &imGuiFramebuffers[i]);
+	for (uint32_t i = 0; i < swapchainImageViews.size(); i++) {
+		attachment[0] = swapchainImageViews[i];
+		err = vkCreateFramebuffer(vulkanDevice->getDevice(), &frameBufferCreateInfo, nullptr, &imGuiFramebuffers[i]);
 		checkVkResult(err);
 	}
 }
 
 void UIManager::cleanupFramebuffers() {
 	for (size_t i = 0; i < imGuiFramebuffers.size(); i++) {
-		vkDestroyFramebuffer(VulkanCore::getDevice(), imGuiFramebuffers[i], nullptr);
+		vkDestroyFramebuffer(vulkanDevice->getDevice(), imGuiFramebuffers[i], nullptr);
 	}
 }
