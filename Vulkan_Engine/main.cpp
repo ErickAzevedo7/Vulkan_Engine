@@ -115,10 +115,10 @@ public:
 		outline.cleanup();
 		viewPort.cleanup();
 		mousePick.cleanup();
+		cleanup(); // Calls uiManager.cleanup()
+
 		// ResourceContext cleanup handled by destructor
 		resourceContext.cleanup();
-
-		cleanup();
 		engineCore.cleanup();
 	}
 
@@ -399,6 +399,11 @@ private:
 
 	void recreateRenderPasses() {
 		vkDeviceWaitIdle(VulkanCore::getDevice());
+
+		static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice())
+			->updateSwapchain(engineCore.getSwapChainExtent(),
+							  static_cast<uint32_t>(engineCore.getSwapChainImageViews().size()));
+
 		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
 

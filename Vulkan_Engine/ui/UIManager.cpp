@@ -343,4 +343,5 @@ void UIManager::cleanupFramebuffers() {
 	for (size_t i = 0; i < imGuiFramebuffers.size(); i++) {
 		vkDestroyFramebuffer(vulkanDevice->getDevice(), imGuiFramebuffers[i], nullptr);
 	}
+	imGuiFramebuffers.clear();
 }
