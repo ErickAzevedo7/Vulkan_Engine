@@ -85,7 +85,8 @@ public:
 					 mousePick.getMousePickImageViews(),
 					 viewPort.m_ViewportImageViews,
 					 mousePick.getMousePickExtent());
-		editorCamera.init(&engineCore, &resourceContext, &inspector);
+		editorCamera.init(
+			static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext, &inspector);
 
 		// Create a hardcoded test light entity so lighting can be verified (TEMPORARY)
 		{
@@ -160,7 +161,8 @@ public:
 
 		// (TEMPORARY)
 		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
-		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame());
+		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame(),
+										 engineCore.getUniformBuffersMapped()[VulkanCore::getCurrentFrame()]);
 
 		// Update simple single light (for now static directional light)
 		{

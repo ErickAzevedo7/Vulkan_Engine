@@ -1,7 +1,12 @@
 #pragma once
 
+#include <cstdint>
+
 #include "renderer/GraphicsDevice.h"
 #include "vulkan/vulkan_core.h"
+
+
+struct GLFWwindow;
 
 namespace Renderer {
 
@@ -28,7 +33,8 @@ public:
 					uint32_t swapchainImageCount,
 					VkFormat depthFormat,
 					VkPipeline pipeline,
-					VkPipelineLayout pipelineLayout);
+					VkPipelineLayout pipelineLayout,
+					GLFWwindow* window);
 
 	/** Call after swapchain recreation to update extent/image count. */
 	void updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount);
@@ -84,6 +90,12 @@ public:
 		return pipelineLayout;
 	}
 
+	// --- Window / uniform buffer access ---
+
+	GLFWwindow* getWindow() const {
+		return window;
+	}
+
 private:
 	VkDevice device = VK_NULL_HANDLE;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -101,6 +113,9 @@ private:
 	VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+	// Window state
+	GLFWwindow* window = nullptr;
 };
 
 } // namespace Renderer

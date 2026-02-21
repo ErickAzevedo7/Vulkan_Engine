@@ -2,8 +2,9 @@
 
 // Project headers - Core
 #include "context/ResourceContext.h"
-#include "core/vulkancore.h"
+#include "core/vulkancore.h" // UniformBufferObject struct
 #include "Entity.h"
+#include "renderer/vulkan/VulkanDevice.h"
 #include "Scene.h"
 
 // Project headers - Components
@@ -69,22 +70,22 @@ ImGuizmo::OPERATION EditorCamera::currentGizmoOperation = ImGuizmo::TRANSLATE;
 ResourceContext* EditorCamera::resources = nullptr;
 InspectorUi* EditorCamera::inspector = nullptr;
 
-void EditorCamera::init(VulkanCore* core, ResourceContext* resources, InspectorUi* inspector) {
-	engineCore = core;
+void EditorCamera::init(Renderer::VulkanDevice* device, ResourceContext* resources, InspectorUi* inspector) {
+	vulkanDevice = device;
 	EditorCamera::resources = resources;
 	EditorCamera::inspector = inspector;
 	int width, height;
-	glfwGetFramebufferSize(engineCore->getWindow(), &width, &height);
+	glfwGetFramebufferSize(vulkanDevice->getWindow(), &width, &height);
 	EditorCamera::lastX = width / 2.0f;
 	EditorCamera::lastY = height / 2.0f;
-	EditorCamera::extent = engineCore->getSwapChainExtent();
+	EditorCamera::extent = vulkanDevice->getSwapChainExtent();
 }
 
 void EditorCamera::setExtent(VkExtent2D newExtent) {
 	extent = newExtent;
 }
 
-void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
+void EditorCamera::updateUniformBuffer(uint32_t currentImage, void* uniformBufferMapped) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
@@ -119,8 +120,8 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage) {
 		// normal matrix is inverse-transpose of model's upper-left 3x3
 		ubo.normal = glm::transpose(glm::inverse(model));
 
-		size_t offset = entity.getID() * VulkanCore::getDynamicAlignment();
-		char* base = static_cast<char*>(engineCore->getUniformBuffersMapped()[currentImage]);
+		size_t offset = entity.getID() * vulkanDevice->getDynamicAlignment();
+		char* base = static_cast<char*>(uniformBufferMapped);
 
 		memcpy(base + offset, &ubo, sizeof(ubo));
 	}

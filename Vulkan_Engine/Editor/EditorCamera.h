@@ -13,8 +13,11 @@
 
 // Forward declarations
 class MousePick;
-class VulkanCore;
-class ResourceContext; // Forward declaration
+class ResourceContext;
+
+namespace Renderer {
+class VulkanDevice;
+}
 
 extern double deltaTime;
 
@@ -28,11 +31,11 @@ public:
 	static float pitch;
 	static float lastX;
 	static float lastY;
-	void init(VulkanCore* core, ResourceContext* resources, InspectorUi* inspector);
+	void init(Renderer::VulkanDevice* device, ResourceContext* resources, InspectorUi* inspector);
 
 	static void setExtent(VkExtent2D newExtent);
 
-	void updateUniformBuffer(uint32_t currentImage);
+	void updateUniformBuffer(uint32_t currentImage, void* uniformBufferMapped);
 	static void mousePosHandler();
 	void inputProcess(MousePick& mousePick);
 	static void drawGuizmo();
@@ -41,7 +44,7 @@ public:
 
 private:
 	static uint32_t selectedID;
-	VulkanCore* engineCore;
+	Renderer::VulkanDevice* vulkanDevice;
 	static ResourceContext* resources;
 	static InspectorUi* inspector;
 	static bool isDragging;
