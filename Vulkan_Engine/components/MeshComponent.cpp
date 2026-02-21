@@ -8,8 +8,8 @@
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
 #include "renderer/GraphicsResourceBinder.h"
+#include "renderer/RenderCommandList.h"
 #include "renderer/RenderTypes.h"
-#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
 
@@ -29,7 +29,7 @@ MeshComponent::~MeshComponent() {
 	owner = nullptr;
 }
 
-void MeshComponent::render(VkCommandBuffer commandBuffer,
+void MeshComponent::render(Renderer::RenderCommandList& commandList,
 						   VkPipeline pipeline,
 						   VkPipelineLayout pipelineLayout,
 						   uint32_t currentFrame,
@@ -57,16 +57,16 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 
 	pushConstants.usePickColor = useMousePick;
 
-	vkCmdPushConstants(
-		commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants), &pushConstants);
+	commandList.pushConstants(
+		pipelineLayout, 16 /* VK_SHADER_STAGE_FRAGMENT_BIT */, 0, sizeof(pushConstants), &pushConstants);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	commandList.bindPipeline(pipeline);
 
-	VkBuffer vertexBuffers[] = {meshManager.getVertexBuffer(*mesh)};
-	VkDeviceSize offsets[] = {0};
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	void* vertexBuffers[] = {meshManager.getVertexBuffer(*mesh)};
+	size_t offsets[] = {0};
+	commandList.bindVertexBuffers(vertexBuffers, offsets, 1);
 
-	vkCmdBindIndexBuffer(commandBuffer, meshManager.getIndexBuffer(*mesh), 0, VK_INDEX_TYPE_UINT32);
+	commandList.bindIndexBuffer(meshManager.getIndexBuffer(*mesh));
 
 	uint32_t maxEntities = 1000;
 	if (id >= maxEntities) {
@@ -79,11 +79,11 @@ void MeshComponent::render(VkCommandBuffer commandBuffer,
 	VkDescriptorSet vkSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
 
 	// Bind descriptor sets (for uniforms/textures)
-	vkCmdBindDescriptorSets(
-		commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &vkSet, 1, &dynamicOffset);
+	void* vkSetPtr = vkSet;
+	commandList.bindDescriptorSets(pipelineLayout, &vkSetPtr, 1, &dynamicOffset, 1);
 
 	// Issue draw call
-	vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
+	commandList.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
 }
 
 Mesh* MeshComponent::GetMesh() const {

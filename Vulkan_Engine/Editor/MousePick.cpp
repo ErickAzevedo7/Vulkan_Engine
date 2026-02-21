@@ -8,9 +8,11 @@
 
 #include "core/utils/Utils.h"
 #include "managers/MeshManager.h"
+#include "renderer/vulkan/VulkanCommandList.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
+
 
 void MousePick::init(Renderer::VulkanDevice* device, ResourceContext* resources) {
 	vulkanDevice = device;
@@ -357,7 +359,8 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint
 	scissor.extent = mousePickExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	SceneRenderer::renderMousePick(commandBuffer,
+	Renderer::VulkanCommandList commandList(commandBuffer);
+	SceneRenderer::renderMousePick(commandList,
 								   mousePickPipeline,
 								   vulkanDevice->getPipelineLayout(),
 								   VulkanCore::getCurrentFrame(),

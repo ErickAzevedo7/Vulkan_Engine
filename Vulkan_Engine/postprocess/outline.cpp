@@ -8,9 +8,11 @@
 
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
+#include "renderer/vulkan/VulkanCommandList.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
+
 
 void Outline::init(Renderer::VulkanDevice* device,
 				   std::vector<VkImageView> IDimageViews,
@@ -82,8 +84,9 @@ void Outline::recordOutlineCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 	scissor.extent = viewportExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	Renderer::VulkanCommandList commandList(commandBuffer);
 	SceneRenderer::renderOutlineSelected(
-		commandBuffer, outlinePipeline, outlinePipelineLayout, outlineDescriptorSets[VulkanCore::getCurrentFrame()]);
+		commandList, outlinePipeline, outlinePipelineLayout, outlineDescriptorSets[VulkanCore::getCurrentFrame()]);
 
 	vkCmdEndRenderPass(commandBuffer);
 

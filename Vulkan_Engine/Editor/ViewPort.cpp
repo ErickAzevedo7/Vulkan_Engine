@@ -8,10 +8,12 @@
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "gridPlane/GridPlane.h"
+#include "renderer/vulkan/VulkanCommandList.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "SceneRenderer.h"
 #include "skybox/Skybox.h"
 #include "vulkan/vulkan_core.h"
+
 
 void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 	vulkanDevice = device;
@@ -426,7 +428,8 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32
 
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
-	SceneRenderer::renderScene(commandBuffer,
+	Renderer::VulkanCommandList commandList(commandBuffer);
+	SceneRenderer::renderScene(commandList,
 							   vulkanDevice->getPipeline(),
 							   vulkanDevice->getPipelineLayout(),
 							   VulkanCore::getCurrentFrame(),

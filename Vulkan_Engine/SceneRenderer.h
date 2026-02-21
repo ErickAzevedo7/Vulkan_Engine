@@ -9,34 +9,37 @@ class VulkanCore;
 class Entity;
 class ViewPort;
 
+namespace Renderer {
+class RenderCommandList;
+}
+
 class SceneRenderer {
 public:
-	static void init(VulkanCore* engineCore, ResourceContext* resources);
+	static void init(ResourceContext* resources);
 
-	static void renderScene(VkCommandBuffer commandBuffer,
+	static void renderScene(Renderer::RenderCommandList& commandList,
 							VkPipeline pipeline,
 							VkPipelineLayout pipelineLayout,
 							uint32_t currentFrame,
 							uint64_t dynamicAlignment);
 
 	static void renderEntity(const Entity* entity,
-							 VkCommandBuffer commandBuffer,
+							 Renderer::RenderCommandList& commandList,
 							 VkPipeline pipeline,
 							 VkPipelineLayout pipelineLayout,
 							 uint32_t currentFrame,
 							 uint64_t dynamicAlignment,
 							 int useMousePick);
-	static void renderOutlineSelected(VkCommandBuffer commandBuffer,
+	static void renderOutlineSelected(Renderer::RenderCommandList& commandList,
 									  VkPipeline outlinePipeline,
 									  VkPipelineLayout outlinePipelineLayout,
 									  VkDescriptorSet outlineDescriptorSet);
-	static void renderMousePick(VkCommandBuffer commandBuffer,
+	static void renderMousePick(Renderer::RenderCommandList& commandList,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
 								uint32_t currentFrame,
 								uint64_t dynamicAlignment);
 
 private:
-	static VulkanCore* engineCore;
 	static ResourceContext* resources;
 };

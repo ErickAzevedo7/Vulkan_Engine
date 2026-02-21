@@ -10,7 +10,8 @@
 class Entity;
 namespace Renderer {
 class GraphicsResourceBinder;
-}
+class RenderCommandList;
+} // namespace Renderer
 struct Mesh;
 struct Material;
 
@@ -21,7 +22,7 @@ public:
 	MeshComponent(Entity* owner, const std::string& meshName, MeshManager& meshManager);
 	~MeshComponent();
 
-	void render(VkCommandBuffer commandBuffer,
+	void render(Renderer::RenderCommandList& commandList,
 				VkPipeline pipeline,
 				VkPipelineLayout pipelineLayout,
 				uint32_t currentFrame,

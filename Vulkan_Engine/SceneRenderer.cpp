@@ -7,19 +7,18 @@
 #include "context/ResourceContext.h"
 #include "Entity.h"
 #include "managers/SceneManager.h"
+#include "renderer/RenderCommandList.h"
 #include "Scene.h"
-#include "vulkan/vulkan_core.h"
+
 
 // Initialize static members
-VulkanCore* SceneRenderer::engineCore = nullptr;
 ResourceContext* SceneRenderer::resources = nullptr;
 
-void SceneRenderer::init(VulkanCore* engineCore, ResourceContext* resources) {
-	SceneRenderer::engineCore = engineCore;
+void SceneRenderer::init(ResourceContext* resources) {
 	SceneRenderer::resources = resources;
 }
 
-void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
+void SceneRenderer::renderScene(Renderer::RenderCommandList& commandList,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
 								uint32_t currentFrame,
@@ -30,12 +29,12 @@ void SceneRenderer::renderScene(VkCommandBuffer commandBuffer,
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
 
-		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 0);
+		renderEntity(entity, commandList, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 0);
 	}
 }
 
 void SceneRenderer::renderEntity(const Entity* entity,
-								 VkCommandBuffer commandBuffer,
+								 Renderer::RenderCommandList& commandList,
 								 VkPipeline pipeline,
 								 VkPipelineLayout pipelineLayout,
 								 uint32_t currentFrame,
@@ -47,7 +46,7 @@ void SceneRenderer::renderEntity(const Entity* entity,
 		return;
 	}
 
-	meshComp->render(commandBuffer,
+	meshComp->render(commandList,
 					 pipeline,
 					 pipelineLayout,
 					 currentFrame,
@@ -57,7 +56,7 @@ void SceneRenderer::renderEntity(const Entity* entity,
 					 resources->getResourceBinder());
 }
 
-void SceneRenderer::renderOutlineSelected(VkCommandBuffer commandBuffer,
+void SceneRenderer::renderOutlineSelected(Renderer::RenderCommandList& commandList,
 										  VkPipeline outlinePipeline,
 										  VkPipelineLayout outlinePipelineLayout,
 										  VkDescriptorSet outlineDescriptorSet) {
@@ -67,24 +66,21 @@ void SceneRenderer::renderOutlineSelected(VkCommandBuffer commandBuffer,
 		Entity* entity = &scene->getEntity(i);
 		if (entity->isSelected) {
 			int selectedID = entity->getID();
-			vkCmdPushConstants(
-				commandBuffer, outlinePipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(int), &selectedID);
+			commandList.pushConstants(outlinePipelineLayout,
+									  16, // VK_SHADER_STAGE_FRAGMENT_BIT mapping
+									  0,
+									  sizeof(int),
+									  &selectedID);
 
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, outlinePipeline);
-			vkCmdBindDescriptorSets(commandBuffer,
-									VK_PIPELINE_BIND_POINT_GRAPHICS,
-									outlinePipelineLayout,
-									0,
-									1,
-									&outlineDescriptorSet,
-									0,
-									nullptr);
-			vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Full-screen triangle
+			commandList.bindPipeline(outlinePipeline);
+			void* descSets[] = {outlineDescriptorSet};
+			commandList.bindDescriptorSets(outlinePipelineLayout, descSets, 1, nullptr, 0);
+			commandList.draw(3, 1, 0, 0); // Full-screen triangle
 		}
 	}
 }
 
-void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
+void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 									VkPipeline pipeline,
 									VkPipelineLayout pipelineLayout,
 									uint32_t currentFrame,
@@ -95,6 +91,6 @@ void SceneRenderer::renderMousePick(VkCommandBuffer commandBuffer,
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
 
-		renderEntity(entity, commandBuffer, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 1);
+		renderEntity(entity, commandList, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 1);
 	}
 }

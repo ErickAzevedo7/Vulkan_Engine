@@ -77,7 +77,7 @@ public:
 		// Link AssetBrowser to InspectorUi (circular dependency resolution)
 		inspector.setAssetBrowser(&assetBrowser);
 
-		SceneRenderer::init(&engineCore, &resourceContext);
+		SceneRenderer::init(&resourceContext);
 		mousePick.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
 		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					  mousePick.getMousePickExtent());
