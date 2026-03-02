@@ -52,11 +52,18 @@ void MeshManager::generateSphere(std::vector<Vertex>& vertices,
 		}
 	}
 
-	bool oddRow = false;
 	for (uint32_t y = 0; y < Y_SEGMENTS; ++y) {
-		for (uint32_t x = 0; x <= X_SEGMENTS; ++x) {
-			indices.push_back(y * (X_SEGMENTS + 1) + x);
-			indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+		for (uint32_t x = 0; x < X_SEGMENTS; ++x) {
+			uint32_t first = y * (X_SEGMENTS + 1) + x;
+			uint32_t second = first + X_SEGMENTS + 1;
+
+			indices.push_back(first);
+			indices.push_back(first + 1);
+			indices.push_back(second + 1);
+
+			indices.push_back(second + 1);
+			indices.push_back(second);
+			indices.push_back(first);
 		}
 	}
 }
