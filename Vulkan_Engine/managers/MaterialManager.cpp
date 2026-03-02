@@ -131,24 +131,22 @@ Material* MaterialManager::createMaterial(const std::string& name,
 				file >> j;
 				file.close();
 
-				// Load material properties if they exist in the file
-				if (j.contains("ambient") && j["ambient"].is_array() && j["ambient"].size() == 3) {
-					mat->properties.ambient = glm::vec3(
-						j["ambient"][0].get<float>(), j["ambient"][1].get<float>(), j["ambient"][2].get<float>());
+				// Load PBR material properties if they exist in the file
+				if (j.contains("albedo") && j["albedo"].is_array() && j["albedo"].size() == 3) {
+					mat->properties.albedo = glm::vec3(
+						j["albedo"][0].get<float>(), j["albedo"][1].get<float>(), j["albedo"][2].get<float>());
 				}
 
-				if (j.contains("shininess") && j["shininess"].is_number()) {
-					mat->properties.shininess = j["shininess"].get<float>();
+				if (j.contains("metallic") && j["metallic"].is_number()) {
+					mat->properties.metallic = j["metallic"].get<float>();
 				}
 
-				if (j.contains("specular") && j["specular"].is_array() && j["specular"].size() == 3) {
-					mat->properties.specular = glm::vec3(
-						j["specular"][0].get<float>(), j["specular"][1].get<float>(), j["specular"][2].get<float>());
+				if (j.contains("roughness") && j["roughness"].is_number()) {
+					mat->properties.roughness = j["roughness"].get<float>();
 				}
 
-				if (j.contains("diffuse") && j["diffuse"].is_array() && j["diffuse"].size() == 3) {
-					mat->properties.diffuse = glm::vec3(
-						j["diffuse"][0].get<float>(), j["diffuse"][1].get<float>(), j["diffuse"][2].get<float>());
+				if (j.contains("ao") && j["ao"].is_number()) {
+					mat->properties.ao = j["ao"].get<float>();
 				}
 			} catch (const std::exception& e) {
 				std::cerr << "MaterialManager::createMaterial: failed to load properties from file: " << e.what()
@@ -291,10 +289,10 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 void MaterialManager::saveMaterialToFile(const std::string& path,
 										 const std::string& name,
 										 const std::string& albedoTextureKey,
-										 const glm::vec3& ambient,
-										 float shininess,
-										 const glm::vec3& specular,
-										 const glm::vec3& diffuse) {
+										 const glm::vec3& albedo,
+										 float metallic,
+										 float roughness,
+										 float ao) {
 	std::ofstream file(path, std::ios::trunc);
 	if (!file.is_open()) {
 		return;
@@ -304,11 +302,11 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 	j["name"] = name;
 	j["albedoTextureKey"] = albedoTextureKey.empty() ? textureManager.kDefaultTextureKey : albedoTextureKey;
 
-	// Save material properties
-	j["ambient"] = {ambient.x, ambient.y, ambient.z};
-	j["shininess"] = shininess;
-	j["specular"] = {specular.x, specular.y, specular.z};
-	j["diffuse"] = {diffuse.x, diffuse.y, diffuse.z};
+	// Save PBR material properties
+	j["albedo"] = {albedo.x, albedo.y, albedo.z};
+	j["metallic"] = metallic;
+	j["roughness"] = roughness;
+	j["ao"] = ao;
 
 	file << j.dump(4) << std::endl;
 	file.close();

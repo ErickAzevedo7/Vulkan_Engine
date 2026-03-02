@@ -31,7 +31,6 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
 
-
 // Initialize constants
 // Constants are initialized in the constructor/header
 
@@ -399,9 +398,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						resources.getMaterialManager().saveMaterialToFile(fullPath,
 																		  matName,
 																		  texKey,
-																		  mat->properties.ambient,
-																		  mat->properties.shininess,
-																		  mat->properties.specular);
+																		  mat->properties.albedo,
+																		  mat->properties.metallic,
+																		  mat->properties.roughness,
+																		  mat->properties.ao);
 						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'"
 								  << std::endl;
 					}
@@ -421,7 +421,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		ImGuiIO& io = ImGui::GetIO();
 
 		ImGui::PushFont(io.Fonts->Fonts[1]); // Use bold font (index 1)
-		ImGui::TextUnformatted("Lighting Properties");
+		ImGui::TextUnformatted("PBR Properties");
 		ImGui::PopFont();
 
 		ImGui::Spacing();
@@ -433,40 +433,36 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 		bool propertiesChanged = false;
 
-		// Ambient
-		ImGui::Text("Ambient");
+		// Albedo
+		ImGui::Text("Albedo");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Ambient",
-							  &material->properties.ambient.x,
+		if (ImGui::ColorEdit3("##Albedo",
+							  &material->properties.albedo.x,
 							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
 
-		// Diffuse
-		ImGui::Text("Diffuse");
+		// Metallic
+		ImGui::Text("Metallic");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Diffuse",
-							  &material->properties.diffuse.x,
-							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+		if (ImGui::SliderFloat("##Metallic", &material->properties.metallic, 0.0f, 1.0f, "%.2f")) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
 
-		// Specular
-		ImGui::Text("Specular");
+		// Roughness
+		ImGui::Text("Roughness");
 		ImGui::NextColumn();
-		if (ImGui::ColorEdit3("##Specular",
-							  &material->properties.specular.x,
-							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+		if (ImGui::SliderFloat("##Roughness", &material->properties.roughness, 0.0f, 1.0f, "%.2f")) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
 
-		// Shininess
-		ImGui::Text("Shininess");
+		// AO
+		ImGui::Text("AO");
 		ImGui::NextColumn();
-		if (ImGui::SliderFloat("##Shininess", &material->properties.shininess, 1.0f, 256.0f, "%.1f")) {
+		if (ImGui::SliderFloat("##AO", &material->properties.ao, 0.0f, 1.0f, "%.2f")) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
@@ -486,10 +482,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			resources.getMaterialManager().saveMaterialToFile(fullPath,
 															  matName,
 															  material->albedoTextureKey,
-															  material->properties.ambient,
-															  material->properties.shininess,
-															  material->properties.specular,
-															  material->properties.diffuse);
+															  material->properties.albedo,
+															  material->properties.metallic,
+															  material->properties.roughness,
+															  material->properties.ao);
 		}
 	}
 
@@ -771,50 +767,6 @@ void InspectorUi::render() {
 			ImGui::NextColumn();
 
 			ImGui::Columns(1);
-
-			// Lighting Properties section
-			ImGui::Spacing();
-			ImGui::Spacing();
-
-			ImGuiIO& io = ImGui::GetIO();
-			ImGui::PushFont(io.Fonts->Fonts[1]); // Bold font
-			ImGui::TextUnformatted("Lighting Properties");
-			ImGui::PopFont();
-
-			ImGui::Spacing();
-
-			ImGui::Columns(2, "##LightPropsColumns", false);
-			ImGui::SetColumnWidth(0, 60.0f);
-
-			// Ambient
-			ImGui::Text("Ambient");
-			ImGui::NextColumn();
-			ImGui::ColorEdit3(
-				"##LightAmbient", &lightComp->ambient.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-			ImGui::NextColumn();
-
-			// Diffuse
-			ImGui::Text("Diffuse");
-			ImGui::NextColumn();
-			ImGui::ColorEdit3(
-				"##LightDiffuse", &lightComp->diffuse.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-			ImGui::NextColumn();
-
-			// Specular
-			ImGui::Text("Specular");
-			ImGui::NextColumn();
-			ImGui::ColorEdit3(
-				"##LightSpecular", &lightComp->specular.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-			ImGui::NextColumn();
-
-			// Lighting Model
-			ImGui::Text("Model");
-			ImGui::NextColumn();
-			ImGui::Checkbox("Blinn-Phong", &lightComp->useBlinnPhong);
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Blinn-Phong (checked) or Phong (unchecked)");
-			}
-			ImGui::NextColumn();
 
 			ImGui::Columns(1);
 

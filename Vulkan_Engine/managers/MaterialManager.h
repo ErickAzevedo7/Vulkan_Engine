@@ -19,10 +19,11 @@ class VulkanShadowMap;
 } // namespace Renderer
 
 struct MaterialProperties {
-	alignas(16) glm::vec3 ambient{0.15f, 0.15f, 0.15f};
-	alignas(4) float shininess{32.0f};
-	alignas(16) glm::vec3 specular{0.5f, 0.5f, 0.5f};
-	alignas(16) glm::vec3 diffuse{0.8f, 0.8f, 0.8f};
+	alignas(16) glm::vec3 albedo{1.0f, 1.0f, 1.0f};
+	alignas(4) float metallic{0.0f};
+	alignas(4) float roughness{0.5f};
+	alignas(4) float ao{1.0f};
+	alignas(8) float _pad[2]{}; // pad to 32 bytes for std140
 };
 
 struct Material {
@@ -55,10 +56,10 @@ public:
 	void saveMaterialToFile(const std::string& path,
 							const std::string& name,
 							const std::string& albedoTextureKey = "",
-							const glm::vec3& ambient = glm::vec3(0.15f),
-							float shininess = 32.0f,
-							const glm::vec3& specular = glm::vec3(0.5f),
-							const glm::vec3& diffuse = glm::vec3(0.8f));
+							const glm::vec3& albedo = glm::vec3(1.0f),
+							float metallic = 0.0f,
+							float roughness = 0.5f,
+							float ao = 1.0f);
 	Material* updateMaterialTexture(const std::string& materialPath, const std::string& texturePath);
 	void updateMaterialProperties(Material* material, uint32_t frame);
 

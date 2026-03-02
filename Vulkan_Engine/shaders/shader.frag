@@ -13,23 +13,20 @@ layout(binding = 2) uniform Light {
     vec4 colorIntensity; // rgb=color, a=intensity
     vec4 direction;      // xyz=direction, w=pad
     vec4 positionType;   // xyz=position, w=type (0=directional,1=point,2=spot)
-    vec4 ambient;        // rgb=ambient color
-    vec4 diffuse;        // rgb=diffuse color
-    vec4 specular;       // rgb=specular color
     float attenuationKc;
     float attenuationKl;
     float attenuationKq;
     float cutOff;        // inner cone angle (cosine)
     float outerCutOff;   // outer cone angle (cosine)
-    int useBlinnPhong;   // 1 = Blinn-Phong, 0 = Phong
     float far_plane;     // point light shadow far plane
+    float _pad[2];
 } light;
 
 layout(binding = 3) uniform MaterialProps {
-    vec3 ambient;
-    float shininess;
-    vec3 specular;
-    vec3 diffuse;
+    vec3 albedo;
+    float metallic;
+    float roughness;
+    float ao;
 } material;
 
 layout(location = 0) out vec4 outColor;
@@ -43,9 +40,61 @@ layout(push_constant) uniform PushConstants {
     mat4 lightSpaceMatrix; // directional light view-projection for shadow sampling
 } pc;
 
+const float PI = 3.14159265359;
+
 // ----------------------------------------------------------------------------
-// Directional light: PCF over a 2D shadow map
+// PBR Functions (LearnOpenGL)
 // ----------------------------------------------------------------------------
+
+// Normal Distribution Function: Trowbridge-Reitz GGX
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+}
+
+// Geometry Function: Schlick-GGX
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float num   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return num / denom;
+}
+
+// Geometry Function: Smith's method (combined)
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+// Fresnel Equation: Fresnel-Schlick approximation
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// ----------------------------------------------------------------------------
+// Shadow Functions (unchanged)
+// ----------------------------------------------------------------------------
+
+// Directional/Spot light: PCF over a 2D shadow map
 float shadowCalculation(vec3 fragPos, vec3 normal, vec3 lightDir)
 {
     // Transform fragment position into light clip space
@@ -59,11 +108,10 @@ float shadowCalculation(vec3 fragPos, vec3 normal, vec3 lightDir)
     float currentDepth = projCoords.z;
 
     // Keep the shadow at 0.0 when outside the far_plane region of the light's frustum.
-    // Additionally, prevent back-projection (w < 0.0) where geometry behind the spotlight is erroneously shadowed.
     if(projCoords.z > 1.0 || fragPosLightSpace.w < 0.0)
         return 0.0;
-    // Slope-scaled bias to prevent shadow acne, reduced to stop peter-panning
-    // (Vulkan pipeline already uses front-face culling for shadows)
+
+    // Slope-scaled bias
     float bias = max(0.001 * (1.0 - dot(normal, lightDir)), 0.0001);
 
     // 3×3 PCF
@@ -88,6 +136,7 @@ vec3 gridSamplingDisk[20] = vec3[](
    vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
 );
 
+// Point light: PCF over a cube shadow map
 float shadowCubeCalculation(vec3 lightPos, vec3 fragPos)
 {
     vec3 fragToLight    = fragPos - lightPos;
@@ -110,86 +159,99 @@ float shadowCubeCalculation(vec3 lightPos, vec3 fragPos)
     return shadow;
 }
 
+// ----------------------------------------------------------------------------
+// Main
+// ----------------------------------------------------------------------------
 void main() {
-    if (pc.usePickColor == 1)
+    if (pc.usePickColor == 1) {
         outColor = vec4(pc.pickColor, 1.0);
-    else
-    {
-    vec4 tex = texture(texSampler, fragTexCoord);
-    vec3 texColor = tex.rgb;
-
-    // read light data from uniform
-    vec3 lightColor = light.colorIntensity.rgb;
-    float lightIntensity = light.colorIntensity.a;
-    vec3 lightDir = light.direction.xyz;
-    vec3 lightPos = light.positionType.xyz;
-    int lightType = int(light.positionType.w + 0.5);
-
-    if (lightType == 0) {
-        lightDir = normalize(-light.direction.xyz);
-    } else if (lightType == 1 || lightType == 2) {
-        lightDir = normalize(lightPos - fragPosition);
+        return;
     }
 
-    // Spotlight intensity calculation
-    float spotIntensity = 1.0;
+    vec4 tex = texture(texSampler, fragTexCoord);
+    vec3 albedo   = material.albedo * tex.rgb;
+    float metallic  = material.metallic;
+    float roughness = material.roughness;
+    float ao        = material.ao;
+
+    vec3 N = normalize(fragNormal);
+    vec3 V = normalize(fragViewPos - fragPosition);
+
+    // Calculate reflectance at normal incidence (F0)
+    // For dielectrics use 0.04; for metals use the albedo color
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metallic);
+
+    // Read light data
+    vec3  lightColor     = light.colorIntensity.rgb;
+    float lightIntensity = light.colorIntensity.a;
+    vec3  lightPos       = light.positionType.xyz;
+    int   lightType      = int(light.positionType.w + 0.5);
+
+    // Determine light direction based on type
+    vec3 L = vec3(0.0);
+    if (lightType == 0) {
+        L = normalize(-light.direction.xyz); // directional
+    } else {
+        L = normalize(lightPos - fragPosition); // point or spot
+    }
+
+    vec3 H = normalize(V + L);
+
+    // Radiance
+    vec3 radiance = lightColor * lightIntensity;
+
+    // Attenuation for point/spot lights
+    if (lightType == 1 || lightType == 2) {
+        float distance    = length(lightPos - fragPosition);
+        float attenuation = 1.0 / (distance * distance);
+        radiance *= attenuation;
+    }
+
+    // Spotlight intensity
     if (lightType == 2) {
         vec3 spotDir = normalize(-light.direction.xyz);
-        float theta = dot(lightDir, spotDir);
+        float theta   = dot(L, spotDir);
         float epsilon = light.cutOff - light.outerCutOff;
-        spotIntensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+        float spotIntensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+        radiance *= spotIntensity;
     }
 
-    //ambient - modulated by texture color
-    vec3 ambient = light.ambient.rgb * material.ambient;
+    // Cook-Torrance BRDF
+    float NDF = DistributionGGX(N, H, roughness);
+    float G   = GeometrySmith(N, V, L, roughness);
+    vec3  F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-    // diffuse - modulated by texture color
-    vec3 norm = normalize(fragNormal);
-    
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = light.diffuse.rgb * (diff * material.diffuse);
+    vec3 numerator    = NDF * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001; // + 0.0001 to prevent divide by zero
+    vec3 specular     = numerator / denominator;
 
-    // specular (Blinn-Phong or Phong based on flag) - NOT modulated by texture color
-    vec3 viewDir = normalize(fragViewPos - fragPosition);
-    float spec;
-    
-    if (light.useBlinnPhong == 1) {
-        // Blinn-Phong: use halfway vector
-        vec3 halfwayDir = normalize(lightDir + viewDir);
-        spec = pow(max(dot(norm, halfwayDir), 0.0), material.shininess);
-    } else {
-        // Phong: use reflection vector
-        vec3 reflectDir = reflect(-lightDir, norm);
-        spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    }
-    
-    vec3 specular = light.specular.rgb * (spec * material.specular);
+    // Energy conservation: kS is Fresnel, kD is the remaining
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    // Metals have no diffuse component
+    kD *= 1.0 - metallic;
 
-    // point light and spotlight attenuation
-    if (lightType == 1 || lightType == 2) {
-      float distance = length(lightPos - fragPosition);
-      float attenuation = 1.0 / (light.attenuationKc + light.attenuationKl * distance + light.attenuationKq * (distance * distance));
+    float NdotL = max(dot(N, L), 0.0);
 
-        ambient  *= attenuation;
-        diffuse  *= attenuation;
-        specular *= attenuation;
-    }
-
-    // Apply spotlight intensity
-    if (lightType == 2) {
-        diffuse  *= spotIntensity;
-        specular *= spotIntensity;
-    }
-
-    // Final result - apply light color and intensity
+    // Shadow
     float shadow = 0.0;
     if (lightType == 1) { // Point light
         shadow = shadowCubeCalculation(lightPos, fragPosition);
-    } else if (lightType == 0 || lightType == 2) { // Directional or Spot light
-        shadow = shadowCalculation(fragPosition, norm, lightDir);
+    } else if (lightType == 0 || lightType == 2) { // Directional or Spot
+        shadow = shadowCalculation(fragPosition, N, L);
     }
 
-    vec3 result = (ambient + (1.0 - shadow) * (diffuse + specular)) * texColor * lightIntensity;
-    outColor = vec4(result, tex.a);
-    }
+    // Outgoing radiance Lo
+    vec3 Lo = (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * NdotL;
+
+    // Ambient lighting (constant, no IBL)
+    vec3 ambient = vec3(0.03) * albedo * ao;
+
+    vec3 color = ambient + Lo;
+
+    // HDR tonemapping (Reinhard)
+    color = color / (color + vec3(1.0));
+
+    outColor = vec4(color, tex.a);
 }

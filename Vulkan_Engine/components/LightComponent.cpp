@@ -38,17 +38,15 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	u.colorIntensity = glm::vec4(color, intensity);
 	u.direction = glm::vec4(dir, 0.0f);
 	u.positionType = glm::vec4(pos, static_cast<float>(static_cast<int>(type)));
-	u.ambient = glm::vec4(ambient, 0.0f);
-	u.diffuse = glm::vec4(diffuse, 0.0f);
-	u.specular = glm::vec4(specular, 0.0f);
 	u.attenuationKc = attenuationKc;
 	u.attenuationKl = attenuationKl;
 	u.attenuationKq = attenuationKq;
 	u.cutOff = glm::cos(innerConeAngle);
 	u.outerCutOff = glm::cos(outerConeAngle);
-	u.useBlinnPhong = useBlinnPhong ? 1 : 0;
 	// far_plane: distance at which the light's shadow map and attenuation saturates
 	u.far_plane = range;
+	u._pad[0] = 0.0f;
+	u._pad[1] = 0.0f;
 
 	return u;
 }
