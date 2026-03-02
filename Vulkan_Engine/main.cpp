@@ -12,8 +12,10 @@
 #include "Scene.h"
 #include "vulkan/vulkan_core.h"
 
+#include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
+#include "glm/gtx/quaternion.hpp"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define fontPath "C:\\Windows\\Fonts\\segoeuisl.ttf" // Windows UI font
@@ -39,6 +41,7 @@
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
 #include "renderer/vulkan/VulkanDevice.h"
+#include "renderer/vulkan/VulkanShadowMap.h"
 #include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
 #include "ui/InspectorUi.h"
@@ -104,6 +107,7 @@ public:
 				LightComponent* lc = lightEntity.getComponent<LightComponent>();
 				if (lc) {
 					lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
+					lc->range = 100.0f; // shadow far plane
 				}
 			}
 		}
@@ -115,10 +119,11 @@ public:
 		outline.cleanup();
 		viewPort.cleanup();
 		mousePick.cleanup();
-		cleanup(); // Calls uiManager.cleanup()
+		cleanup();
 
 		// ResourceContext cleanup handled by destructor
 		resourceContext.cleanup();
+
 		engineCore.cleanup();
 	}
 
@@ -160,11 +165,10 @@ public:
 		vkResetCommandBuffer(engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
 
 		// (TEMPORARY)
-		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
-		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame(),
-										 engineCore.getUniformBuffersMapped()[VulkanCore::getCurrentFrame()]);
-
 		// Update simple single light (for now static directional light)
+		glm::mat4 lightSpaceMatrices[6] = {
+			glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};
+		glm::vec4 lightPos_farPlane(0.0f);
 		{
 			uint32_t frame = VulkanCore::getCurrentFrame();
 			// Find the first LightComponent in the active scene. If none found,
@@ -188,21 +192,34 @@ public:
 			if (!foundLight) {
 				// no lights in scene: make sure shader receives zero intensity
 				lu.colorIntensity = glm::vec4(0.0f);
+			} else {
+				// Defer entirely to the ShadowMap interface to calculate complex graphics projection math
+				shadowMap.calculateShadowMatrices(
+					lu.positionType, lu.direction, lu.far_plane, lu.outerCutOff, lightSpaceMatrices, lightPos_farPlane);
 			}
 			resourceContext.getLightManager().updateLight(frame, lu);
 		}
 
+		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
+		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame(),
+										 engineCore.getUniformBuffersMapped()[VulkanCore::getCurrentFrame()],
+										 lightSpaceMatrices,
+										 lightPos_farPlane);
+
+		// --- 1. SHADOW PASS ---
+		shadowMap.recordShadowCommandBuffer(VulkanCore::getCurrentFrame(), lightSpaceMatrices, lightPos_farPlane);
 		mousePick.recordMousePickCommandBuffer(mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
 											   imageIndex);
 
-		viewPort.recordViewportCommandBuffer(viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
-											 imageIndex);
+		viewPort.recordViewportCommandBuffer(
+			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex, lightSpaceMatrices[0]);
 
 		outline.recordOutlineCommandBuffer(outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex);
 
 		recordImguiCommandBuffer(uiManager.getCommandBuffers()[VulkanCore::getCurrentFrame()], imageIndex);
 
-		std::array<VkCommandBuffer, 4> submitCommandBuffers = {
+		std::array<VkCommandBuffer, 5> submitCommandBuffers = {
+			shadowMap.getCommandBuffer(VulkanCore::getCurrentFrame()),
 			mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
 			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
 			outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
@@ -258,7 +275,7 @@ public:
 
 	void mainLoop() {
 		sceneTexture.resize(viewPort.m_ViewportImageViews.size());
-		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
 			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -378,7 +395,7 @@ private:
 	UIManager uiManager;
 	VkExtent2D viewportExtent;
 	std::vector<VkDescriptorSet> sceneTexture;
-
+	Renderer::VulkanShadowMap shadowMap;
 	static void check_vk_result(VkResult err) {
 		if (err == 0)
 			return;
@@ -391,6 +408,10 @@ private:
 		// Initialize UI Manager (ImGui)
 		uiManager.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					   engineCore.getSwapChainImageViews());
+		shadowMap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+					   2048,
+					   2048); // Initialize as PointLight to ensure 6 layers and cube view
+		resourceContext.getMaterialManager().setShadowMap(&shadowMap);
 	}
 
 	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ImageIndex) {
@@ -400,11 +421,12 @@ private:
 	void recreateRenderPasses() {
 		vkDeviceWaitIdle(VulkanCore::getDevice());
 
+		// Update VulkanDevice with the new swapchain properties
 		static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice())
 			->updateSwapchain(engineCore.getSwapChainExtent(),
 							  static_cast<uint32_t>(engineCore.getSwapChainImageViews().size()));
 
-		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
 
 		uiManager.recreateFramebuffers(engineCore.getSwapChainImageViews());
@@ -413,7 +435,7 @@ private:
 		outline.recreateOutline(
 			mousePick.getMousePickImageViews(), viewPort.m_ViewportImageViews, mousePick.getMousePickExtent());
 
-		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
 			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -421,6 +443,7 @@ private:
 
 	void cleanup() {
 		uiManager.cleanup();
+		shadowMap.cleanup();
 	}
 
 	void inputProcess() {

@@ -1,5 +1,6 @@
 #include "MeshComponent.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -10,6 +11,7 @@
 #include "renderer/GraphicsResourceBinder.h"
 #include "renderer/RenderCommandList.h"
 #include "renderer/RenderTypes.h"
+#include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
 
@@ -57,8 +59,12 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 
 	pushConstants.usePickColor = useMousePick;
 
-	commandList.pushConstants(
-		pipelineLayout, 16 /* VK_SHADER_STAGE_FRAGMENT_BIT */, 0, sizeof(pushConstants), &pushConstants);
+	commandList.pushConstants(pipelineLayout,
+							  VK_SHADER_STAGE_VERTEX_BIT |
+								  VK_SHADER_STAGE_FRAGMENT_BIT, // must cover all stages in the pipeline layout range
+							  0,
+							  sizeof(pushConstants),
+							  &pushConstants);
 
 	commandList.bindPipeline(pipeline);
 

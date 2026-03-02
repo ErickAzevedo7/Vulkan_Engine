@@ -20,6 +20,7 @@
 #include "renderer/GraphicsResourceBinder.h" // Added
 #include "renderer/RenderTypes.h"
 #include "renderer/vulkan/VulkanBuffer.h"
+#include "renderer/vulkan/VulkanShadowMap.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -420,6 +421,22 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		// Material UBO
 		desc.bindings.push_back(binding3); // Material UBO
 
+		// Binding 4: Shadow Map (Sampler) - Fragment
+		Renderer::ResourceBinding binding4;
+		binding4.binding = 4;
+		binding4.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding4.count = 1;
+		binding4.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(binding4);
+
+		// Binding 5: Shadow Map Cube (Sampler) - Fragment
+		Renderer::ResourceBinding binding5;
+		binding5.binding = 5;
+		binding5.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding5.count = 1;
+		binding5.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(binding5);
+
 		layout = resourceBinder->createLayout(desc);
 		layoutCache[layoutKey] = layout;
 	}
@@ -468,12 +485,23 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 			bufferBindings.push_back(lightBinding);
 		}
 
+		// Binding 4: Default Shadow Map Texture (only if shadowMap is missing)
+		Renderer::ResourceImageBinding shadowBinding;
+		shadowBinding.binding = 4;
+		if (!shadowMap) {
+			shadowBinding.texture = textureManager.getTexture(textureManager.kDefaultTextureKey)->handle;
+			shadowBinding.sampler = textureManager.getTexture(textureManager.kDefaultTextureKey)->sampler;
+			imageBindings.push_back(shadowBinding);
+		}
+
 		// Update via Binder
 		resourceBinder->updateSet(material->resourceSets[i], bufferBindings, imageBindings);
 
-		// Update Binding 0 (Global UBO) Manually
+		// Update Global UBO and Shadow Map Manually
 		VkDescriptorSet vkSet =
 			*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
+
+		std::vector<VkWriteDescriptorSet> manualWrites;
 
 		VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
@@ -484,11 +512,46 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		uboWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		uboWrite.dstSet = vkSet;
 		uboWrite.dstBinding = 0;
-		uboWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Original was dynamic
+		uboWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 		uboWrite.descriptorCount = 1;
 		uboWrite.pBufferInfo = &bufferInfo;
+		manualWrites.push_back(uboWrite);
 
-		vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &uboWrite, 0, nullptr);
+		VkDescriptorImageInfo shadowInfo{};
+		VkWriteDescriptorSet shadowWrite{};
+		if (shadowMap) {
+			shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			shadowInfo.imageView =
+				static_cast<VkImageView>(shadowMap->getDepth2DView()); // 2D view for directional light sampling
+			shadowInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler());
+
+			shadowWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			shadowWrite.dstSet = vkSet;
+			shadowWrite.dstBinding = 4;
+			shadowWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			shadowWrite.descriptorCount = 1;
+			shadowWrite.pImageInfo = &shadowInfo;
+			manualWrites.push_back(shadowWrite);
+		}
+
+		VkDescriptorImageInfo shadowCubeInfo{};
+		VkWriteDescriptorSet shadowCubeWrite{};
+		if (shadowMap) {
+			shadowCubeInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			shadowCubeInfo.imageView = static_cast<VkImageView>(shadowMap->getDepthCubeImageView());
+			shadowCubeInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler()); // Reuse sampler
+
+			shadowCubeWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			shadowCubeWrite.dstSet = vkSet;
+			shadowCubeWrite.dstBinding = 5;
+			shadowCubeWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			shadowCubeWrite.descriptorCount = 1;
+			shadowCubeWrite.pImageInfo = &shadowCubeInfo;
+			manualWrites.push_back(shadowCubeWrite);
+		}
+
+		vkUpdateDescriptorSets(
+			VulkanCore::getDevice(), static_cast<uint32_t>(manualWrites.size()), manualWrites.data(), 0, nullptr);
 	}
 }
 
@@ -542,6 +605,58 @@ VkBuffer MaterialManager::getMaterialPropertyBuffer(Material* material, uint32_t
 
 void MaterialManager::setLightManager(LightManager* lightMgr) {
 	lightManager = lightMgr;
+}
+
+void MaterialManager::setShadowMap(Renderer::VulkanShadowMap* map) {
+	shadowMap = map;
+
+	if (shadowMap && resourceBinder) {
+		for (auto& pair : materials) {
+			Material* material = pair.second;
+			for (size_t i = 0; i < material->resourceSets.size(); i++) {
+				VkDescriptorSet vkSet =
+					*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
+
+				std::vector<VkWriteDescriptorSet> manualWrites;
+
+				VkDescriptorImageInfo shadowInfo{};
+				VkWriteDescriptorSet shadowWrite{};
+				shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+				shadowInfo.imageView = static_cast<VkImageView>(shadowMap->getDepth2DView());
+				shadowInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler());
+
+				shadowWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				shadowWrite.dstSet = vkSet;
+				shadowWrite.dstBinding = 4;
+				shadowWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				shadowWrite.descriptorCount = 1;
+				shadowWrite.pImageInfo = &shadowInfo;
+				manualWrites.push_back(shadowWrite);
+
+				VkDescriptorImageInfo shadowCubeInfo{};
+				VkWriteDescriptorSet shadowCubeWrite{};
+				shadowCubeInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+				shadowCubeInfo.imageView = static_cast<VkImageView>(shadowMap->getDepthCubeImageView());
+				shadowCubeInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler());
+
+				shadowCubeWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				shadowCubeWrite.dstSet = vkSet;
+				shadowCubeWrite.dstBinding = 5;
+				shadowCubeWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				shadowCubeWrite.descriptorCount = 1;
+				shadowCubeWrite.pImageInfo = &shadowCubeInfo;
+				manualWrites.push_back(shadowCubeWrite);
+
+				if (!manualWrites.empty()) {
+					vkUpdateDescriptorSets(VulkanCore::getDevice(),
+										   static_cast<uint32_t>(manualWrites.size()),
+										   manualWrites.data(),
+										   0,
+										   nullptr);
+				}
+			}
+		}
+	}
 }
 
 void MaterialManager::cleanupPendingResources(uint32_t frameIndex) {

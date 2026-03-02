@@ -12,10 +12,10 @@
 
 class TextureManager;
 
-// Forward declaration - use interface, not implementation
 namespace Renderer {
 class GraphicsBuffer;
 class GraphicsResourceBinder;
+class VulkanShadowMap;
 } // namespace Renderer
 
 struct MaterialProperties {
@@ -61,7 +61,7 @@ public:
 							const glm::vec3& diffuse = glm::vec3(0.8f));
 	Material* updateMaterialTexture(const std::string& materialPath, const std::string& texturePath);
 	void updateMaterialProperties(Material* material, uint32_t frame);
-	
+
 	// Deferred destruction for descriptor sets
 	void cleanupPendingResources(uint32_t frameIndex);
 
@@ -69,6 +69,7 @@ public:
 	void setBufferManager(Renderer::GraphicsBuffer* bufferMgr);
 	void setResourceBinder(Renderer::GraphicsResourceBinder* binder);
 	void setLightManager(class LightManager* lightMgr);
+	void setShadowMap(Renderer::VulkanShadowMap* map);
 
 	// Get VkBuffer for descriptor writes (temporary until descriptor abstraction)
 	VkBuffer getMaterialPropertyBuffer(Material* material, uint32_t frame);
@@ -78,6 +79,7 @@ private:
 	Renderer::GraphicsBuffer* bufferManager = nullptr;
 	Renderer::GraphicsResourceBinder* resourceBinder = nullptr;
 	class LightManager* lightManager = nullptr;
+	Renderer::VulkanShadowMap* shadowMap = nullptr;
 
 	// Layout key -> Handle map (to reuse layouts)
 	std::unordered_map<std::string, Renderer::ResourceSetLayoutHandle> layoutCache;

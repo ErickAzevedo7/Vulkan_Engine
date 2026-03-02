@@ -1,5 +1,11 @@
 #include "VulkanCommandList.h"
 
+#include <cstddef>
+#include <cstdint>
+
+#include "vulkan/vulkan_core.h"
+
+
 namespace Renderer {
 
 VulkanCommandList::VulkanCommandList(VkCommandBuffer cmd) : commandBuffer(cmd) {

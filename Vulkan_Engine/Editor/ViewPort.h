@@ -1,9 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
+
+#include "glm/ext/matrix_float4x4.hpp"
+
 
 namespace Renderer {
 class VulkanDevice;
@@ -21,7 +25,8 @@ public:
 
 	void createViewportImageViews();
 
-	void recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void
+	recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, const glm::mat4& lightSpaceMatrix);
 
 	void recreateViewport(VkExtent2D viewportExtent);
 

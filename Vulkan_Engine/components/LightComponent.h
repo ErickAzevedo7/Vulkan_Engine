@@ -23,7 +23,7 @@ public:
 	// Basic light properties (public for quick editor access)
 	glm::vec3 color{1.0f, 1.0f, 1.0f};
 	float intensity{1.0f};
-	float range{10.0f}; // used by point/spot
+	float range{50.0f}; // used by point/spot
 	glm::vec3 direction{0.0f, -1.0f, 0.0f}; // used by directional/spot
 	float innerConeAngle{glm::radians(12.5f)};
 	float outerConeAngle{glm::radians(17.5f)};
@@ -50,17 +50,18 @@ public:
 	// Uniform layout for GPU upload (aligned to std140)
 	struct alignas(16) LightUniform {
 		glm::vec4 colorIntensity; // rgb=color, a=intensity
-		glm::vec4 direction;      // xyz=direction, w=pad
-		glm::vec4 positionType;   // xyz=position, w=type (0=directional,1=point,2=spot)
-		glm::vec4 ambient;        // rgb=ambient, w=pad
-		glm::vec4 diffuse;        // rgb=diffuse, w=pad
-		glm::vec4 specular;       // rgb=specular, w=pad
+		glm::vec4 direction; // xyz=direction, w=pad
+		glm::vec4 positionType; // xyz=position, w=type (0=directional,1=point,2=spot)
+		glm::vec4 ambient; // rgb=ambient, w=pad
+		glm::vec4 diffuse; // rgb=diffuse, w=pad
+		glm::vec4 specular; // rgb=specular, w=pad
 		float attenuationKc;
 		float attenuationKl;
 		float attenuationKq;
-		float cutOff;        // inner cone angle (cosine)
-		float outerCutOff;   // outer cone angle (cosine)
-		int useBlinnPhong;   // 1 = Blinn-Phong, 0 = Phong
+		float cutOff; // inner cone angle (cosine)
+		float outerCutOff; // outer cone angle (cosine)
+		int useBlinnPhong; // 1 = Blinn-Phong, 0 = Phong
+		float far_plane; // point light shadow far plane
 	};
 
 	LightUniform getLightUniform() const;

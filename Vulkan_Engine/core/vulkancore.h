@@ -10,6 +10,7 @@
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 
 // C++ standard library (only what's needed in the interface)
 #include <optional>
@@ -56,6 +57,8 @@ struct UniformBufferObject {
 	alignas(16) glm::mat4 normal;
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
+	alignas(16) glm::mat4 lightSpaceMatrices[6];
+	alignas(16) glm::vec4 lightPos_farPlane;
 	alignas(16) glm::vec3 viewPos;
 };
 

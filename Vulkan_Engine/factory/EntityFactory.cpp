@@ -65,12 +65,13 @@ Entity& EntityFactory::createLight(ResourceContext& resources,
 	entity.addComponent(transform);
 
 	// Add mesh component for visualization (small cube)
-	MeshComponent* meshComp = new MeshComponent(&entity, "cube", resources.getMeshManager());
+	// Commented out to prevent the light source from casting a shadow when pointing straight down!
+	// MeshComponent* meshComp = new MeshComponent(&entity, "cube", resources.getMeshManager());
 	// Set default material
-	if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
-		meshComp->SetMaterial(mat);
-	}
-	entity.addComponent(meshComp);
+	// if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
+	// 	meshComp->SetMaterial(mat);
+	// }
+	// entity.addComponent(meshComp);
 
 	// Add light component
 	LightComponent* lightComp = new LightComponent(&entity, type);

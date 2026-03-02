@@ -85,7 +85,10 @@ void EditorCamera::setExtent(VkExtent2D newExtent) {
 	extent = newExtent;
 }
 
-void EditorCamera::updateUniformBuffer(uint32_t currentImage, void* uniformBufferMapped) {
+void EditorCamera::updateUniformBuffer(uint32_t currentImage,
+									   void* uniformBufferMapped,
+									   const glm::mat4* lightSpaceMatrices,
+									   const glm::vec4& lightPos_farPlane) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
@@ -111,6 +114,13 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage, void* uniformBuffe
 	ubo.proj = projMatrix;
 
 	ubo.viewPos = cameraPos;
+
+	if (lightSpaceMatrices) {
+		for (int i = 0; i < 6; i++) {
+			ubo.lightSpaceMatrices[i] = lightSpaceMatrices[i];
+		}
+		ubo.lightPos_farPlane = lightPos_farPlane;
+	}
 
 	for (const auto& entityPtr : *entities) {
 		const Entity& entity = *entityPtr;

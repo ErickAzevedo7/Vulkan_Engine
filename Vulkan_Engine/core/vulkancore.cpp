@@ -65,7 +65,7 @@ const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
-const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_MULTIVIEW_EXTENSION_NAME};
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -118,8 +118,8 @@ void VulkanCore::initWindow() {
 void VulkanCore::initVulkan() {
 	physicalDevice = VK_NULL_HANDLE;
 	currentFrame = 0;
-	bool framebufferResized = false;
-	bool swapChainRecreated = false;
+	framebufferResized = false;
+	swapChainRecreated = false;
 	msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	createInstance();
@@ -690,8 +690,26 @@ void VulkanCore::createDescriptorSetLayout() {
 	materialPropsLayoutBinding.pImmutableSamplers = nullptr;
 	materialPropsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 4> bindings = {
-		uboLayoutBinding, samplerLayoutBinding, lightLayoutBinding, materialPropsLayoutBinding};
+	VkDescriptorSetLayoutBinding shadowMapLayoutBinding{};
+	shadowMapLayoutBinding.binding = 4;
+	shadowMapLayoutBinding.descriptorCount = 1;
+	shadowMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	shadowMapLayoutBinding.pImmutableSamplers = nullptr;
+	shadowMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	VkDescriptorSetLayoutBinding shadowCubeMapLayoutBinding{};
+	shadowCubeMapLayoutBinding.binding = 5;
+	shadowCubeMapLayoutBinding.descriptorCount = 1;
+	shadowCubeMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	shadowCubeMapLayoutBinding.pImmutableSamplers = nullptr;
+	shadowCubeMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 6> bindings = {uboLayoutBinding,
+															samplerLayoutBinding,
+															lightLayoutBinding,
+															materialPropsLayoutBinding,
+															shadowMapLayoutBinding,
+															shadowCubeMapLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -787,9 +805,10 @@ void VulkanCore::createGraphicsPipeline() {
 	colorBlending.blendConstants[3] = 0.0f;
 
 	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(float) * 3 + sizeof(int);
+	pushConstantRange.size = sizeof(float) * 3 + sizeof(int) // pickColor + usePickColor (16 bytes)
+							 + sizeof(float) * 16; // mat4 lightSpaceMatrix    (64 bytes)
 
 	std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
@@ -965,8 +984,13 @@ void VulkanCore::createLogicalDevice() {
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.sampleRateShading = VK_TRUE; // enable sample shading feature for the device
 
+	VkPhysicalDeviceMultiviewFeatures multiviewFeatures{};
+	multiviewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+	multiviewFeatures.multiview = VK_TRUE;
+
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.pNext = &multiviewFeatures;
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;

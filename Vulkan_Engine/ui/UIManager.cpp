@@ -134,9 +134,7 @@ void UIManager::recreateFramebuffers(const std::vector<VkImageView>& swapchainIm
 }
 
 void UIManager::cleanup() {
-	for (auto framebuffer : imGuiFramebuffers) {
-		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
-	}
+	cleanupFramebuffers();
 
 	vkDestroyRenderPass(vulkanDevice->getDevice(), imGuiRenderPass, nullptr);
 
@@ -340,8 +338,16 @@ void UIManager::createFramebuffers(const std::vector<VkImageView>& swapchainImag
 }
 
 void UIManager::cleanupFramebuffers() {
+	if (!vulkanDevice)
+		return;
+	VkDevice device = vulkanDevice->getDevice();
+	if (!device)
+		return;
+
 	for (size_t i = 0; i < imGuiFramebuffers.size(); i++) {
-		vkDestroyFramebuffer(vulkanDevice->getDevice(), imGuiFramebuffers[i], nullptr);
+		if (imGuiFramebuffers[i] != VK_NULL_HANDLE) {
+			vkDestroyFramebuffer(device, imGuiFramebuffers[i], nullptr);
+		}
 	}
 	imGuiFramebuffers.clear();
 }

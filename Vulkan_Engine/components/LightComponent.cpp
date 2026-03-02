@@ -47,6 +47,8 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	u.cutOff = glm::cos(innerConeAngle);
 	u.outerCutOff = glm::cos(outerConeAngle);
 	u.useBlinnPhong = useBlinnPhong ? 1 : 0;
+	// far_plane: distance at which the light's shadow map and attenuation saturates
+	u.far_plane = range;
 
 	return u;
 }

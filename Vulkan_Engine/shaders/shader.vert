@@ -5,6 +5,8 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 normal;
     mat4 view;
     mat4 proj;
+    mat4 lightSpaceMatrices[6];
+    vec4 lightPos_farPlane;
     vec3 viewPos;
 } ubo;
 

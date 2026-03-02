@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <stdexcept>
 
 #include "core/utils/Utils.h"
@@ -13,6 +14,8 @@
 #include "SceneRenderer.h"
 #include "skybox/Skybox.h"
 #include "vulkan/vulkan_core.h"
+
+#include "glm/ext/matrix_float4x4.hpp"
 
 
 void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
@@ -368,7 +371,9 @@ void ViewPort::createViewportFramebuffers() {
 	}
 }
 
-void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
+										   uint32_t imageIndex,
+										   const glm::mat4& lightSpaceMatrix) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	// beginInfo.flags = 0;
@@ -427,6 +432,14 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32
 							skyboxDynamicOffset);
 
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
+
+	// Push the directional light view-projection matrix at offset 16 (after pickColor+usePickColor)
+	vkCmdPushConstants(m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
+					   vulkanDevice->getPipelineLayout(),
+					   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					   16, // offset: skip the 16-byte pick color block
+					   sizeof(glm::mat4), // 64 bytes
+					   &lightSpaceMatrix);
 
 	Renderer::VulkanCommandList commandList(commandBuffer);
 	SceneRenderer::renderScene(commandList,

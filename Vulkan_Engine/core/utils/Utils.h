@@ -1,9 +1,10 @@
 #pragma once
-#include "vulkan/vulkan_core.h"
-
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "vulkan/vulkan_core.h"
+
 
 namespace Utils {
 bool hasStencilComponent(VkFormat format);
@@ -35,7 +36,9 @@ void createImage(uint32_t width,
 				 VkImageUsageFlags usage,
 				 VkMemoryPropertyFlags properties,
 				 VkImage& image,
-				 VkDeviceMemory& imageMemory);
+				 VkDeviceMemory& imageMemory,
+				 uint32_t arrayLayers = 1,
+				 VkImageCreateFlags flags = 0);
 
 void transitionImageLayout(VkImage image,
 						   VkFormat format,
@@ -45,5 +48,10 @@ void transitionImageLayout(VkImage image,
 						   VkCommandPool commandPool,
 						   uint32_t layerCount = 1);
 void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, VkCommandPool commandPool);
-VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+VkImageView createImageView(VkImage image,
+							VkFormat format,
+							VkImageAspectFlags aspectFlags,
+							uint32_t mipLevels,
+							VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D,
+							uint32_t layerCount = 1);
 } // namespace Utils

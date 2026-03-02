@@ -23,6 +23,11 @@ public:
 							uint32_t currentFrame,
 							uint64_t dynamicAlignment);
 
+	static void renderShadows(Renderer::RenderCommandList& commandList,
+							  VkPipeline shadowPipeline,
+							  VkPipelineLayout shadowPipelineLayout,
+							  VkDescriptorSet shadowDescriptorSet);
+
 	static void renderEntity(const Entity* entity,
 							 Renderer::RenderCommandList& commandList,
 							 VkPipeline pipeline,

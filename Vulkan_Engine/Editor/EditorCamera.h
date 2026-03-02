@@ -10,6 +10,7 @@
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 
 // Forward declarations
 class MousePick;
@@ -35,7 +36,10 @@ public:
 
 	static void setExtent(VkExtent2D newExtent);
 
-	void updateUniformBuffer(uint32_t currentImage, void* uniformBufferMapped);
+	void updateUniformBuffer(uint32_t currentImage,
+							 void* uniformBufferMapped,
+							 const glm::mat4* lightSpaceMatrices = nullptr,
+							 const glm::vec4& lightPos_farPlane = glm::vec4(0.0f));
 	static void mousePosHandler();
 	void inputProcess(MousePick& mousePick);
 	static void drawGuizmo();

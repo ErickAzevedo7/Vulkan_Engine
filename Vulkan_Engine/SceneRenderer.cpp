@@ -4,12 +4,16 @@
 #include <cstdint>
 
 #include "components/MeshComponent.h"
+#include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "Entity.h"
+#include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "renderer/RenderCommandList.h"
 #include "Scene.h"
+#include "vulkan/vulkan_core.h"
 
+#include "glm/ext/matrix_float4x4.hpp"
 
 // Initialize static members
 ResourceContext* SceneRenderer::resources = nullptr;
@@ -92,5 +96,49 @@ void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 		Entity* entity = &scene->getEntity(i);
 
 		renderEntity(entity, commandList, pipeline, pipelineLayout, currentFrame, dynamicAlignment, 1);
+	}
+}
+
+void SceneRenderer::renderShadows(Renderer::RenderCommandList& commandList,
+								  VkPipeline shadowPipeline,
+								  VkPipelineLayout shadowPipelineLayout,
+								  VkDescriptorSet shadowDescriptorSet) {
+	Scene* scene = resources->getSceneManager().getActiveScene();
+	if (!scene)
+		return;
+
+	// Bind shadow pipeline and its descriptor set before drawing anything
+	commandList.bindPipeline(shadowPipeline);
+
+	void* pDescriptorSets[] = {shadowDescriptorSet};
+	commandList.bindDescriptorSets(shadowPipelineLayout, pDescriptorSets, 1, nullptr, 0);
+
+	auto entities = scene->getEntities();
+	MeshManager& meshManager = resources->getMeshManager();
+
+	for (const auto& entPtr : *entities) {
+		Entity* e = entPtr.get();
+		if (!e)
+			continue;
+		auto* meshComp = e->getComponent<MeshComponent>();
+		auto* transform = e->getComponent<Transform>();
+		if (!meshComp || !transform)
+			continue;
+
+		Mesh* mesh = meshComp->GetMesh();
+		if (!mesh)
+			continue;
+
+		// Push the model matrix (64 bytes) for this object
+		glm::mat4 model = transform->getMatrix();
+		commandList.pushConstants(shadowPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
+
+		// Bind Geometry Buffers
+		void* pBuffers[] = {meshManager.getVertexBuffer(*mesh)};
+		size_t offsets[] = {0};
+		commandList.bindVertexBuffers(pBuffers, offsets, 1);
+		commandList.bindIndexBuffer(meshManager.getIndexBuffer(*mesh));
+
+		commandList.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
 	}
 }

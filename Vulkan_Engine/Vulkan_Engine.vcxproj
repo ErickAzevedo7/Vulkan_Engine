@@ -106,7 +106,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -125,7 +125,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -182,6 +182,7 @@
     <ClCompile Include="renderer\vulkan\VulkanTexture.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanDevice.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanCommandList.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanShadowMap.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\LightComponent.h" />
@@ -236,6 +237,8 @@
     <ClInclude Include="renderer\vulkan\VulkanDevice.h" />
     <ClInclude Include="renderer\RenderCommandList.h" />
     <ClInclude Include="renderer\vulkan\VulkanCommandList.h" />
+    <ClInclude Include="renderer\ShadowMap.h" />
+    <ClInclude Include="renderer\vulkan\VulkanShadowMap.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />
