@@ -127,7 +127,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;$(ProjectDir)external\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>

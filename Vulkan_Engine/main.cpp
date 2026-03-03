@@ -193,6 +193,12 @@ public:
 				// no lights in scene: make sure shader receives zero intensity
 				lu.colorIntensity = glm::vec4(0.0f);
 			} else {
+				// For directional lights (type 0), pass camera world position in positionType.xyz
+				if (static_cast<int>(lu.positionType.w) == 0) {
+					glm::vec3 cameraPos = EditorCamera::cameraPos;
+					lu.positionType = glm::vec4(cameraPos, 0.0f);
+				}
+
 				// Defer entirely to the ShadowMap interface to calculate complex graphics projection math
 				shadowMap.calculateShadowMatrices(
 					lu.positionType, lu.direction, lu.far_plane, lu.outerCutOff, lightSpaceMatrices, lightPos_farPlane);
@@ -409,8 +415,8 @@ private:
 		uiManager.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					   engineCore.getSwapChainImageViews());
 		shadowMap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
-					   2048,
-					   2048); // Initialize as PointLight to ensure 6 layers and cube view
+					   1024,
+					   1024); // Initialize as PointLight to ensure 6 layers and cube view
 		resourceContext.getMaterialManager().setShadowMap(&shadowMap);
 	}
 

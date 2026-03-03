@@ -26,7 +26,6 @@
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
 
-
 namespace Renderer {
 
 VulkanShadowMap::~VulkanShadowMap() {
@@ -553,16 +552,37 @@ void VulkanShadowMap::calculateShadowMatrices(const glm::vec4& positionType,
 		}
 		outLightPosFarPlane = glm::vec4(lPos, 0.0f);
 	} else { // 0 = directional light
-		float near_plane = -far_plane, f_plane = far_plane;
-		glm::mat4 lightProjection = glm::orthoZO(-100.0f, 100.0f, 100.0f, -100.0f, near_plane, f_plane);
+		float shadowRadius = far_plane > 0.1f ? far_plane : 25.0f; // Use light's far plane range
+		glm::vec3 cameraPos(positionType.x, positionType.y, positionType.z);
 
 		glm::vec3 lightDir = glm::normalize(glm::vec3(direction.x, direction.y, direction.z));
-		glm::vec3 lightPos = glm::vec3(0.0f);
 		glm::vec3 up = std::abs(lightDir.y) > 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
-		glm::mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, up);
+
+		// Build a temporary light-space basis centered near the camera
+		glm::mat4 lightView = glm::lookAt(cameraPos - lightDir * shadowRadius, cameraPos, up);
+
+		// Snap origin to texel grid to prevent shadow swimming
+		float texelsPerUnit = (float)width / (2.0f * shadowRadius);
+		glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(texelsPerUnit));
+		glm::mat4 lookAt = scaleMat * lightView;
+		glm::mat4 lookAtInv = glm::inverse(lookAt);
+
+		glm::vec3 origin(0.0f);
+		origin = glm::vec3(lookAt * glm::vec4(origin, 1.0f));
+		origin.x = std::floor(origin.x);
+		origin.y = std::floor(origin.y);
+		origin = glm::vec3(lookAtInv * glm::vec4(origin, 1.0f));
+
+		glm::vec3 snappedEye = origin - lightDir * shadowRadius;
+		glm::mat4 snappedView = glm::lookAt(snappedEye, origin, up);
+
+		float near_plane = 0.1f;
+		float f_plane = shadowRadius * 2.0f;
+		glm::mat4 lightProjection =
+			glm::orthoZO(-shadowRadius, shadowRadius, -shadowRadius, shadowRadius, near_plane, f_plane);
 
 		for (int i = 0; i < 6; i++) {
-			outMatrices[i] = lightProjection * lightView;
+			outMatrices[i] = lightProjection * snappedView;
 		}
 		outLightPosFarPlane = glm::vec4(0.0f);
 	}

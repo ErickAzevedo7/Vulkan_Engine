@@ -763,7 +763,7 @@ void InspectorUi::render() {
 			// Intensity
 			ImGui::Text("Intensity");
 			ImGui::NextColumn();
-			ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 0.01f, 0.0f, 100.0f, "%.2f");
+			ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 1.0f, 0.0f, 1000.0f, "%.1f");
 			ImGui::NextColumn();
 
 			ImGui::Columns(1);
