@@ -40,7 +40,6 @@
 #include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
-#include "renderer/Hdr.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "renderer/vulkan/VulkanHdr.h"
 #include "renderer/vulkan/VulkanShadowMap.h"

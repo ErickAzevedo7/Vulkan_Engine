@@ -1,12 +1,14 @@
 #include "VulkanHdr.h"
 
-#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <vector>
 
 #include "core/utils/Utils.h"
 #include "core/vulkancore.h"
 #include "renderer/vulkan/VulkanDevice.h"
+#include "vulkan/vulkan_core.h"
 
 namespace Renderer {
 
