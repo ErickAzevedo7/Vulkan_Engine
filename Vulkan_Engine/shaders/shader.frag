@@ -250,8 +250,5 @@ void main() {
 
     vec3 color = ambient + Lo;
 
-    // HDR tonemapping (Reinhard)
-    color = color / (color + vec3(1.0));
-
     outColor = vec4(color, tex.a);
 }

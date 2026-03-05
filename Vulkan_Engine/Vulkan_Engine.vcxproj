@@ -162,6 +162,7 @@
     <ClCompile Include="managers\MeshManager.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Editor\MousePick.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanHdr.cpp" />
     <ClCompile Include="postprocess\outline.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="components\Transform.cpp" />
@@ -207,6 +208,8 @@
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="managers\MeshManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
+    <ClInclude Include="renderer\vulkan\VulkanHdr.h" />
+    <ClInclude Include="renderer\Hdr.h" />
     <ClInclude Include="postprocess\outline.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="components\Transform.h" />

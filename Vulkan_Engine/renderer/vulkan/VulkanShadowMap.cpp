@@ -1,6 +1,7 @@
 #include "VulkanShadowMap.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -24,6 +25,7 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 #include "glm/geometric.hpp"
+#include "glm/matrix.hpp"
 #include "glm/trigonometric.hpp"
 
 namespace Renderer {

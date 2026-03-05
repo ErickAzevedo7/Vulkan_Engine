@@ -12,3 +12,6 @@ C:\VulkanSDK\1.4.309.0\Bin\glslc.exe gridplane.frag -o gridplane.frag.spv
 
 C:\VulkanSDK\1.4.309.0\Bin\glslc.exe shadow\shadow.vert -o shadow\shadow.vert.spv
 C:\VulkanSDK\1.4.309.0\Bin\glslc.exe shadow\shadow.frag -o shadow\shadow.frag.spv
+
+C:\VulkanSDK\1.4.309.0\Bin\glslc.exe hdr\postprocess_hdr.vert -o hdr\postprocess_hdr_vert.spv
+C:\VulkanSDK\1.4.309.0\Bin\glslc.exe hdr\postprocess_hdr.frag -o hdr\postprocess_hdr_frag.spv

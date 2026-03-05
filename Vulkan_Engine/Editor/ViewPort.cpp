@@ -17,7 +17,6 @@
 
 #include "glm/ext/matrix_float4x4.hpp"
 
-
 void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 	vulkanDevice = device;
 	this->viewportExtent = viewportExtent;
@@ -34,10 +33,8 @@ void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 
 	createColorResources();
 	createDepthResources();
-	createViewportImage();
-	createViewportImageViews();
 
-	m_ViewportCommandBuffers.resize(m_ViewportImageViews.size());
+	m_ViewportCommandBuffers.resize(vulkanDevice->getSwapChainImageCount());
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -63,18 +60,6 @@ void ViewPort::cleanupFramebuffers() {
 		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
-	for (auto imageView : m_ViewportImageViews) {
-		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
-	}
-
-	for (auto image : m_ViewportImages) {
-		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
-	}
-
-	for (auto memory : m_DstImageMemory) {
-		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
-	}
-
 	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
 	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
 	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
@@ -82,6 +67,10 @@ void ViewPort::cleanupFramebuffers() {
 	vkDestroyImageView(vulkanDevice->getDevice(), colorImageView, nullptr);
 	vkDestroyImage(vulkanDevice->getDevice(), colorImage, nullptr);
 	vkFreeMemory(vulkanDevice->getDevice(), colorImageMemory, nullptr);
+
+	vkDestroyImageView(vulkanDevice->getDevice(), hdrResolveImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), hdrResolveImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), hdrResolveImageMemory, nullptr);
 }
 
 void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
@@ -92,8 +81,6 @@ void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
 	this->viewportExtent = viewportExtent;
 	createColorResources();
 	createDepthResources();
-	createViewportImage();
-	createViewportImageViews();
 	createViewportFramebuffers();
 }
 
@@ -106,18 +93,6 @@ void ViewPort::cleanup() {
 		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
 	}
 
-	for (auto imageView : m_ViewportImageViews) {
-		vkDestroyImageView(vulkanDevice->getDevice(), imageView, nullptr);
-	}
-
-	for (auto image : m_ViewportImages) {
-		vkDestroyImage(vulkanDevice->getDevice(), image, nullptr);
-	}
-
-	for (auto memory : m_DstImageMemory) {
-		vkFreeMemory(vulkanDevice->getDevice(), memory, nullptr);
-	}
-
 	vkDestroyImageView(vulkanDevice->getDevice(), depthImageView, nullptr);
 	vkDestroyImage(vulkanDevice->getDevice(), depthImage, nullptr);
 	vkFreeMemory(vulkanDevice->getDevice(), depthImageMemory, nullptr);
@@ -126,25 +101,41 @@ void ViewPort::cleanup() {
 	vkDestroyImage(vulkanDevice->getDevice(), colorImage, nullptr);
 	vkFreeMemory(vulkanDevice->getDevice(), colorImageMemory, nullptr);
 
+	vkDestroyImageView(vulkanDevice->getDevice(), hdrResolveImageView, nullptr);
+	vkDestroyImage(vulkanDevice->getDevice(), hdrResolveImage, nullptr);
+	vkFreeMemory(vulkanDevice->getDevice(), hdrResolveImageMemory, nullptr);
+
 	vkDestroyCommandPool(vulkanDevice->getDevice(), m_ViewportCommandPool, nullptr);
 
 	vkDestroyRenderPass(vulkanDevice->getDevice(), m_ViewportRenderPass, nullptr);
 }
 
 void ViewPort::createColorResources() {
-	VkFormat colorFormat = vulkanDevice->getSwapChainImageFormat();
+	VkFormat hdrFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 	Utils::createImage(viewportExtent.width,
 					   viewportExtent.height,
 					   1,
 					   static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples()),
-					   colorFormat,
+					   hdrFormat,
 					   VK_IMAGE_TILING_OPTIMAL,
 					   VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 					   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 					   colorImage,
 					   colorImageMemory);
-	colorImageView = Utils::createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	colorImageView = Utils::createImageView(colorImage, hdrFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+	Utils::createImage(viewportExtent.width,
+					   viewportExtent.height,
+					   1,
+					   VK_SAMPLE_COUNT_1_BIT,
+					   hdrFormat,
+					   VK_IMAGE_TILING_OPTIMAL,
+					   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+					   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					   hdrResolveImage,
+					   hdrResolveImageMemory);
+	hdrResolveImageView = Utils::createImageView(hdrResolveImage, hdrFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
 void ViewPort::createDepthResources() {
@@ -170,110 +161,11 @@ void ViewPort::createDepthResources() {
 								 m_ViewportCommandPool);
 }
 
-void ViewPort::createViewportImage() {
-	m_ViewportImages.resize(vulkanDevice->getSwapChainImageCount());
-	m_DstImageMemory.resize(vulkanDevice->getSwapChainImageCount());
-
-	for (uint32_t i = 0; i < vulkanDevice->getSwapChainImageCount(); i++) {
-		// Create the linear tiled destination image to copy to and to read the
-		// memory from
-		VkImageCreateInfo imageCreateCI{};
-		imageCreateCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
-		// Note that vkCmdBlitImage (if supported) will also do format conversions
-		// if the swapchain color format would differ
-		imageCreateCI.format = VK_FORMAT_B8G8R8A8_SRGB;
-		imageCreateCI.extent.width = viewportExtent.width;
-		imageCreateCI.extent.height = viewportExtent.height;
-		imageCreateCI.extent.depth = 1;
-		imageCreateCI.arrayLayers = 1;
-		imageCreateCI.mipLevels = 1;
-		imageCreateCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageCreateCI.samples = VK_SAMPLE_COUNT_1_BIT;
-		imageCreateCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageCreateCI.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-		// Create the image
-		// VkImage dstImage;
-		vkCreateImage(vulkanDevice->getDevice(), &imageCreateCI, nullptr, &m_ViewportImages[i]);
-		// Create memory to back up the image
-		VkMemoryRequirements memRequirements;
-		VkMemoryAllocateInfo memAllocInfo{};
-		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		// VkDeviceMemory dstImageMemory;
-		vkGetImageMemoryRequirements(vulkanDevice->getDevice(), m_ViewportImages[i], &memRequirements);
-		memAllocInfo.allocationSize = memRequirements.size;
-		// Memory must be host visible to copy from
-		memAllocInfo.memoryTypeIndex =
-			Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-		if (vkAllocateMemory(vulkanDevice->getDevice(), &memAllocInfo, nullptr, &m_DstImageMemory[i]) != VK_SUCCESS) {
-			throw std::runtime_error("failed to allocate image memory!");
-		}
-		vkBindImageMemory(vulkanDevice->getDevice(), m_ViewportImages[i], m_DstImageMemory[i], 0);
-
-		VkCommandBufferAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = m_ViewportCommandPool;
-		allocInfo.commandBufferCount = 1;
-
-		VkCommandBuffer copyCmd;
-		vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, &copyCmd);
-
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		vkBeginCommandBuffer(copyCmd, &beginInfo);
-
-		VkImageMemoryBarrier imageMemoryBarrier{};
-		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageMemoryBarrier.image = m_ViewportImages[i];
-		imageMemoryBarrier.subresourceRange = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-		vkCmdPipelineBarrier(copyCmd,
-							 VK_PIPELINE_STAGE_TRANSFER_BIT,
-							 VK_PIPELINE_STAGE_TRANSFER_BIT,
-							 0,
-							 0,
-							 nullptr,
-							 0,
-							 nullptr,
-							 1,
-							 &imageMemoryBarrier);
-
-		vkEndCommandBuffer(copyCmd);
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &copyCmd;
-
-		vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
-
-		vkFreeCommandBuffers(vulkanDevice->getDevice(), m_ViewportCommandPool, 1, &copyCmd);
-	}
-}
-
-void ViewPort::createViewportImageViews() {
-	m_ViewportImageViews.resize(m_ViewportImages.size());
-	for (uint32_t i = 0; i < m_ViewportImages.size(); i++) {
-		m_ViewportImageViews[i] =
-			Utils::createImageView(m_ViewportImages[i], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-	}
-}
-
 void ViewPort::createViewportRenderPass() {
+	VkFormat hdrFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+
 	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = vulkanDevice->getSwapChainImageFormat();
+	colorAttachment.format = hdrFormat;
 	colorAttachment.samples = static_cast<VkSampleCountFlagBits>(vulkanDevice->getMsaaSamples());
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -293,14 +185,14 @@ void ViewPort::createViewportRenderPass() {
 	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription colorAttachmentResolve{};
-	colorAttachmentResolve.format = vulkanDevice->getSwapChainImageFormat();
+	colorAttachmentResolve.format = hdrFormat;
 	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Optimized for reading in HDR pass
 
 	VkAttachmentReference colorAttachmentRef{};
 	colorAttachmentRef.attachment = 0;
@@ -346,13 +238,13 @@ void ViewPort::createViewportRenderPass() {
 }
 
 void ViewPort::createViewportFramebuffers() {
-	m_ViewportFramebuffers.resize(m_ViewportImageViews.size());
+	m_ViewportFramebuffers.resize(vulkanDevice->getSwapChainImageCount());
 
-	for (size_t i = 0; i < m_ViewportImageViews.size(); i++) {
+	for (size_t i = 0; i < vulkanDevice->getSwapChainImageCount(); i++) {
 		std::array<VkImageView, 3> attachments = {
 			colorImageView,
 			depthImageView,
-			m_ViewportImageViews[i],
+			hdrResolveImageView,
 		};
 
 		VkFramebufferCreateInfo framebufferInfo{};
@@ -469,7 +361,7 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 }
 
 void ViewPort::createViewportCommandBuffers() {
-	m_ViewportCommandBuffers.resize(m_ViewportImageViews.size());
+	m_ViewportCommandBuffers.resize(vulkanDevice->getSwapChainImageCount());
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;

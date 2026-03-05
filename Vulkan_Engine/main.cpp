@@ -40,7 +40,9 @@
 #include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
+#include "renderer/Hdr.h"
 #include "renderer/vulkan/VulkanDevice.h"
+#include "renderer/vulkan/VulkanHdr.h"
 #include "renderer/vulkan/VulkanShadowMap.h"
 #include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
@@ -84,9 +86,18 @@ public:
 		mousePick.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
 		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					  mousePick.getMousePickExtent());
+		hdrTonemap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+						viewPort.hdrResolveImageView,
+						mousePick.getMousePickExtent().width,
+						mousePick.getMousePickExtent().height);
+		std::vector<VkImageView> ldrImageViews(hdrTonemap.getLdrImageViewCount());
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++) {
+			ldrImageViews[i] = static_cast<VkImageView>(hdrTonemap.getLdrImageView(i));
+		}
+
 		outline.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					 mousePick.getMousePickImageViews(),
-					 viewPort.m_ViewportImageViews,
+					 ldrImageViews,
 					 mousePick.getMousePickExtent());
 		editorCamera.init(
 			static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext, &inspector);
@@ -107,7 +118,7 @@ public:
 				LightComponent* lc = lightEntity.getComponent<LightComponent>();
 				if (lc) {
 					lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
-					lc->range = 100.0f; // shadow far plane
+					lc->range = 20.0f; // shadow far plane
 				}
 			}
 		}
@@ -116,6 +127,7 @@ public:
 		changeImGuizmoStyle();
 		mainLoop();
 
+		hdrTonemap.cleanup();
 		outline.cleanup();
 		viewPort.cleanup();
 		mousePick.cleanup();
@@ -127,43 +139,7 @@ public:
 		engineCore.cleanup();
 	}
 
-	void drawFrame() {
-		int width = 0, height = 0;
-		glfwGetFramebufferSize(engineCore.getWindow(), &width, &height);
-		while (width == 0 || height == 0) {
-			glfwWaitEvents();
-			return;
-		}
-
-		vkWaitForFences(VulkanCore::getDevice(),
-						1,
-						&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()],
-						VK_TRUE,
-						UINT64_MAX);
-
-		// Cleanup resources from the previous cycle of this frame
-		// Safe to do now because fence wait returned
-		resourceContext.getMaterialManager().cleanupPendingResources(VulkanCore::getCurrentFrame());
-
-		uint32_t imageIndex;
-		VkResult result = vkAcquireNextImageKHR(VulkanCore::getDevice(),
-												engineCore.getSwapChain(),
-												UINT64_MAX,
-												engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
-												VK_NULL_HANDLE,
-												&imageIndex);
-
-		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-			engineCore.recreateSwapChain();
-			return;
-		} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-			throw std::runtime_error("failed to acquire swap chain image!");
-		}
-
-		vkResetFences(VulkanCore::getDevice(), 1, &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
-
-		vkResetCommandBuffer(engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
-
+	void drawFrame(uint32_t imageIndex) {
 		// (TEMPORARY)
 		// Update simple single light (for now static directional light)
 		glm::mat4 lightSpaceMatrices[6] = {
@@ -220,14 +196,18 @@ public:
 		viewPort.recordViewportCommandBuffer(
 			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex, lightSpaceMatrices[0]);
 
+		// Assuming an exposure of 1.0 for now, could be passed from UI
+		hdrTonemap.recordHdrCommandBuffer(VulkanCore::getCurrentFrame(), imageIndex, exposure);
+
 		outline.recordOutlineCommandBuffer(outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex);
 
 		recordImguiCommandBuffer(uiManager.getCommandBuffers()[VulkanCore::getCurrentFrame()], imageIndex);
 
-		std::array<VkCommandBuffer, 5> submitCommandBuffers = {
+		std::array<VkCommandBuffer, 6> submitCommandBuffers = {
 			shadowMap.getCommandBuffer(VulkanCore::getCurrentFrame()),
 			mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
 			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
+			static_cast<VkCommandBuffer>(hdrTonemap.getCommandBuffer(VulkanCore::getCurrentFrame())),
 			outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
 			uiManager.getCommandBuffers()[VulkanCore::getCurrentFrame()],
 		};
@@ -267,7 +247,7 @@ public:
 		presentInfo.pImageIndices = &imageIndex;
 		presentInfo.pResults = nullptr; // Optional
 
-		result = vkQueuePresentKHR(VulkanCore::getPresentQueue(), &presentInfo);
+		VkResult result = vkQueuePresentKHR(VulkanCore::getPresentQueue(), &presentInfo);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || engineCore.getFramebufferResized()) {
 			engineCore.setFramebufferResized(false);
@@ -280,8 +260,8 @@ public:
 	}
 
 	void mainLoop() {
-		sceneTexture.resize(viewPort.m_ViewportImageViews.size());
-		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
+		sceneTexture.resize(hdrTonemap.getLdrImageViewCount());
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++)
 			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -297,6 +277,42 @@ public:
 
 				engineCore.setSwapChainRecreated(false);
 			}
+
+			int width = 0, height = 0;
+			glfwGetFramebufferSize(engineCore.getWindow(), &width, &height);
+			// Early pause if minimized
+			if (width == 0 || height == 0) {
+				glfwWaitEvents();
+				continue;
+			}
+
+			// Acquire image at start of frame
+			vkWaitForFences(VulkanCore::getDevice(),
+							1,
+							&engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()],
+							VK_TRUE,
+							UINT64_MAX);
+
+			resourceContext.getMaterialManager().cleanupPendingResources(VulkanCore::getCurrentFrame());
+
+			uint32_t imageIndex;
+			VkResult result =
+				vkAcquireNextImageKHR(VulkanCore::getDevice(),
+									  engineCore.getSwapChain(),
+									  UINT64_MAX,
+									  engineCore.getImageAvailableSemaphores()[VulkanCore::getCurrentFrame()],
+									  VK_NULL_HANDLE,
+									  &imageIndex);
+
+			if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+				engineCore.recreateSwapChain();
+				continue;
+			} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+				throw std::runtime_error("failed to acquire swap chain image!");
+			}
+
+			vkResetFences(VulkanCore::getDevice(), 1, &engineCore.getInFlightFences()[VulkanCore::getCurrentFrame()]);
+			vkResetCommandBuffer(engineCore.getCommandBuffers()[VulkanCore::getCurrentFrame()], 0);
 
 			uiManager.beginFrame();
 			ImGuizmo::BeginFrame();
@@ -338,8 +354,7 @@ public:
 
 			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
-			ImGui::Image((ImTextureID)sceneTexture[VulkanCore::getCurrentFrame()],
-						 ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+			ImGui::Image((ImTextureID)sceneTexture[imageIndex], ImVec2{viewportPanelSize.x, viewportPanelSize.y});
 
 			ImGui::SetCursorScreenPos(p);
 
@@ -347,6 +362,10 @@ public:
 
 			ImGui::End();
 			ImGui::PopStyleVar(2);
+
+			ImGui::Begin("Renderer Settings");
+			ImGui::SliderFloat("Exposure", &exposure, 0.1f, 10.0f);
+			ImGui::End();
 
 			sceneUi.render();
 
@@ -379,11 +398,11 @@ public:
 
 			ImGui::Render();
 
-			drawFrame();
+			drawFrame(imageIndex);
 		}
 		vkDeviceWaitIdle(VulkanCore::getDevice());
 
-		for (uint32_t i = 0; i < viewPort.m_ViewportImageViews.size(); i++)
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
 	}
 
@@ -397,11 +416,14 @@ private:
 	EditorCamera editorCamera;
 	ViewPort viewPort;
 	MousePick mousePick;
+	Renderer::VulkanHdr hdrTonemap;
 	Outline outline;
 	UIManager uiManager;
 	VkExtent2D viewportExtent;
 	std::vector<VkDescriptorSet> sceneTexture;
 	Renderer::VulkanShadowMap shadowMap;
+	float exposure = 1.0f;
+
 	static void check_vk_result(VkResult err) {
 		if (err == 0)
 			return;
@@ -432,16 +454,22 @@ private:
 			->updateSwapchain(engineCore.getSwapChainExtent(),
 							  static_cast<uint32_t>(engineCore.getSwapChainImageViews().size()));
 
-		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
 
 		uiManager.recreateFramebuffers(engineCore.getSwapChainImageViews());
 		mousePick.recreateMousePick();
 		viewPort.recreateViewport(mousePick.getMousePickExtent());
-		outline.recreateOutline(
-			mousePick.getMousePickImageViews(), viewPort.m_ViewportImageViews, mousePick.getMousePickExtent());
+		hdrTonemap.recreateHdr(
+			viewPort.hdrResolveImageView, mousePick.getMousePickExtent().width, mousePick.getMousePickExtent().height);
+		std::vector<VkImageView> ldrImageViews(hdrTonemap.getLdrImageViewCount());
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++) {
+			ldrImageViews[i] = static_cast<VkImageView>(hdrTonemap.getLdrImageView(i));
+		}
 
-		for (uint32_t i = 0; i < static_cast<uint32_t>(viewPort.m_ViewportImageViews.size()); i++)
+		outline.recreateOutline(mousePick.getMousePickImageViews(), ldrImageViews, mousePick.getMousePickExtent());
+
+		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++)
 			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

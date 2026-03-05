@@ -19,6 +19,7 @@
     <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Editor\MousePick.cpp" />
+    <ClCompile Include="postprocess\hdr.cpp" />
     <ClCompile Include="postprocess\outline.cpp" />
     <ClCompile Include="skybox\Skybox.cpp" />
     <ClCompile Include="gridPlane\GridPlane.cpp" />
@@ -52,6 +53,7 @@
     <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="managers\TextureManager.h" />
     <ClInclude Include="managers\MaterialManager.h" />
+    <ClInclude Include="postprocess\hdr.h" />
     <ClInclude Include="postprocess\outline.h" />
     <ClInclude Include="skybox\Skybox.h" />
     <ClInclude Include="gridPlane\GridPlane.h" />
