@@ -704,12 +704,21 @@ void VulkanCore::createDescriptorSetLayout() {
 	shadowCubeMapLayoutBinding.pImmutableSamplers = nullptr;
 	shadowCubeMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 6> bindings = {uboLayoutBinding,
+	// Binding 6: IBL irradiance cubemap (samplerCube)
+	VkDescriptorSetLayoutBinding irradianceMapLayoutBinding{};
+	irradianceMapLayoutBinding.binding = 6;
+	irradianceMapLayoutBinding.descriptorCount = 1;
+	irradianceMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	irradianceMapLayoutBinding.pImmutableSamplers = nullptr;
+	irradianceMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 7> bindings = {uboLayoutBinding,
 															samplerLayoutBinding,
 															lightLayoutBinding,
 															materialPropsLayoutBinding,
 															shadowMapLayoutBinding,
-															shadowCubeMapLayoutBinding};
+															shadowCubeMapLayoutBinding,
+															irradianceMapLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

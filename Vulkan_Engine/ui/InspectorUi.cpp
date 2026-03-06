@@ -398,7 +398,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 						resources.getMaterialManager().saveMaterialToFile(fullPath,
 																		  matName,
 																		  texKey,
-																		  mat->properties.albedo,
+																		  mat->properties.albedo_pad,
 																		  mat->properties.metallic,
 																		  mat->properties.roughness,
 																		  mat->properties.ao);
@@ -437,8 +437,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		ImGui::Text("Albedo");
 		ImGui::NextColumn();
 		if (ImGui::ColorEdit3("##Albedo",
-							  &material->properties.albedo.x,
-							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+							  &material->properties.albedo_pad.x,
+							  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_Float)) {
 			propertiesChanged = true;
 		}
 		ImGui::NextColumn();
@@ -482,7 +482,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			resources.getMaterialManager().saveMaterialToFile(fullPath,
 															  matName,
 															  material->albedoTextureKey,
-															  material->properties.albedo,
+															  material->properties.albedo_pad,
 															  material->properties.metallic,
 															  material->properties.roughness,
 															  material->properties.ao);

@@ -9,6 +9,7 @@
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 
 class TextureManager;
 
@@ -18,12 +19,18 @@ class GraphicsResourceBinder;
 class VulkanShadowMap;
 } // namespace Renderer
 
+// Forward-declare the VulkanIBL data needed for binding
+struct VulkanIBLData {
+	VkImageView irradianceView;
+	VkSampler irradianceSampler;
+};
+
 struct MaterialProperties {
-	alignas(16) glm::vec3 albedo{1.0f, 1.0f, 1.0f};
+	alignas(16) glm::vec4 albedo_pad{1.0f, 1.0f, 1.0f, 0.0f}; // xyz = albedo, w = unused
 	alignas(4) float metallic{0.0f};
 	alignas(4) float roughness{0.5f};
 	alignas(4) float ao{1.0f};
-	alignas(8) float _pad[2]{}; // pad to 32 bytes for std140
+	alignas(4) float _pad{0.0f}; // pad to 32 bytes for std140 (16 + 4*4 = 32)
 };
 
 struct Material {
@@ -71,6 +78,7 @@ public:
 	void setResourceBinder(Renderer::GraphicsResourceBinder* binder);
 	void setLightManager(class LightManager* lightMgr);
 	void setShadowMap(Renderer::VulkanShadowMap* map);
+	void setIrradianceMap(VkImageView view, VkSampler sampler);
 
 	// Get VkBuffer for descriptor writes (temporary until descriptor abstraction)
 	VkBuffer getMaterialPropertyBuffer(Material* material, uint32_t frame);
@@ -81,6 +89,8 @@ private:
 	Renderer::GraphicsResourceBinder* resourceBinder = nullptr;
 	class LightManager* lightManager = nullptr;
 	Renderer::VulkanShadowMap* shadowMap = nullptr;
+	VkImageView irradianceView = VK_NULL_HANDLE;
+	VkSampler irradianceSampler = VK_NULL_HANDLE;
 
 	// Layout key -> Handle map (to reuse layouts)
 	std::unordered_map<std::string, Renderer::ResourceSetLayoutHandle> layoutCache;

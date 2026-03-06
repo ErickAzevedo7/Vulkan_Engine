@@ -17,7 +17,10 @@
 
 #include "glm/ext/matrix_float4x4.hpp"
 
-void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
+void ViewPort::init(Renderer::VulkanDevice* device,
+					VkExtent2D viewportExtent,
+					VkImageView skyboxView,
+					VkSampler skyboxSampler) {
 	vulkanDevice = device;
 	this->viewportExtent = viewportExtent;
 
@@ -52,7 +55,7 @@ void ViewPort::init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent) {
 	createViewportFramebuffers();
 
 	GridPlane::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
-	Skybox::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
+	Skybox::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass, skyboxView, skyboxSampler);
 }
 
 void ViewPort::cleanupFramebuffers() {

@@ -8,6 +8,7 @@ layout(location = 3) in vec3 fragViewPos;
 layout(binding = 1) uniform sampler2D texSampler;
 layout(binding = 4) uniform sampler2D shadowSampler;
 layout(binding = 5) uniform samplerCube shadowCubeSampler;
+layout(binding = 6) uniform samplerCube irradianceMap;
 
 layout(binding = 2) uniform Light {
     vec4 colorIntensity; // rgb=color, a=intensity
@@ -23,10 +24,11 @@ layout(binding = 2) uniform Light {
 } light;
 
 layout(binding = 3) uniform MaterialProps {
-    vec3 albedo;
+    vec4 albedo_pad; // xyz = albedo, w is padding
     float metallic;
     float roughness;
     float ao;
+    float _pad;
 } material;
 
 layout(location = 0) out vec4 outColor;
@@ -88,6 +90,12 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Fresnel-Schlick with roughness factor (used for ambient IBL term)
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 // ----------------------------------------------------------------------------
@@ -169,7 +177,7 @@ void main() {
     }
 
     vec4 tex = texture(texSampler, fragTexCoord);
-    vec3 albedo   = material.albedo * tex.rgb;
+    vec3 albedo   = material.albedo_pad.rgb * tex.rgb;
     float metallic  = material.metallic;
     float roughness = material.roughness;
     float ao        = material.ao;
@@ -245,8 +253,16 @@ void main() {
     // Outgoing radiance Lo
     vec3 Lo = (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * NdotL;
 
-    // Ambient lighting (constant, no IBL)
-    vec3 ambient = vec3(0.03) * albedo * ao;
+    // Ambient lighting — IBL diffuse irradiance
+    // We calculate a NEW Fresnel term here specifically for ambient, using N and V (and roughness) 
+    // instead of H and V (which the direct light uses).
+    vec3 kS_ambient = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kD_ambient = vec3(1.0) - kS_ambient;
+    kD_ambient *= 1.0 - metallic; // Pure metals have ZERO diffuse reflection
+
+    vec3 irradiance = texture(irradianceMap, N).rgb;
+    vec3 diffuse    = irradiance * albedo;
+    vec3 ambient    = (kD_ambient * diffuse) * ao; 
 
     vec3 color = ambient + Lo;
 

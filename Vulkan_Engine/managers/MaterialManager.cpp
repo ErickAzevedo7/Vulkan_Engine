@@ -21,6 +21,7 @@
 #include "renderer/RenderTypes.h"
 #include "renderer/vulkan/VulkanBuffer.h"
 #include "renderer/vulkan/VulkanShadowMap.h"
+#include "renderer/vulkan/VulkanTexture.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -133,8 +134,8 @@ Material* MaterialManager::createMaterial(const std::string& name,
 
 				// Load PBR material properties if they exist in the file
 				if (j.contains("albedo") && j["albedo"].is_array() && j["albedo"].size() == 3) {
-					mat->properties.albedo = glm::vec3(
-						j["albedo"][0].get<float>(), j["albedo"][1].get<float>(), j["albedo"][2].get<float>());
+					mat->properties.albedo_pad = glm::vec4(
+						j["albedo"][0].get<float>(), j["albedo"][1].get<float>(), j["albedo"][2].get<float>(), 0.0f);
 				}
 
 				if (j.contains("metallic") && j["metallic"].is_number()) {
@@ -435,6 +436,14 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		binding5.stages = Renderer::ShaderStage::Fragment;
 		desc.bindings.push_back(binding5);
 
+		// Binding 6: Irradiance Map (Cube Sampler) - Fragment
+		Renderer::ResourceBinding binding6;
+		binding6.binding = 6;
+		binding6.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding6.count = 1;
+		binding6.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(binding6);
+
 		layout = resourceBinder->createLayout(desc);
 		layoutCache[layoutKey] = layout;
 	}
@@ -548,6 +557,32 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 			manualWrites.push_back(shadowCubeWrite);
 		}
 
+		// Binding 6: Irradiance Map — use real view if available, else default texture
+		VkDescriptorImageInfo irrInfo{};
+		VkWriteDescriptorSet irrWrite{};
+		{
+			if (irradianceView != VK_NULL_HANDLE) {
+				irrInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				irrInfo.imageView = irradianceView;
+				irrInfo.sampler = irradianceSampler;
+			} else {
+				// Fallback: plain white 1x1 default texture
+				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
+				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
+				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
+				irrInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				irrInfo.imageView = vkTex->getImageView(def->handle);
+				irrInfo.sampler = vkTex->getSampler(def->sampler);
+			}
+			irrWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			irrWrite.dstSet = vkSet;
+			irrWrite.dstBinding = 6;
+			irrWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			irrWrite.descriptorCount = 1;
+			irrWrite.pImageInfo = &irrInfo;
+			manualWrites.push_back(irrWrite);
+		}
+
 		vkUpdateDescriptorSets(
 			VulkanCore::getDevice(), static_cast<uint32_t>(manualWrites.size()), manualWrites.data(), 0, nullptr);
 	}
@@ -653,6 +688,38 @@ void MaterialManager::setShadowMap(Renderer::VulkanShadowMap* map) {
 										   nullptr);
 				}
 			}
+		}
+	}
+}
+
+void MaterialManager::setIrradianceMap(VkImageView view, VkSampler sampler) {
+	irradianceView = view;
+	irradianceSampler = sampler;
+
+	if (irradianceView == VK_NULL_HANDLE || !resourceBinder)
+		return;
+
+	// Retroactively update binding 6 on every existing material descriptor set
+	for (auto& pair : materials) {
+		Material* material = pair.second;
+		for (size_t i = 0; i < material->resourceSets.size(); i++) {
+			VkDescriptorSet vkSet =
+				*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
+
+			VkDescriptorImageInfo irrInfo{};
+			irrInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			irrInfo.imageView = irradianceView;
+			irrInfo.sampler = irradianceSampler;
+
+			VkWriteDescriptorSet irrWrite{};
+			irrWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			irrWrite.dstSet = vkSet;
+			irrWrite.dstBinding = 6;
+			irrWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			irrWrite.descriptorCount = 1;
+			irrWrite.pImageInfo = &irrInfo;
+
+			vkUpdateDescriptorSets(VulkanCore::getDevice(), 1, &irrWrite, 0, nullptr);
 		}
 	}
 }

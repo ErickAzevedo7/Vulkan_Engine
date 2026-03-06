@@ -15,3 +15,7 @@ C:\VulkanSDK\1.4.309.0\Bin\glslc.exe shadow\shadow.frag -o shadow\shadow.frag.sp
 
 C:\VulkanSDK\1.4.309.0\Bin\glslc.exe hdr\postprocess_hdr.vert -o hdr\postprocess_hdr_vert.spv
 C:\VulkanSDK\1.4.309.0\Bin\glslc.exe hdr\postprocess_hdr.frag -o hdr\postprocess_hdr_frag.spv
+
+C:\VulkanSDK\1.4.309.0\Bin\glslc.exe ibl\cubemap.vert              -o ibl\cubemap_vert.spv
+C:\VulkanSDK\1.4.309.0\Bin\glslc.exe ibl\equirect_to_cubemap.frag  -o ibl\equirect_to_cubemap_frag.spv
+C:\VulkanSDK\1.4.309.0\Bin\glslc.exe ibl\irradiance_conv.frag      -o ibl\irradiance_conv_frag.spv

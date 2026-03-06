@@ -18,11 +18,6 @@
 #include "glm/ext/vector_float3.hpp"
 
 // initialize static members
-VkImage Skybox::skyboxImage;
-VkImageView Skybox::skyboxImageView;
-VkDeviceMemory Skybox::skyboxImageMemory;
-std::string Skybox::path = "textures/skybox/";
-VkSampler Skybox::skyboxSampler;
 std::vector<VkDescriptorSet> Skybox::skyboxDescriptorSet;
 VkDescriptorSetLayout Skybox::skyboxDescriptorSetLayout;
 VkDescriptorPool Skybox::skyboxDescriptorPool;
@@ -34,22 +29,19 @@ std::vector<VkBuffer> Skybox::skyboxUniformBuffers;
 std::vector<VkDeviceMemory> Skybox::skyboxUniformBuffersMemory;
 Renderer::VulkanDevice* Skybox::vulkanDevice = nullptr;
 
-void Skybox::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass) {
+void Skybox::init(Renderer::VulkanDevice* device,
+				  VkCommandPool commandPool,
+				  VkRenderPass renderPass,
+				  VkImageView envView,
+				  VkSampler envSampler) {
 	vulkanDevice = device;
-	loadSkyboxTextures(commandPool);
-	createSkyboxImageViews();
-	createSkyboxSampler();
 	createSkyboxUniformBuffers();
-	createDescriptorSet();
+	createDescriptorSet(envView, envSampler);
 	createSkyboxVertexBuffer(commandPool);
 	createSkyboxPipeline(renderPass);
 }
 
 void Skybox::cleanup() {
-	vkDestroySampler(vulkanDevice->getDevice(), skyboxSampler, nullptr);
-	vkDestroyImageView(vulkanDevice->getDevice(), skyboxImageView, nullptr);
-	vkDestroyImage(vulkanDevice->getDevice(), skyboxImage, nullptr);
-	vkFreeMemory(vulkanDevice->getDevice(), skyboxImageMemory, nullptr);
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroyBuffer(vulkanDevice->getDevice(), skyboxUniformBuffers[i], nullptr);
 		vkFreeMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[i], nullptr);
@@ -272,7 +264,7 @@ void Skybox::createSkyboxVertexBuffer(VkCommandPool commandPool) {
 	vkFreeMemory(vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
 }
 
-void Skybox::createDescriptorSet() {
+void Skybox::createDescriptorSet(VkImageView envView, VkSampler envSampler) {
 	skyboxDescriptorSet.resize(MAX_FRAMES_IN_FLIGHT);
 
 	VkDescriptorPoolSize poolSizes{};
@@ -332,8 +324,8 @@ void Skybox::createDescriptorSet() {
 
 		VkDescriptorImageInfo imageInfo{};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = skyboxImageView;
-		imageInfo.sampler = skyboxSampler;
+		imageInfo.imageView = envView;
+		imageInfo.sampler = envSampler;
 
 		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -361,217 +353,4 @@ void Skybox::createDescriptorSet() {
 							   0,
 							   nullptr);
 	}
-}
-
-void Skybox::createSkyboxSampler() {
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.anisotropyEnable = VK_FALSE;
-	samplerInfo.maxAnisotropy = 1.0f;
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 0.0f;
-
-	if (vkCreateSampler(vulkanDevice->getDevice(), &samplerInfo, nullptr, &skyboxSampler) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create cubemap sampler!");
-	}
-}
-
-void Skybox::createSkyboxImage(VkCommandPool commandPool, uint32_t width, uint32_t height) {
-	VkImageCreateInfo imageCreateCI{};
-	imageCreateCI.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-	imageCreateCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
-	imageCreateCI.format = VK_FORMAT_R8G8B8A8_SRGB;
-	imageCreateCI.extent = {width, height, 1};
-	imageCreateCI.mipLevels = 1;
-	imageCreateCI.arrayLayers = 6;
-	imageCreateCI.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageCreateCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	imageCreateCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-
-	vkCreateImage(vulkanDevice->getDevice(), &imageCreateCI, nullptr, &skyboxImage);
-
-	VkMemoryRequirements memRequirements;
-	VkMemoryAllocateInfo memAllocInfo{};
-	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	// VkDeviceMemory dstImageMemory;
-	vkGetImageMemoryRequirements(vulkanDevice->getDevice(), skyboxImage, &memRequirements);
-	memAllocInfo.allocationSize = memRequirements.size;
-	// Memory must be host visible to copy from
-	memAllocInfo.memoryTypeIndex =
-		Utils::findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	if (vkAllocateMemory(vulkanDevice->getDevice(), &memAllocInfo, nullptr, &skyboxImageMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate image memory!");
-	}
-	vkBindImageMemory(vulkanDevice->getDevice(), skyboxImage, skyboxImageMemory, 0);
-
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer copyCmd;
-	vkAllocateCommandBuffers(vulkanDevice->getDevice(), &allocInfo, &copyCmd);
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(copyCmd, &beginInfo);
-
-	VkImageMemoryBarrier imageMemoryBarrier{};
-	imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageMemoryBarrier.image = skyboxImage;
-	imageMemoryBarrier.subresourceRange = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-	vkCmdPipelineBarrier(copyCmd,
-						 VK_PIPELINE_STAGE_TRANSFER_BIT,
-						 VK_PIPELINE_STAGE_TRANSFER_BIT,
-						 0,
-						 0,
-						 nullptr,
-						 0,
-						 nullptr,
-						 1,
-						 &imageMemoryBarrier);
-
-	vkEndCommandBuffer(copyCmd);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &copyCmd;
-
-	vkQueueSubmit(vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(vulkanDevice->getGraphicsQueue());
-
-	vkFreeCommandBuffers(vulkanDevice->getDevice(), commandPool, 1, &copyCmd);
-}
-
-void Skybox::createSkyboxImageViews() {
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = skyboxImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-	viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 6;
-
-	if (vkCreateImageView(vulkanDevice->getDevice(), &viewInfo, nullptr, &skyboxImageView) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create texture image view!");
-	}
-}
-
-void Skybox::loadSkyboxTextures(VkCommandPool commandPool) {
-	const std::array<std::string, 6> faces = {path + "right.bmp",
-											  path + "left.bmp",
-											  path + "top.bmp",
-											  path + "bottom.bmp",
-											  path + "front.bmp",
-											  path + "back.bmp"};
-	int texWidth, texHeight, texChannels;
-	std::vector<stbi_uc*> facePixels;
-	stbi_set_flip_vertically_on_load(false);
-	VkDeviceSize layerSize = 0;
-
-	// Load each face of the cubemap
-	for (const auto& face : faces) {
-		stbi_uc* pixels = stbi_load(face.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-		if (!pixels) {
-			throw std::runtime_error("failed to load texture image!");
-		}
-
-		layerSize = texWidth * texHeight * 4;
-
-		facePixels.push_back(pixels);
-	}
-
-	VkDeviceSize imageSize = layerSize * 6;
-
-	createSkyboxImage(commandPool, texWidth, texHeight);
-
-	// Create staging buffer
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	Utils::createBuffer(imageSize,
-						VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-						VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						stagingBuffer,
-						stagingBufferMemory);
-
-	void* data;
-	vkMapMemory(vulkanDevice->getDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
-	for (size_t i = 0; i < faces.size(); i++) {
-		memcpy(static_cast<char*>(data) + layerSize * i, facePixels[i], static_cast<size_t>(layerSize));
-		stbi_image_free(facePixels[i]);
-	}
-	vkUnmapMemory(vulkanDevice->getDevice(), stagingBufferMemory);
-
-	Utils::transitionImageLayout(skyboxImage,
-								 VK_FORMAT_R8G8B8A8_SRGB,
-								 VK_IMAGE_LAYOUT_UNDEFINED,
-								 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-								 1,
-								 commandPool,
-								 6);
-	Utils::copyBufferToImage(
-		stagingBuffer, skyboxImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), commandPool);
-
-	// Copy buffer to cubemap image, one layer per face
-	VkCommandBuffer commandBuffer = Utils::beginSingleTimeCommands(commandPool);
-
-	std::vector<VkBufferImageCopy> bufferCopyRegions;
-	for (uint32_t face = 0; face < faces.size(); face++) {
-		VkBufferImageCopy region{};
-		region.bufferOffset = layerSize * face;
-		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = face;
-		region.imageSubresource.layerCount = 1;
-		region.imageOffset = {0, 0, 0};
-		region.imageExtent = {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1};
-		bufferCopyRegions.push_back(region);
-	}
-
-	vkCmdCopyBufferToImage(commandBuffer,
-						   stagingBuffer,
-						   skyboxImage,
-						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-						   static_cast<uint32_t>(bufferCopyRegions.size()),
-						   bufferCopyRegions.data());
-
-	Utils::endSingleTimeCommands(commandPool, commandBuffer);
-
-	Utils::transitionImageLayout(skyboxImage,
-								 VK_FORMAT_B8G8R8A8_SRGB,
-								 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-								 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-								 1,
-								 commandPool,
-								 6);
-
-	vkDestroyBuffer(vulkanDevice->getDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
 }

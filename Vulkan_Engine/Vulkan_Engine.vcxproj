@@ -184,6 +184,7 @@
     <ClCompile Include="renderer\vulkan\VulkanDevice.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanCommandList.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanShadowMap.cpp" />
+    <ClCompile Include="renderer\vulkan\VulkanIBL.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="components\LightComponent.h" />
@@ -242,6 +243,7 @@
     <ClInclude Include="renderer\vulkan\VulkanCommandList.h" />
     <ClInclude Include="renderer\ShadowMap.h" />
     <ClInclude Include="renderer\vulkan\VulkanShadowMap.h" />
+    <ClInclude Include="renderer\vulkan\VulkanIBL.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />

@@ -5,14 +5,11 @@ namespace Renderer {
 class VulkanDevice;
 }
 
-#include <cstdint>
 #include <glm/glm.hpp>
-#include <string>
 #include <vector>
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
-
 
 // Vertex structure
 struct SkyboxVertex {
@@ -47,7 +44,11 @@ const std::vector<SkyboxVertex> skyboxVertices = {
 
 class Skybox {
 public:
-	static void init(Renderer::VulkanDevice* device, VkCommandPool commandPool, VkRenderPass renderPass);
+	static void init(Renderer::VulkanDevice* device,
+					 VkCommandPool commandPool,
+					 VkRenderPass renderPass,
+					 VkImageView envView,
+					 VkSampler envSampler);
 
 	static void cleanup();
 
@@ -62,14 +63,9 @@ public:
 	static void updateSkyboxUniformBuffer(unsigned int currentImage, const glm::mat4& view, const glm::mat4& proj);
 
 private:
-	static VkImage skyboxImage;
-	static VkImageView skyboxImageView;
-	static VkDeviceMemory skyboxImageMemory;
-	static VkSampler skyboxSampler;
 	static std::vector<VkDescriptorSet> skyboxDescriptorSet;
 	static VkDescriptorSetLayout skyboxDescriptorSetLayout;
 	static VkDescriptorPool skyboxDescriptorPool;
-	static std::string path;
 	static VkBuffer skyboxVertexBuffer;
 	static VkDeviceMemory skyboxVertexBufferMemory;
 	static Renderer::VulkanDevice* vulkanDevice;
@@ -84,13 +80,5 @@ private:
 
 	static void createSkyboxVertexBuffer(VkCommandPool commandPool);
 
-	static void createDescriptorSet();
-
-	static void createSkyboxSampler();
-
-	static void createSkyboxImage(VkCommandPool commandPool, uint32_t width, uint32_t height);
-
-	static void createSkyboxImageViews();
-
-	static void loadSkyboxTextures(VkCommandPool commandPool);
+	static void createDescriptorSet(VkImageView envView, VkSampler envSampler);
 };

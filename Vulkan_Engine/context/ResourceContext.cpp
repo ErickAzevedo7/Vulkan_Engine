@@ -80,7 +80,8 @@ void ResourceContext::init(VulkanCore* engineCore) {
 
 	std::vector<VkDescriptorPoolSize> poolSizes;
 	poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, totalSets});
-	poolSizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, totalSets});
+	poolSizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						 totalSets * 4}); // 4 samplers per set: texture + shadow2D + shadowCube + irradiance
 	poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, totalSets * 2}); // Light + Material props
 
 	vulkanBinder->createPool(totalSets * 2, poolSizes); // *2 for safety

@@ -42,6 +42,7 @@
 #include "postprocess/outline.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "renderer/vulkan/VulkanHdr.h"
+#include "renderer/vulkan/VulkanIBL.h"
 #include "renderer/vulkan/VulkanShadowMap.h"
 #include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
@@ -73,6 +74,14 @@ public:
 		// Initialize ResourceContext managers (create pools/buffers)
 		resourceContext.init(&engineCore);
 
+		// IBL must be initialized BEFORE loadDefaults() so that when materials are
+		// first created their descriptor set slot 6 (irradianceMap) receives the
+		// real cubemap view instead of a 2D fallback placeholder.
+		ibl.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+				 VulkanCore::getCommandPool(),
+				 "common/texture/skybox/environment.hdr");
+		resourceContext.getMaterialManager().setIrradianceMap(ibl.getIrradianceImageView(), ibl.getIrradianceSampler());
+
 		// Initialize resource managers (textures, materials, lights)
 		// ResourceContext constructor created the managers, now load content
 		resourceContext.loadDefaults();
@@ -84,7 +93,9 @@ public:
 		SceneRenderer::init(&resourceContext);
 		mousePick.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
 		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
-					  mousePick.getMousePickExtent());
+					  mousePick.getMousePickExtent(),
+					  ibl.getEnvCubemapImageView(),
+					  ibl.getEnvCubemapSampler());
 		hdrTonemap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 						viewPort.hdrResolveImageView,
 						mousePick.getMousePickExtent().width,
@@ -421,6 +432,7 @@ private:
 	VkExtent2D viewportExtent;
 	std::vector<VkDescriptorSet> sceneTexture;
 	Renderer::VulkanShadowMap shadowMap;
+	VulkanIBL ibl;
 	float exposure = 1.0f;
 
 	static void check_vk_result(VkResult err) {
@@ -477,6 +489,7 @@ private:
 	void cleanup() {
 		uiManager.cleanup();
 		shadowMap.cleanup();
+		ibl.cleanup();
 	}
 
 	void inputProcess() {

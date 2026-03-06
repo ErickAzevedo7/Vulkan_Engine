@@ -21,7 +21,8 @@ public:
 	VkDeviceMemory hdrResolveImageMemory;
 	VkImageView hdrResolveImageView;
 
-	void init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent);
+	void
+	init(Renderer::VulkanDevice* device, VkExtent2D viewportExtent, VkImageView skyboxView, VkSampler skyboxSampler);
 
 	void
 	recordViewportCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, const glm::mat4& lightSpaceMatrix);
