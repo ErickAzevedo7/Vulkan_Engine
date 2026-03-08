@@ -1,6 +1,7 @@
 #include "VulkanIBL.h"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <glm/glm.hpp>
@@ -39,6 +40,13 @@ struct CapturePushConstants {
 	glm::mat4 proj;
 };
 
+// Push constant for prefilter pass — adds roughness after view/proj
+struct PrefilterPushConstants {
+	glm::mat4 view;
+	glm::mat4 proj;
+	float roughness;
+};
+
 // ============================================================================
 void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, const char* hdrPath) {
 	vulkanDevice = device;
@@ -47,6 +55,8 @@ void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, 
 	loadEquirect(commandPool, hdrPath);
 	buildEnvCubemap(commandPool);
 	buildIrradianceMap(commandPool);
+	buildPrefilterMap(commandPool);
+	buildBrdfLut(commandPool);
 
 	// Temp HDR 2-D image is no longer needed after buildEnvCubemap
 	vkDestroySampler(vulkanDevice->getDevice(), hdrSampler, nullptr);
@@ -73,6 +83,16 @@ void VulkanIBL::cleanup() {
 	vkDestroyImageView(dev, envCubemapImageView, nullptr);
 	vkDestroyImage(dev, envCubemapImage, nullptr);
 	vkFreeMemory(dev, envCubemapMemory, nullptr);
+
+	vkDestroySampler(dev, prefilterSampler, nullptr);
+	vkDestroyImageView(dev, prefilterImageView, nullptr);
+	vkDestroyImage(dev, prefilterImage, nullptr);
+	vkFreeMemory(dev, prefilterMemory, nullptr);
+
+	vkDestroySampler(dev, brdfLutSampler, nullptr);
+	vkDestroyImageView(dev, brdfLutImageView, nullptr);
+	vkDestroyImage(dev, brdfLutImage, nullptr);
+	vkFreeMemory(dev, brdfLutMemory, nullptr);
 }
 
 // ============================================================================
@@ -341,7 +361,8 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 								   VkDescriptorSetLayout descLayout,
 								   VkDescriptorSet descSet,
 								   VkImage dstImage,
-								   uint32_t mipLevel) {
+								   uint32_t mipLevel,
+								   float roughness) {
 	VkDevice dev = vulkanDevice->getDevice();
 
 	// ---------- Render pass ----------
@@ -386,10 +407,13 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 		throw std::runtime_error("VulkanIBL: failed to create capture render pass");
 
 	// ---------- Pipeline layout ----------
+	// Push constant range covers PrefilterPushConstants (view + proj + roughness).
+	// The irradiance pass ignores roughness (it stays 0.0f).
+	// stageFlags covers both vertex (view/proj) and fragment (roughness).
 	VkPushConstantRange pcRange{};
-	pcRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pcRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pcRange.offset = 0;
-	pcRange.size = sizeof(CapturePushConstants);
+	pcRange.size = sizeof(PrefilterPushConstants); // = 2*mat4 + float (padded)
 
 	VkPipelineLayoutCreateInfo plCI{};
 	plCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -529,10 +553,12 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descSet, 0, nullptr);
 
-		CapturePushConstants pc{};
+		PrefilterPushConstants pc{};
 		pc.view = captureViews[face];
 		pc.proj = captureProj;
-		vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+		pc.roughness = roughness;
+		vkCmdPushConstants(
+			cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
 
 		vkCmdDraw(cmd, 36, 1, 0, 0); // 6 faces × 6 verts, all provided in shader
 		vkCmdEndRenderPass(cmd);
@@ -618,10 +644,19 @@ void VulkanIBL::buildEnvCubemap(VkCommandPool commandPool) {
 					   envCubemapImage,
 					   0); // Render to base mip level 0
 
-	// 5. Generate mipmaps for the environment cubemap before using it for convolution/prefilter
+	// 5. Generate mipmaps for the environment cubemap before using it for convolution/prefilter.
+	// renderCubemapFaces leaves mip 0 (and all others) in COLOR_ATTACHMENT_OPTIMAL.
+	// generateMipmaps needs every mip to START in TRANSFER_DST_OPTIMAL so it can blit
+	// mip[i-1] → mip[i]. Transition all mips first, then the blit loop handles per-mip transitions.
+	transitionCubemap(commandPool,
+					  envCubemapImage,
+					  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					  envMipLevels);
+
 	generateMipmaps(commandPool, envCubemapImage, VK_FORMAT_R16G16B16A16_SFLOAT, 512, 512, envMipLevels, 6);
 
-	// The mipmap generation already transitions all levels and layers to SHADER_READ_ONLY_OPTIMAL
+	// generateMipmaps transitions all levels and layers to SHADER_READ_ONLY_OPTIMAL on exit
 
 	vkDestroyDescriptorSetLayout(dev, descLayout, nullptr);
 	vkDestroyDescriptorPool(dev, pool, nullptr);
@@ -700,4 +735,301 @@ void VulkanIBL::buildIrradianceMap(VkCommandPool commandPool) {
 
 	vkDestroyDescriptorSetLayout(dev, descLayout, nullptr);
 	vkDestroyDescriptorPool(dev, pool, nullptr);
+}
+
+// ----------------------------------------------------------------------------
+// Pass 3: Pre-filter environment cubemap by roughness (specular IBL)
+// 128x128 cubemap with 5 mip levels, each at increasing roughness
+// ----------------------------------------------------------------------------
+void VulkanIBL::buildPrefilterMap(VkCommandPool commandPool) {
+	constexpr uint32_t PREFILTER_SIZE = 128;
+	constexpr uint32_t MAX_MIP_LEVELS = 5;
+
+	VkDevice dev = vulkanDevice->getDevice();
+
+	createCubemapImage(PREFILTER_SIZE, prefilterImage, prefilterMemory, prefilterImageView, MAX_MIP_LEVELS);
+
+	Utils::transitionImageLayout(prefilterImage,
+								 VK_FORMAT_R16G16B16A16_SFLOAT,
+								 VK_IMAGE_LAYOUT_UNDEFINED,
+								 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+								 MAX_MIP_LEVELS,
+								 commandPool,
+								 6);
+
+	VkSamplerCreateInfo sci{};
+	sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	sci.magFilter = VK_FILTER_LINEAR;
+	sci.minFilter = VK_FILTER_LINEAR;
+	sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.minLod = 0.0f;
+	sci.maxLod = static_cast<float>(MAX_MIP_LEVELS);
+	sci.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	vkCreateSampler(dev, &sci, nullptr, &prefilterSampler);
+
+	// Descriptor set pointing the prefilter shader at envCubemapImageView
+	VkDescriptorPoolSize ps{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1};
+	VkDescriptorPoolCreateInfo dpCI{};
+	dpCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	dpCI.maxSets = 1;
+	dpCI.poolSizeCount = 1;
+	dpCI.pPoolSizes = &ps;
+	VkDescriptorPool pool;
+	vkCreateDescriptorPool(dev, &dpCI, nullptr, &pool);
+
+	VkDescriptorSetLayoutBinding binding{};
+	binding.binding = 0;
+	binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	binding.descriptorCount = 1;
+	binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkDescriptorSetLayoutCreateInfo dslCI{};
+	dslCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dslCI.bindingCount = 1;
+	dslCI.pBindings = &binding;
+	VkDescriptorSetLayout descLayout;
+	vkCreateDescriptorSetLayout(dev, &dslCI, nullptr, &descLayout);
+
+	VkDescriptorSetAllocateInfo dsAI{};
+	dsAI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	dsAI.descriptorPool = pool;
+	dsAI.descriptorSetCount = 1;
+	dsAI.pSetLayouts = &descLayout;
+	VkDescriptorSet descSet;
+	vkAllocateDescriptorSets(dev, &dsAI, &descSet);
+
+	VkDescriptorImageInfo imgInfo{};
+	imgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imgInfo.imageView = envCubemapImageView;
+	imgInfo.sampler = cubemapSampler;
+	VkWriteDescriptorSet write{};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = descSet;
+	write.dstBinding = 0;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	write.descriptorCount = 1;
+	write.pImageInfo = &imgInfo;
+	vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+
+	// Render each roughness mip level (size halves each level)
+	// Roughness maps linearly across mip levels: mip 0 = 0.0, mip 4 = 1.0
+	for (uint32_t mip = 0; mip < MAX_MIP_LEVELS; mip++) {
+		float mipRoughness = (float)mip / (float)(MAX_MIP_LEVELS - 1);
+		uint32_t mipSize = static_cast<uint32_t>(PREFILTER_SIZE * std::pow(0.5f, (float)mip));
+		renderCubemapFaces(commandPool,
+						   mipSize,
+						   "shaders/ibl/cubemap_vert.spv",
+						   "shaders/ibl/prefilter_frag.spv",
+						   descLayout,
+						   descSet,
+						   prefilterImage,
+						   mip,
+						   mipRoughness);
+	}
+
+	Utils::transitionImageLayout(prefilterImage,
+								 VK_FORMAT_R16G16B16A16_SFLOAT,
+								 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+								 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+								 MAX_MIP_LEVELS,
+								 commandPool,
+								 6);
+
+	vkDestroyDescriptorSetLayout(dev, descLayout, nullptr);
+	vkDestroyDescriptorPool(dev, pool, nullptr);
+}
+
+// ----------------------------------------------------------------------------
+// Pass 4: Bake the BRDF integration LUT (512x512 RG16F 2D texture)
+// X axis = NdotV, Y axis = roughness, output RG = (scale, bias)
+// ----------------------------------------------------------------------------
+void VulkanIBL::buildBrdfLut(VkCommandPool commandPool) {
+	constexpr uint32_t LUT_SIZE = 512;
+	VkDevice dev = vulkanDevice->getDevice();
+
+	Utils::createImage(LUT_SIZE,
+					   LUT_SIZE,
+					   1,
+					   VK_SAMPLE_COUNT_1_BIT,
+					   VK_FORMAT_R16G16_SFLOAT,
+					   VK_IMAGE_TILING_OPTIMAL,
+					   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+					   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					   brdfLutImage,
+					   brdfLutMemory);
+
+	brdfLutImageView = Utils::createImageView(brdfLutImage, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+	Utils::transitionImageLayout(brdfLutImage,
+								 VK_FORMAT_R16G16_SFLOAT,
+								 VK_IMAGE_LAYOUT_UNDEFINED,
+								 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+								 1,
+								 commandPool);
+
+	VkSamplerCreateInfo sci{};
+	sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	sci.magFilter = VK_FILTER_LINEAR;
+	sci.minFilter = VK_FILTER_LINEAR;
+	sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sci.minLod = 0.0f;
+	sci.maxLod = 1.0f;
+	vkCreateSampler(dev, &sci, nullptr, &brdfLutSampler);
+
+	// Render pass targeting the 2D LUT image
+	VkAttachmentDescription colorAtt{};
+	colorAtt.format = VK_FORMAT_R16G16_SFLOAT;
+	colorAtt.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAtt.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorRef;
+
+	VkSubpassDependency dep{};
+	dep.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dep.dstSubpass = 0;
+	dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dep.srcAccessMask = 0;
+	dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	VkRenderPassCreateInfo rpCI{};
+	rpCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	rpCI.attachmentCount = 1;
+	rpCI.pAttachments = &colorAtt;
+	rpCI.subpassCount = 1;
+	rpCI.pSubpasses = &subpass;
+	rpCI.dependencyCount = 1;
+	rpCI.pDependencies = &dep;
+	VkRenderPass renderPass;
+	vkCreateRenderPass(dev, &rpCI, nullptr, &renderPass);
+
+	VkFramebufferCreateInfo fbCI{};
+	fbCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	fbCI.renderPass = renderPass;
+	fbCI.attachmentCount = 1;
+	fbCI.pAttachments = &brdfLutImageView;
+	fbCI.width = LUT_SIZE;
+	fbCI.height = LUT_SIZE;
+	fbCI.layers = 1;
+	VkFramebuffer fb;
+	vkCreateFramebuffer(dev, &fbCI, nullptr, &fb);
+
+	// No descriptors needed — fullscreen triangle has no input samplers
+	VkPipelineLayoutCreateInfo plCI{};
+	plCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	VkPipelineLayout pipelineLayout;
+	vkCreatePipelineLayout(dev, &plCI, nullptr, &pipelineLayout);
+
+	auto vertCode = Utils::readFile("shaders/ibl/brdf_lut_vert.spv");
+	auto fragCode = Utils::readFile("shaders/ibl/brdf_lut_frag.spv");
+	VkShaderModule vertModule, fragModule;
+	Utils::createShaderModule(vertCode, vertModule);
+	Utils::createShaderModule(fragCode, fragModule);
+
+	VkPipelineShaderStageCreateInfo stages[2]{};
+	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	stages[0].module = vertModule;
+	stages[0].pName = "main";
+	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	stages[1].module = fragModule;
+	stages[1].pName = "main";
+
+	VkPipelineVertexInputStateCreateInfo viCI{};
+	viCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	VkPipelineInputAssemblyStateCreateInfo iaCI{};
+	iaCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	iaCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+	VkViewport viewport{0.0f, 0.0f, (float)LUT_SIZE, (float)LUT_SIZE, 0.0f, 1.0f};
+	VkRect2D scissor{{0, 0}, {LUT_SIZE, LUT_SIZE}};
+	VkPipelineViewportStateCreateInfo vpsCI{};
+	vpsCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	vpsCI.viewportCount = 1;
+	vpsCI.pViewports = &viewport;
+	vpsCI.scissorCount = 1;
+	vpsCI.pScissors = &scissor;
+
+	VkPipelineRasterizationStateCreateInfo rastCI{};
+	rastCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rastCI.polygonMode = VK_POLYGON_MODE_FILL;
+	rastCI.cullMode = VK_CULL_MODE_NONE;
+	rastCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rastCI.lineWidth = 1.0f;
+
+	VkPipelineMultisampleStateCreateInfo msCI{};
+	msCI.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	msCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	VkPipelineColorBlendAttachmentState cba{};
+	cba.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	VkPipelineColorBlendStateCreateInfo cbCI{};
+	cbCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	cbCI.attachmentCount = 1;
+	cbCI.pAttachments = &cba;
+
+	VkGraphicsPipelineCreateInfo gpCI{};
+	gpCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	gpCI.stageCount = 2;
+	gpCI.pStages = stages;
+	gpCI.pVertexInputState = &viCI;
+	gpCI.pInputAssemblyState = &iaCI;
+	gpCI.pViewportState = &vpsCI;
+	gpCI.pRasterizationState = &rastCI;
+	gpCI.pMultisampleState = &msCI;
+	gpCI.pColorBlendState = &cbCI;
+	gpCI.layout = pipelineLayout;
+	gpCI.renderPass = renderPass;
+	gpCI.subpass = 0;
+	VkPipeline pipeline;
+	vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpCI, nullptr, &pipeline);
+
+	vkDestroyShaderModule(dev, fragModule, nullptr);
+	vkDestroyShaderModule(dev, vertModule, nullptr);
+
+	// Record and submit the single fullscreen triangle draw
+	VkCommandBuffer cmd = Utils::beginSingleTimeCommands(commandPool);
+	VkRenderPassBeginInfo rpBegin{};
+	rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	rpBegin.renderPass = renderPass;
+	rpBegin.framebuffer = fb;
+	rpBegin.renderArea.extent = {LUT_SIZE, LUT_SIZE};
+	VkClearValue clear{};
+	clear.color = {{0, 0, 0, 0}};
+	rpBegin.clearValueCount = 1;
+	rpBegin.pClearValues = &clear;
+
+	vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	vkCmdDraw(cmd, 3, 1, 0, 0);
+	vkCmdEndRenderPass(cmd);
+	Utils::endSingleTimeCommands(commandPool, cmd);
+
+	Utils::transitionImageLayout(brdfLutImage,
+								 VK_FORMAT_R16G16_SFLOAT,
+								 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+								 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+								 1,
+								 commandPool);
+
+	vkDestroyFramebuffer(dev, fb, nullptr);
+	vkDestroyPipeline(dev, pipeline, nullptr);
+	vkDestroyPipelineLayout(dev, pipelineLayout, nullptr);
+	vkDestroyRenderPass(dev, renderPass, nullptr);
 }

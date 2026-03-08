@@ -712,13 +712,31 @@ void VulkanCore::createDescriptorSetLayout() {
 	irradianceMapLayoutBinding.pImmutableSamplers = nullptr;
 	irradianceMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 7> bindings = {uboLayoutBinding,
+	// Binding 7: IBL pre-filtered specular env cubemap (samplerCube)
+	VkDescriptorSetLayoutBinding prefilterMapLayoutBinding{};
+	prefilterMapLayoutBinding.binding = 7;
+	prefilterMapLayoutBinding.descriptorCount = 1;
+	prefilterMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	prefilterMapLayoutBinding.pImmutableSamplers = nullptr;
+	prefilterMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 8: BRDF integration LUT (sampler2D)
+	VkDescriptorSetLayoutBinding brdfLutLayoutBinding{};
+	brdfLutLayoutBinding.binding = 8;
+	brdfLutLayoutBinding.descriptorCount = 1;
+	brdfLutLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	brdfLutLayoutBinding.pImmutableSamplers = nullptr;
+	brdfLutLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 9> bindings = {uboLayoutBinding,
 															samplerLayoutBinding,
 															lightLayoutBinding,
 															materialPropsLayoutBinding,
 															shadowMapLayoutBinding,
 															shadowCubeMapLayoutBinding,
-															irradianceMapLayoutBinding};
+															irradianceMapLayoutBinding,
+															prefilterMapLayoutBinding,
+															brdfLutLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

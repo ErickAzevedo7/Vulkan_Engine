@@ -6,6 +6,7 @@
 #include <functional>
 #include <glm/gtx/hash.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"

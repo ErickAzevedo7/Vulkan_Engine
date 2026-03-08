@@ -79,6 +79,10 @@ public:
 	void setLightManager(class LightManager* lightMgr);
 	void setShadowMap(Renderer::VulkanShadowMap* map);
 	void setIrradianceMap(VkImageView view, VkSampler sampler);
+	void setSpecularIBL(VkImageView prefilterView,
+						VkSampler prefilterSampler,
+						VkImageView brdfLutView,
+						VkSampler brdfLutSampler);
 
 	// Get VkBuffer for descriptor writes (temporary until descriptor abstraction)
 	VkBuffer getMaterialPropertyBuffer(Material* material, uint32_t frame);
@@ -91,6 +95,10 @@ private:
 	Renderer::VulkanShadowMap* shadowMap = nullptr;
 	VkImageView irradianceView = VK_NULL_HANDLE;
 	VkSampler irradianceSampler = VK_NULL_HANDLE;
+	VkImageView prefilterView = VK_NULL_HANDLE;
+	VkSampler prefilterSamplerHandle = VK_NULL_HANDLE;
+	VkImageView brdfLutView = VK_NULL_HANDLE;
+	VkSampler brdfLutSamplerHandle = VK_NULL_HANDLE;
 
 	// Layout key -> Handle map (to reuse layouts)
 	std::unordered_map<std::string, Renderer::ResourceSetLayoutHandle> layoutCache;

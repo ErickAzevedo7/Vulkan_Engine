@@ -9,6 +9,8 @@ layout(binding = 1) uniform sampler2D texSampler;
 layout(binding = 4) uniform sampler2D shadowSampler;
 layout(binding = 5) uniform samplerCube shadowCubeSampler;
 layout(binding = 6) uniform samplerCube irradianceMap;
+layout(binding = 7) uniform samplerCube prefilterMap;
+layout(binding = 8) uniform sampler2D   brdfLUT;
 
 layout(binding = 2) uniform Light {
     vec4 colorIntensity; // rgb=color, a=intensity
@@ -253,16 +255,26 @@ void main() {
     // Outgoing radiance Lo
     vec3 Lo = (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * NdotL;
 
-    // Ambient lighting — IBL diffuse irradiance
-    // We calculate a NEW Fresnel term here specifically for ambient, using N and V (and roughness) 
-    // instead of H and V (which the direct light uses).
+    // Ambient lighting — IBL diffuse + specular (split-sum approximation)
+    // Fresnel for ambient uses N·V and roughness, not H·V
     vec3 kS_ambient = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
     vec3 kD_ambient = vec3(1.0) - kS_ambient;
     kD_ambient *= 1.0 - metallic; // Pure metals have ZERO diffuse reflection
 
+    // --- Diffuse IBL ---
     vec3 irradiance = texture(irradianceMap, N).rgb;
     vec3 diffuse    = irradiance * albedo;
-    vec3 ambient    = (kD_ambient * diffuse) * ao; 
+
+    // --- Specular IBL (split-sum) ---
+    // Reflect view vector to look up environment in specular direction
+    vec3 R = reflect(-V, N);
+    const float MAX_REFLECTION_LOD = 4.0; // 5 mip levels (0..4)
+    vec3 prefilteredColor = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+    // BRDF LUT encodes (scale, bias) for F0: X = NdotV axis, Y = roughness axis
+    vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specularIBL = prefilteredColor * (kS_ambient * brdf.x + brdf.y);
+
+    vec3 ambient    = (kD_ambient * diffuse + specularIBL) * ao;
 
     vec3 color = ambient + Lo;
 

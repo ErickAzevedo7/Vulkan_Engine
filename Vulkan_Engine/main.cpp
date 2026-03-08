@@ -81,6 +81,8 @@ public:
 				 VulkanCore::getCommandPool(),
 				 "common/texture/skybox/environment.hdr");
 		resourceContext.getMaterialManager().setIrradianceMap(ibl.getIrradianceImageView(), ibl.getIrradianceSampler());
+		resourceContext.getMaterialManager().setSpecularIBL(
+			ibl.getPrefilterImageView(), ibl.getPrefilterSampler(), ibl.getBrdfLutImageView(), ibl.getBrdfLutSampler());
 
 		// Initialize resource managers (textures, materials, lights)
 		// ResourceContext constructor created the managers, now load content

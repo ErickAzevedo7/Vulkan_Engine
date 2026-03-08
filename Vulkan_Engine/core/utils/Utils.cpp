@@ -261,6 +261,16 @@ void Utils::transitionImageLayout(VkImage image,
 
 		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	} else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
+			   newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		// Used to prepare a rendered cubemap mip chain for generateMipmaps blitting.
+		// The render pass left the image in COLOR_ATTACHMENT_OPTIMAL; we need it in
+		// TRANSFER_DST_OPTIMAL so the blit loop can write into each mip level.
+		barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	} else {
 		throw std::invalid_argument("unsupported layout transition!");
 	}

@@ -25,6 +25,7 @@
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 #include "nlohmann/json.hpp"
 #include "nlohmann/json_fwd.hpp"
 
@@ -444,6 +445,22 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		binding6.stages = Renderer::ShaderStage::Fragment;
 		desc.bindings.push_back(binding6);
 
+		// Binding 7: Pre-filtered Specular Map (Cube Sampler) - Fragment
+		Renderer::ResourceBinding binding7;
+		binding7.binding = 7;
+		binding7.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding7.count = 1;
+		binding7.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(binding7);
+
+		// Binding 8: BRDF Integration LUT (2D Sampler) - Fragment
+		Renderer::ResourceBinding binding8;
+		binding8.binding = 8;
+		binding8.type = Renderer::ResourceType::CombinedTextureSampler;
+		binding8.count = 1;
+		binding8.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(binding8);
+
 		layout = resourceBinder->createLayout(desc);
 		layoutCache[layoutKey] = layout;
 	}
@@ -581,6 +598,56 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 			irrWrite.descriptorCount = 1;
 			irrWrite.pImageInfo = &irrInfo;
 			manualWrites.push_back(irrWrite);
+		}
+
+		// Binding 7: Pre-filtered Specular Map (use real view if available, else default)
+		VkDescriptorImageInfo prefilterInfo{};
+		VkWriteDescriptorSet prefilterWrite{};
+		{
+			if (prefilterView != VK_NULL_HANDLE) {
+				prefilterInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				prefilterInfo.imageView = prefilterView;
+				prefilterInfo.sampler = prefilterSamplerHandle;
+			} else {
+				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
+				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
+				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
+				prefilterInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				prefilterInfo.imageView = vkTex->getImageView(def->handle);
+				prefilterInfo.sampler = vkTex->getSampler(def->sampler);
+			}
+			prefilterWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			prefilterWrite.dstSet = vkSet;
+			prefilterWrite.dstBinding = 7;
+			prefilterWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			prefilterWrite.descriptorCount = 1;
+			prefilterWrite.pImageInfo = &prefilterInfo;
+			manualWrites.push_back(prefilterWrite);
+		}
+
+		// Binding 8: BRDF Integration LUT (use real view if available, else default)
+		VkDescriptorImageInfo brdfInfo{};
+		VkWriteDescriptorSet brdfWrite{};
+		{
+			if (brdfLutView != VK_NULL_HANDLE) {
+				brdfInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				brdfInfo.imageView = brdfLutView;
+				brdfInfo.sampler = brdfLutSamplerHandle;
+			} else {
+				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
+				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
+				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
+				brdfInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				brdfInfo.imageView = vkTex->getImageView(def->handle);
+				brdfInfo.sampler = vkTex->getSampler(def->sampler);
+			}
+			brdfWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			brdfWrite.dstSet = vkSet;
+			brdfWrite.dstBinding = 8;
+			brdfWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			brdfWrite.descriptorCount = 1;
+			brdfWrite.pImageInfo = &brdfInfo;
+			manualWrites.push_back(brdfWrite);
 		}
 
 		vkUpdateDescriptorSets(
@@ -733,4 +800,52 @@ void MaterialManager::cleanupPendingResources(uint32_t frameIndex) {
 		resourceBinder->freeSet(set);
 	}
 	queue.clear();
+}
+
+void MaterialManager::setSpecularIBL(VkImageView pView, VkSampler pSampler, VkImageView bView, VkSampler bSampler) {
+	prefilterView = pView;
+	prefilterSamplerHandle = pSampler;
+	brdfLutView = bView;
+	brdfLutSamplerHandle = bSampler;
+
+	if (!resourceBinder)
+		return;
+
+	// Retroactively update bindings 7 and 8 on every existing material descriptor set
+	for (auto& pair : materials) {
+		Material* material = pair.second;
+		for (size_t i = 0; i < material->resourceSets.size(); i++) {
+			VkDescriptorSet vkSet =
+				*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
+
+			VkDescriptorImageInfo prefilterInfo{};
+			prefilterInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			prefilterInfo.imageView = prefilterView;
+			prefilterInfo.sampler = prefilterSamplerHandle;
+
+			VkWriteDescriptorSet prefilterWrite{};
+			prefilterWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			prefilterWrite.dstSet = vkSet;
+			prefilterWrite.dstBinding = 7;
+			prefilterWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			prefilterWrite.descriptorCount = 1;
+			prefilterWrite.pImageInfo = &prefilterInfo;
+
+			VkDescriptorImageInfo brdfInfo{};
+			brdfInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			brdfInfo.imageView = brdfLutView;
+			brdfInfo.sampler = brdfLutSamplerHandle;
+
+			VkWriteDescriptorSet brdfWrite{};
+			brdfWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			brdfWrite.dstSet = vkSet;
+			brdfWrite.dstBinding = 8;
+			brdfWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			brdfWrite.descriptorCount = 1;
+			brdfWrite.pImageInfo = &brdfInfo;
+
+			VkWriteDescriptorSet writes[] = {prefilterWrite, brdfWrite};
+			vkUpdateDescriptorSets(VulkanCore::getDevice(), 2, writes, 0, nullptr);
+		}
+	}
 }
