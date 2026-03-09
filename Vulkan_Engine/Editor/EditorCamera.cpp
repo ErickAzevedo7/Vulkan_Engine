@@ -8,6 +8,7 @@
 #include "Scene.h"
 
 // Project headers - Components
+#include "components/CameraComponent.h"
 #include "components/Transform.h"
 
 // Project headers - Managers
@@ -63,6 +64,7 @@ float EditorCamera::pitch = 0.0f;
 float EditorCamera::lastX = 0.0f;
 float EditorCamera::lastY = 0.0f;
 bool EditorCamera::isDragging = false;
+bool EditorCamera::useGameCameraView = false;
 VkExtent2D EditorCamera::extent;
 glm::mat4 EditorCamera::viewMatrix;
 glm::mat4 EditorCamera::projMatrix;
@@ -100,12 +102,33 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 
 	std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
-	viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	bool useGameCamera = EditorCamera::useGameCameraView || (scene->getState() == SceneState::Play);
+	bool foundGameCamera = false;
 
-	projMatrix = glm::perspective(
-		glm::radians(45.0f), static_cast<float>(extent.width) / static_cast<float>(extent.height), 0.1f, 1000.0f);
+	if (useGameCamera) {
+		for (const auto& entityPtr : *entities) {
+			auto* cc = entityPtr->getComponent<CameraComponent>();
+			if (cc && cc->isPrimary) {
+				auto* tc = entityPtr->getComponent<Transform>();
+				if (tc) {
+					// View matrix is inverse of camera's transform matrix
+					viewMatrix = glm::inverse(tc->getMatrix());
+					// Calculate aspect ratio dynamically
+					float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+					projMatrix = cc->getProjectionMatrix(aspect);
+					foundGameCamera = true;
+					break;
+				}
+			}
+		}
+	}
 
-	projMatrix[1][1] *= -1;
+	if (!foundGameCamera) {
+		viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		projMatrix = glm::perspective(
+			glm::radians(45.0f), static_cast<float>(extent.width) / static_cast<float>(extent.height), 0.1f, 1000.0f);
+		projMatrix[1][1] *= -1;
+	}
 
 	UniformBufferObject ubo{};
 
@@ -183,6 +206,10 @@ void EditorCamera::mousePosHandler() {
 }
 
 void EditorCamera::inputProcess(MousePick& mousePick) {
+	if (resources && resources->getSceneManager().getActiveScene()->getState() == SceneState::Play) {
+		return;
+	}
+
 	ImGuiIO& io = ImGui::GetIO();
 
 	if (ImGui::IsWindowHovered() && ImGui::IsMouseDown(1)) {

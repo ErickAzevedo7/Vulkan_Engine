@@ -74,8 +74,27 @@ void EditorMenu::render() {
 				EntityFactory::createPrimitive(
 					resourceContext, resourceContext.getSceneManager().getActiveScene(), "Quad", "quad");
 			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Create Camera")) {
+				EntityFactory::createCamera(resourceContext.getSceneManager().getActiveScene(), "Camera");
+			}
 			ImGui::EndMenu();
 		}
+
+		Scene* scene = resourceContext.getSceneManager().getActiveScene();
+		bool isPlaying = scene && scene->getState() == SceneState::Play;
+
+		ImGui::SameLine(ImGui::GetWindowWidth() / 2.0f - 20.0f);
+		if (isPlaying) {
+			if (ImGui::MenuItem("Stop")) {
+				onStop();
+			}
+		} else {
+			if (ImGui::MenuItem("Play")) {
+				onPlay();
+			}
+		}
+
 		ImGui::EndMainMenuBar();
 	}
 
@@ -182,6 +201,37 @@ void EditorMenu::loadLastScene() {
 		} else {
 			// Fallback to creating a brand new scene file automatically
 			newScene();
+		}
+	}
+}
+
+void EditorMenu::onPlay() {
+	Scene* scene = resourceContext.getSceneManager().getActiveScene();
+	if (!scene)
+		return;
+
+	if (scene->getState() == SceneState::Edit) {
+		// Save current scene to a temporary backup
+		std::filesystem::create_directories("projects/temp");
+		editorSceneBackupPath = "projects/temp/play_backup.iscene";
+
+		ProjectSerializer::save(editorSceneBackupPath, scene, resourceContext);
+
+		scene->onRuntimeStart();
+	}
+}
+
+void EditorMenu::onStop() {
+	Scene* scene = resourceContext.getSceneManager().getActiveScene();
+	if (!scene)
+		return;
+
+	if (scene->getState() == SceneState::Play) {
+		scene->onRuntimeStop();
+
+		// Reload the backup
+		if (!editorSceneBackupPath.empty() && std::filesystem::exists(editorSceneBackupPath)) {
+			ProjectSerializer::load(editorSceneBackupPath, scene, resourceContext);
 		}
 	}
 }

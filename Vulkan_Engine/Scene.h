@@ -7,6 +7,7 @@
 
 #include "Entity.h"
 
+enum class SceneState { Edit = 0, Play = 1 };
 
 class Scene {
 public:
@@ -35,8 +36,21 @@ public:
 	void markDirty();
 	void clearDirty();
 
+	// Runtime
+	void onRuntimeStart();
+	void onRuntimeStop();
+	void onUpdate(float deltaTime);
+
+	inline SceneState getState() const {
+		return state;
+	}
+	inline void setState(SceneState s) {
+		state = s;
+	}
+
 private:
 	std::vector<std::unique_ptr<Entity>> entities;
 	std::string name;
 	bool isDirty = false;
+	SceneState state = SceneState::Edit;
 };

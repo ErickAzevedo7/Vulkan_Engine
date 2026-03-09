@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/Transform.h"
@@ -871,6 +872,61 @@ void InspectorUi::render() {
 				}
 				ImGui::NextColumn();
 			}
+
+			ImGui::Unindent(kContentIndent);
+			ImGui::PopStyleVar();
+		} else {
+			ImGui::PopStyleVar(3);
+		}
+
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
+
+		// Camera component section
+		auto* cameraComp = entity.getComponent<CameraComponent>();
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+		if (cameraComp && ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::PopStyleVar(3);
+
+			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+			ImGui::Indent(kContentIndent);
+
+			ImGui::Columns(2, "##CameraColumns", false);
+			ImGui::SetColumnWidth(0, 80.0f);
+
+			// FOV
+			ImGui::Text("FOV");
+			ImGui::NextColumn();
+			if (ImGui::SliderFloat("##CameraFOV", &cameraComp->fov, 10.0f, 150.0f, "%.1f"))
+				edited = true;
+			ImGui::NextColumn();
+
+			// Near Plane
+			ImGui::Text("Near Plane");
+			ImGui::NextColumn();
+			if (ImGui::DragFloat("##CameraNear", &cameraComp->nearPlane, 0.01f, 0.001f, 10.0f, "%.3f"))
+				edited = true;
+			ImGui::NextColumn();
+
+			// Far Plane
+			ImGui::Text("Far Plane");
+			ImGui::NextColumn();
+			if (ImGui::DragFloat("##CameraFar", &cameraComp->farPlane, 1.0f, 10.0f, 10000.0f, "%.1f"))
+				edited = true;
+			ImGui::NextColumn();
+
+			// Is Primary
+			ImGui::Text("Primary");
+			ImGui::NextColumn();
+			if (ImGui::Checkbox("##CameraPrimary", &cameraComp->isPrimary))
+				edited = true;
+			ImGui::NextColumn();
+
+			ImGui::Columns(1);
 
 			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();

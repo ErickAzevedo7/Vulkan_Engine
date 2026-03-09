@@ -7,6 +7,7 @@
 #include <string>
 #include <system_error>
 
+#include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/Transform.h"
@@ -83,6 +84,16 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			lj["Kl"] = lc->attenuationKl;
 			lj["Kq"] = lc->attenuationKq;
 			ej["light"] = lj;
+		}
+
+		// --- Camera ---
+		if (auto* cc = entity.getComponent<CameraComponent>()) {
+			json cj;
+			cj["fov"] = cc->fov;
+			cj["nearPlane"] = cc->nearPlane;
+			cj["farPlane"] = cc->farPlane;
+			cj["isPrimary"] = cc->isPrimary;
+			ej["camera"] = cj;
 		}
 
 		root["entities"].push_back(ej);
@@ -201,6 +212,17 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			lc->attenuationKl = lj.value("Kl", 0.09f);
 			lc->attenuationKq = lj.value("Kq", 0.032f);
 			entity.addComponent(lc);
+		}
+
+		// --- Camera ---
+		if (ej.contains("camera")) {
+			const auto& cj = ej["camera"];
+			CameraComponent* cc = new CameraComponent(&entity);
+			cc->fov = cj.value("fov", 45.0f);
+			cc->nearPlane = cj.value("nearPlane", 0.1f);
+			cc->farPlane = cj.value("farPlane", 1000.0f);
+			cc->isPrimary = cj.value("isPrimary", true);
+			entity.addComponent(cc);
 		}
 	}
 

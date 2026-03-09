@@ -358,6 +358,46 @@ public:
 
 			EditorCamera::drawGuizmo();
 
+			if (ImGui::IsWindowFocused() || ImGui::IsWindowHovered()) {
+				EditorCamera::useGameCameraView = false;
+			}
+
+			ImGui::End();
+			ImGui::PopStyleVar(2);
+
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+			ImGui::Begin("Game");
+
+			// Switch to the Game tab automatically when Play is pressed
+			Scene* activeScene = resourceContext.getSceneManager().getActiveScene();
+			if (activeScene && activeScene->getState() == SceneState::Play) {
+				ImGui::SetWindowFocus();
+			}
+
+			if (ImGui::IsWindowFocused() || ImGui::IsWindowHovered()) {
+				EditorCamera::useGameCameraView = true;
+			}
+
+			ImVec2 gameSize = ImGui::GetContentRegionAvail();
+			uint32_t gameWidth = (gameSize.x > 0.0f) ? static_cast<uint32_t>(gameSize.x) : 0;
+			uint32_t gameHeight = (gameSize.y > 0.0f) ? static_cast<uint32_t>(gameSize.y) : 0;
+
+			// We only update internal render resolution based on whichever window is currently focused or active
+			if (ImGui::IsWindowFocused() || (activeScene && activeScene->getState() == SceneState::Play)) {
+				this->viewportExtent = VkExtent2D{gameWidth, gameHeight};
+				if (viewportExtent.width > 0 && viewportExtent.height > 0 &&
+					(viewportExtent.width != mousePick.mousePickExtent.width ||
+					 viewportExtent.height != mousePick.mousePickExtent.height)) {
+					mousePick.mousePickExtent = viewportExtent;
+					EditorCamera::setExtent(viewportExtent);
+					recreateRenderPasses();
+				}
+			}
+
+			ImVec2 gamePanelSize = ImGui::GetContentRegionAvail();
+			ImGui::Image((ImTextureID)sceneTexture[imageIndex], ImVec2{gamePanelSize.x, gamePanelSize.y});
+
 			ImGui::End();
 			ImGui::PopStyleVar(2);
 

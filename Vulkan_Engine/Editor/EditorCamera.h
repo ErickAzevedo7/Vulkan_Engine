@@ -32,6 +32,7 @@ public:
 	static float pitch;
 	static float lastX;
 	static float lastY;
+	static bool useGameCameraView;
 	void init(Renderer::VulkanDevice* device, ResourceContext* resources, InspectorUi* inspector);
 
 	static void setExtent(VkExtent2D newExtent);

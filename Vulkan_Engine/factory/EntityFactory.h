@@ -45,4 +45,15 @@ public:
 							   const glm::vec3& position = glm::vec3(0.0f),
 							   const glm::vec3& color = glm::vec3(1.0f),
 							   float intensity = 1.0f);
+
+	/// Create a camera entity with transform and camera component
+	/// @param scene The scene to create the entity in
+	/// @param name The name of the entity
+	/// @param position The initial position
+	/// @param isPrimary Whether this is the primary camera
+	/// @return Reference to the created entity
+	static Entity& createCamera(Scene* scene,
+								const std::string& name,
+								const glm::vec3& position = glm::vec3(0.0f),
+								bool isPrimary = true);
 };

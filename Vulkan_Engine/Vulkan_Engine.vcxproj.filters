@@ -33,7 +33,12 @@
     <ClCompile Include="external\imgui\imgui_tables.cpp" />
     <ClCompile Include="external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="ui\InspectorUi.cpp" />
-    <ClCompile Include="components\LightComponent.cpp" />
+    <ClCompile Include="components\LightComponent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="components\CameraComponent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="managers\LightManager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -69,12 +74,25 @@
     <ClInclude Include="external\imgui\imstb_textedit.h" />
     <ClInclude Include="ui\InspectorUi.h" />
     <ClInclude Include="Editor\MousePick.h" />
-    <ClInclude Include="components\LightComponent.h" />
+    <ClInclude Include="components\LightComponent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="components\CameraComponent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="managers\LightManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="source">
       <UniqueIdentifier>{90de9a81-7caa-4bbe-8101-8fd1b7f27683}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>

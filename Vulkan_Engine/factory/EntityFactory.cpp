@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/Transform.h"
@@ -12,6 +13,7 @@
 #include "Scene.h"
 
 #include "glm/ext/vector_float3.hpp"
+
 
 Entity& EntityFactory::createEmpty(Scene* scene, const std::string& name) {
 	if (!scene) {
@@ -78,6 +80,26 @@ Entity& EntityFactory::createLight(ResourceContext& resources,
 	lightComp->color = color;
 	lightComp->intensity = intensity;
 	entity.addComponent(lightComp);
+
+	return entity;
+}
+
+Entity& EntityFactory::createCamera(Scene* scene, const std::string& name, const glm::vec3& position, bool isPrimary) {
+	if (!scene) {
+		throw std::runtime_error("Cannot create entity: scene is null");
+	}
+
+	Entity& entity = scene->createEntity(name);
+
+	// Add transform component
+	Transform* transform = new Transform();
+	transform->position = position;
+	entity.addComponent(transform);
+
+	// Add camera component
+	CameraComponent* camera = new CameraComponent(&entity);
+	camera->isPrimary = isPrimary;
+	entity.addComponent(camera);
 
 	return entity;
 }

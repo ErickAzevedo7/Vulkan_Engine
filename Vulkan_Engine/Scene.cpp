@@ -77,3 +77,19 @@ void Scene::markDirty() {
 void Scene::clearDirty() {
 	isDirty = false;
 }
+
+void Scene::onRuntimeStart() {
+	state = SceneState::Play;
+	// Future: initialize physics, scripts, etc.
+}
+
+void Scene::onRuntimeStop() {
+	state = SceneState::Edit;
+	// Future: cleanup physics, scripts, etc.
+}
+
+void Scene::onUpdate(float deltaTime) {
+	if (state == SceneState::Play) {
+		// Future: update physics, scripts, etc.
+	}
+}
