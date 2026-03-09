@@ -27,11 +27,18 @@ void EditorMenu::render() {
 	if (ImGui::BeginMainMenuBar()) {
 		// --- File Menu ---
 		if (ImGui::BeginMenu("File")) {
-			if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
-				openSaveDialog();
+			if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+				newScene();
 			}
 			if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
 				openLoadDialog();
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Save", "Ctrl+S")) {
+				quickSave();
+			}
+			if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S")) {
+				saveAs();
 			}
 			ImGui::EndMenu();
 		}
@@ -61,14 +68,73 @@ void EditorMenu::render() {
 	// --- Keyboard shortcuts ---
 	{
 		ImGuiIO& io = ImGui::GetIO();
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))
-			openSaveDialog();
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false))
+		bool ctrl = io.KeyCtrl;
+		bool shift = io.KeyShift;
+
+		if (ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_S, false))
+			quickSave();
+		if (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_S, false))
+			saveAs();
+		if (ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_O, false))
 			openLoadDialog();
+		if (ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_N, false))
+			newScene();
 	}
 }
 
-void EditorMenu::openSaveDialog() {
+void EditorMenu::newScene() {
+	Scene* scene = resourceContext.getSceneManager().getActiveScene();
+	if (scene) {
+		// Ask the user to specify a filename for their new scene
+		std::filesystem::create_directories("projects");
+		char absBase[512];
+		_fullpath(absBase, "projects", sizeof(absBase));
+
+		std::string baseFilename = "new_scene";
+		std::string ext = ".iscene";
+		std::string path = std::string(absBase) + "\\" + baseFilename + ext;
+
+		int counter = 1;
+		while (std::filesystem::exists(path)) {
+			path = std::string(absBase) + "\\" + baseFilename + "(" + std::to_string(counter) + ")" + ext;
+			counter++;
+		}
+
+		// Clear the current active scene
+		scene->clear();
+
+		// Fallback generic light so the scene isn't completely dark
+		Entity& lightEntity = EntityFactory::createLight(resourceContext,
+														 scene,
+														 "Directional Light",
+														 LightType::Directional,
+														 glm::vec3(0.0f, 10.0f, 0.0f),
+														 glm::vec3(1.0f, 0.95f, 0.9f),
+														 10.0f);
+
+		// Set the direction for the directional light
+		LightComponent* lc = lightEntity.getComponent<LightComponent>();
+		if (lc) {
+			lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
+			lc->range = 20.0f; // shadow far plane
+		}
+
+		// Immediately save the newly created empty scene
+		ProjectSerializer::save(path, scene, resourceContext);
+		EditorConfig::setLastScenePath(path);
+	}
+}
+
+void EditorMenu::quickSave() {
+	std::string lastScene = EditorConfig::getLastScenePath();
+	if (!lastScene.empty()) {
+		ProjectSerializer::save(lastScene, resourceContext.getSceneManager().getActiveScene(), resourceContext);
+	} else {
+		saveAs();
+	}
+}
+
+void EditorMenu::saveAs() {
 	// Ensure projects/ directory exists so the dialog starts there
 	std::filesystem::create_directories("projects");
 	char absBase[512];
@@ -100,21 +166,8 @@ void EditorMenu::loadLastScene() {
 		if (!lastScene.empty() && std::filesystem::exists(lastScene)) {
 			ProjectSerializer::load(lastScene, scene, resourceContext);
 		} else {
-			// Fallback generic light so the scene isn't completely dark
-			Entity& lightEntity = EntityFactory::createLight(resourceContext,
-															 scene,
-															 "TestDirectionalLight",
-															 LightType::Directional,
-															 glm::vec3(0.0f, 10.0f, 0.0f),
-															 glm::vec3(1.0f, 0.95f, 0.9f),
-															 10.0f);
-
-			// Set the direction for the directional light
-			LightComponent* lc = lightEntity.getComponent<LightComponent>();
-			if (lc) {
-				lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
-				lc->range = 20.0f; // shadow far plane
-			}
+			// Fallback to creating a brand new scene file automatically
+			newScene();
 		}
 	}
 }

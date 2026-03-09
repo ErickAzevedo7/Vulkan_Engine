@@ -12,7 +12,9 @@ public:
 	void loadLastScene();
 
 private:
-	void openSaveDialog();
+	void newScene();
+	void quickSave();
+	void saveAs();
 	void openLoadDialog();
 
 	ResourceContext& resourceContext;
