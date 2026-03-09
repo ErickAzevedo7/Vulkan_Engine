@@ -154,6 +154,8 @@
     <ClCompile Include="context\\ResourceContext.cpp" />
     <ClCompile Include="core\\utils\\Utils.cpp" />
     <ClCompile Include="Editor\EditorCamera.cpp" />
+    <ClCompile Include="Editor\Win32FileDialog.cpp" />
+    <ClCompile Include="managers\EditorConfig.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="factory\EntityFactory.cpp" />
     <ClCompile Include="gridPlane\GridPlane.cpp" />
@@ -175,6 +177,7 @@
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
+    <ClCompile Include="managers\ProjectSerializer.cpp" />
     <ClCompile Include="Editor\ViewPort.cpp" />
     <ClCompile Include="core\vulkancore.cpp" />
     <ClCompile Include="core\events\EventBus.cpp" />
@@ -203,6 +206,8 @@
     <ClInclude Include="context\ResourceContext.h" />
     <ClInclude Include="core\utils\Utils.h" />
     <ClInclude Include="Editor\EditorCamera.h" />
+    <ClInclude Include="Editor\Win32FileDialog.h" />
+    <ClInclude Include="managers\EditorConfig.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="factory\EntityFactory.h" />
     <ClInclude Include="gridPlane\GridPlane.h" />
@@ -223,6 +228,7 @@
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="ui\UIManager.h" />
     <ClInclude Include="managers\SceneManager.h" />
+    <ClInclude Include="managers\ProjectSerializer.h" />
     <ClInclude Include="Editor\ViewPort.h" />
     <ClInclude Include="core\vulkancore.h" />
     <ClInclude Include="core\events\Event.h" />

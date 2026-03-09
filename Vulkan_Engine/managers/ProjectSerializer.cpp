@@ -1,0 +1,207 @@
+#include "ProjectSerializer.h"
+
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <system_error>
+
+#include "components/LightComponent.h"
+#include "components/MeshComponent.h"
+#include "components/Transform.h"
+#include "context/ResourceContext.h"
+#include "Entity.h"
+#include "managers/MaterialManager.h"
+#include "managers/MeshManager.h"
+#include "Scene.h"
+
+#include "glm/ext/quaternion_float.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include "nlohmann/json.hpp"
+#include "nlohmann/json_fwd.hpp"
+
+using json = nlohmann::json;
+
+bool ProjectSerializer::save(const std::string& filePath, Scene* scene, ResourceContext& resources) {
+	if (!scene) {
+		std::cerr << "[ProjectSerializer] save: scene is null\n";
+		return false;
+	}
+
+	// Ensure the projects directory exists
+	std::filesystem::path p(filePath);
+	if (p.has_parent_path()) {
+		std::error_code ec;
+		std::filesystem::create_directories(p.parent_path(), ec);
+		if (ec) {
+			std::cerr << "[ProjectSerializer] Failed to create directory: " << ec.message() << "\n";
+			return false;
+		}
+	}
+
+	json root;
+	root["scene_name"] = "Scene";
+	root["entities"] = json::array();
+
+	auto* entities = scene->getEntities();
+	for (const auto& entityPtr : *entities) {
+		const Entity& entity = *entityPtr;
+		json ej;
+		ej["name"] = entity.getName();
+
+		// --- Transform ---
+		if (auto* t = entity.getComponent<Transform>()) {
+			json tj;
+			tj["position"] = {t->position.x, t->position.y, t->position.z};
+			tj["rotation"] = {t->rotation.w, t->rotation.x, t->rotation.y, t->rotation.z};
+			tj["scale"] = {t->scale.x, t->scale.y, t->scale.z};
+			ej["transform"] = tj;
+		}
+
+		// --- Mesh ---
+		if (auto* m = entity.getComponent<MeshComponent>()) {
+			json mj;
+			Mesh* mesh = m->GetMesh();
+			mj["mesh_name"] = mesh ? mesh->name : "";
+			Material* mat = m->GetMaterial();
+			mj["material_path"] = mat ? mat->filePath : "";
+			ej["mesh"] = mj;
+		}
+
+		// --- Light ---
+		if (auto* lc = entity.getComponent<LightComponent>()) {
+			json lj;
+			lj["type"] = static_cast<int>(lc->getType());
+			lj["color"] = {lc->color.r, lc->color.g, lc->color.b};
+			lj["intensity"] = lc->intensity;
+			lj["range"] = lc->range;
+			lj["direction"] = {lc->direction.x, lc->direction.y, lc->direction.z};
+			lj["innerConeAngle"] = lc->innerConeAngle;
+			lj["outerConeAngle"] = lc->outerConeAngle;
+			lj["Kc"] = lc->attenuationKc;
+			lj["Kl"] = lc->attenuationKl;
+			lj["Kq"] = lc->attenuationKq;
+			ej["light"] = lj;
+		}
+
+		root["entities"].push_back(ej);
+	}
+
+	std::ofstream file(filePath, std::ios::trunc);
+	if (!file.is_open()) {
+		std::cerr << "[ProjectSerializer] Failed to open for writing: " << filePath << "\n";
+		return false;
+	}
+	file << root.dump(4);
+	file.close();
+
+	std::cout << "[ProjectSerializer] Saved scene to: " << filePath << "\n";
+	return true;
+}
+
+bool ProjectSerializer::load(const std::string& filePath, Scene* scene, ResourceContext& resources) {
+	if (!scene) {
+		std::cerr << "[ProjectSerializer] load: scene is null\n";
+		return false;
+	}
+
+	std::ifstream file(filePath);
+	if (!file.is_open()) {
+		std::cerr << "[ProjectSerializer] Failed to open: " << filePath << "\n";
+		return false;
+	}
+
+	json root;
+	try {
+		file >> root;
+	} catch (const std::exception& e) {
+		std::cerr << "[ProjectSerializer] JSON parse error: " << e.what() << "\n";
+		return false;
+	}
+	file.close();
+
+	// Clear the existing scene entities
+	scene->clear();
+
+	if (!root.contains("entities") || !root["entities"].is_array()) {
+		std::cerr << "[ProjectSerializer] No 'entities' array found in file\n";
+		return false;
+	}
+
+	MeshManager& meshMgr = resources.getMeshManager();
+	MaterialManager& matMgr = resources.getMaterialManager();
+
+	for (const auto& ej : root["entities"]) {
+		std::string name = ej.value("name", "Entity");
+		Entity& entity = scene->createEntity(name);
+
+		// --- Transform ---
+		if (ej.contains("transform")) {
+			const auto& tj = ej["transform"];
+			Transform* t = new Transform();
+
+			if (tj.contains("position") && tj["position"].size() == 3) {
+				t->position = {tj["position"][0], tj["position"][1], tj["position"][2]};
+			}
+			if (tj.contains("rotation") && tj["rotation"].size() == 4) {
+				// stored as w, x, y, z
+				t->rotation = glm::quat(tj["rotation"][0], tj["rotation"][1], tj["rotation"][2], tj["rotation"][3]);
+			}
+			if (tj.contains("scale") && tj["scale"].size() == 3) {
+				t->scale = {tj["scale"][0], tj["scale"][1], tj["scale"][2]};
+			}
+			entity.addComponent(t);
+		}
+
+		// --- Mesh ---
+		if (ej.contains("mesh")) {
+			const auto& mj = ej["mesh"];
+			std::string meshName = mj.value("mesh_name", "");
+			std::string matPath = mj.value("material_path", "");
+
+			if (!meshName.empty()) {
+				Mesh* mesh = meshMgr.getMesh(meshName);
+				if (mesh) {
+					MeshComponent* mc = new MeshComponent(&entity, meshName, meshMgr);
+					// Restore material
+					Material* mat = matPath.empty() ? nullptr : matMgr.getMaterial(matPath);
+					if (!mat) {
+						mat = matMgr.getMaterial("common/material/default.mat");
+					}
+					if (mat) {
+						mc->SetMaterial(mat);
+					}
+					entity.addComponent(mc);
+				} else {
+					std::cerr << "[ProjectSerializer] Mesh not found: " << meshName << "\n";
+				}
+			}
+		}
+
+		// --- Light ---
+		if (ej.contains("light")) {
+			const auto& lj = ej["light"];
+			LightType type = static_cast<LightType>(lj.value("type", 1));
+			LightComponent* lc = new LightComponent(&entity, type);
+
+			if (lj.contains("color") && lj["color"].size() == 3) {
+				lc->color = {lj["color"][0], lj["color"][1], lj["color"][2]};
+			}
+			lc->intensity = lj.value("intensity", 1.0f);
+			lc->range = lj.value("range", 50.0f);
+			if (lj.contains("direction") && lj["direction"].size() == 3) {
+				lc->direction = {lj["direction"][0], lj["direction"][1], lj["direction"][2]};
+			}
+			lc->innerConeAngle = lj.value("innerConeAngle", lc->innerConeAngle);
+			lc->outerConeAngle = lj.value("outerConeAngle", lc->outerConeAngle);
+			lc->attenuationKc = lj.value("Kc", 1.0f);
+			lc->attenuationKl = lj.value("Kl", 0.09f);
+			lc->attenuationKq = lj.value("Kq", 0.032f);
+			entity.addComponent(lc);
+		}
+	}
+
+	std::cout << "[ProjectSerializer] Loaded scene from: " << filePath << "\n";
+	return true;
+}

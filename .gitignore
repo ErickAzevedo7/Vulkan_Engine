@@ -368,3 +368,5 @@ Vulkan_Engine/vcpkg_installed
 Vulkan_Engine/assets
 .clangd
 compile_commands.json
+editor_config.json
+*.iscene
