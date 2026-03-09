@@ -3,7 +3,6 @@
 #include "Win32FileDialog.h"
 
 // clang-format off
-#include <minwindef.h>
 #include <windows.h>
 #include <commdlg.h>
 // clang-format on

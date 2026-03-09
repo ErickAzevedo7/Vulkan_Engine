@@ -38,6 +38,7 @@
 #include "managers/LightManager.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
+#include "managers/ProjectSerializer.h"
 #include "managers/SceneManager.h"
 #include "postprocess/outline.h"
 #include "renderer/vulkan/VulkanDevice.h"
@@ -46,6 +47,7 @@
 #include "renderer/vulkan/VulkanShadowMap.h"
 #include "SceneRenderer.h"
 #include "ui/AssetBrowser.h"
+#include "ui/EditorMenu.h"
 #include "ui/InspectorUi.h"
 #include "ui/SceneUi.h"
 #include "ui/UIManager.h"
@@ -57,7 +59,8 @@ double lastFrame = 0.0; // Time of last frame
 class VulkanEngine {
 public:
 	VulkanEngine()
-		: inspector(resourceContext), assetBrowser(resourceContext, inspector), sceneUi(resourceContext, inspector) {
+		: inspector(resourceContext), assetBrowser(resourceContext, inspector), sceneUi(resourceContext, inspector),
+		  editorMenu(resourceContext) {
 	}
 
 	Core::EventBus eventBus;
@@ -65,6 +68,7 @@ public:
 	void run() {
 		// Initialize Vulkan
 		engineCore.initWindow();
+		editorMenu.setWindow(engineCore.getWindow());
 
 		// Wire up Event System
 		engineCore.setEventBus(&eventBus);
@@ -114,26 +118,8 @@ public:
 		editorCamera.init(
 			static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext, &inspector);
 
-		// Create a hardcoded test light entity so lighting can be verified (TEMPORARY)
-		{
-			Scene* scene = resourceContext.getSceneManager().getActiveScene();
-			if (scene) {
-				Entity& lightEntity = EntityFactory::createLight(resourceContext,
-																 scene,
-																 "TestDirectionalLight",
-																 LightType::Directional,
-																 glm::vec3(0.0f, 10.0f, 0.0f),
-																 glm::vec3(1.0f, 0.95f, 0.9f),
-																 10.0f);
+		editorMenu.loadLastScene();
 
-				// Set the direction for the directional light
-				LightComponent* lc = lightEntity.getComponent<LightComponent>();
-				if (lc) {
-					lc->direction = glm::vec3(0.0f, -1.0f, 0.0f);
-					lc->range = 20.0f; // shadow far plane
-				}
-			}
-		}
 		init();
 
 		changeImGuizmoStyle();
@@ -385,28 +371,7 @@ public:
 
 			assetBrowser.render();
 
-			if (ImGui::BeginMainMenuBar()) {
-				if (ImGui::BeginMenu("Entities")) {
-					if (ImGui::MenuItem("Create Empty Entity")) {
-						EntityFactory::createEmpty(resourceContext.getSceneManager().getActiveScene(), "Empty Entity");
-					}
-
-					if (ImGui::MenuItem("Create Cube")) {
-						EntityFactory::createPrimitive(
-							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Cube", "cube");
-					}
-					if (ImGui::MenuItem("Create Sphere")) {
-						EntityFactory::createPrimitive(
-							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Sphere", "sphere");
-					}
-					if (ImGui::MenuItem("Create Quad")) {
-						EntityFactory::createPrimitive(
-							resourceContext, resourceContext.getSceneManager().getActiveScene(), "Quad", "quad");
-					}
-					ImGui::EndMenu();
-				}
-				ImGui::EndMainMenuBar();
-			}
+			editorMenu.render();
 
 			ImGui::Render();
 
@@ -425,6 +390,7 @@ private:
 	InspectorUi inspector;
 	AssetBrowser assetBrowser;
 	SceneUi sceneUi;
+	EditorMenu editorMenu;
 	EditorCamera editorCamera;
 	ViewPort viewPort;
 	MousePick mousePick;

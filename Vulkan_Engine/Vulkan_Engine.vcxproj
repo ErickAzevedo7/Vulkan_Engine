@@ -155,13 +155,13 @@
     <ClCompile Include="core\\utils\\Utils.cpp" />
     <ClCompile Include="Editor\EditorCamera.cpp" />
     <ClCompile Include="Editor\Win32FileDialog.cpp" />
-    <ClCompile Include="managers\EditorConfig.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="factory\EntityFactory.cpp" />
     <ClCompile Include="gridPlane\GridPlane.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="components\MeshComponent.cpp" />
     <ClCompile Include="managers\MeshManager.cpp" />
+    <ClCompile Include="managers\EditorConfig.cpp" />
     <ClCompile Include="managers\MaterialManager.cpp" />
     <ClCompile Include="Editor\MousePick.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanHdr.cpp" />
@@ -173,6 +173,7 @@
     <ClCompile Include="managers\TextureManager.cpp" />
     <ClCompile Include="skybox\Skybox.cpp" />
     <ClCompile Include="gizmos\ImGuizmo.cpp" />
+    <ClCompile Include="ui\EditorMenu.cpp" />
     <ClCompile Include="ui\InspectorUi.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
@@ -207,12 +208,12 @@
     <ClInclude Include="core\utils\Utils.h" />
     <ClInclude Include="Editor\EditorCamera.h" />
     <ClInclude Include="Editor\Win32FileDialog.h" />
-    <ClInclude Include="managers\EditorConfig.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="factory\EntityFactory.h" />
     <ClInclude Include="gridPlane\GridPlane.h" />
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="managers\MeshManager.h" />
+    <ClInclude Include="managers\EditorConfig.h" />
     <ClInclude Include="managers\MaterialManager.h" />
     <ClInclude Include="renderer\vulkan\VulkanHdr.h" />
     <ClInclude Include="renderer\Hdr.h" />
