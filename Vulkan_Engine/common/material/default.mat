@@ -1,4 +1,12 @@
 {
-    "albedoTextureKey": "common/texture/default.png",
-    "name": "default"
+    "albedo": [
+        1.0,
+        1.0,
+        1.0
+    ],
+    "albedoTextureKey": "assets\\wood.png",
+    "ao": 1.0,
+    "metallic": 1.0,
+    "name": "default",
+    "roughness": 0.0
 }

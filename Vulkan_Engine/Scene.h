@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Entity.h"
-
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "Entity.h"
+
 
 class Scene {
 public:
@@ -29,7 +30,13 @@ public:
 
 	std::vector<std::unique_ptr<Entity>>* getEntities();
 
+	// Dirty flag management
+	bool getIsDirty() const;
+	void markDirty();
+	void clearDirty();
+
 private:
 	std::vector<std::unique_ptr<Entity>> entities;
 	std::string name;
+	bool isDirty = false;
 };

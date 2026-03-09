@@ -320,6 +320,12 @@ void EditorCamera::drawGuizmo() {
 		transform->position = translation;
 		transform->rotation = rotation;
 		transform->scale = scale;
+
+		if (resources) {
+			if (Scene* scene = resources->getSceneManager().getActiveScene()) {
+				scene->markDirty();
+			}
+		}
 	}
 }
 

@@ -404,6 +404,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 																		  mat->properties.ao);
 						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'"
 								  << std::endl;
+
+						if (Scene* scene = resources.getSceneManager().getActiveScene()) {
+							scene->markDirty();
+						}
 					}
 				}
 			}
@@ -486,6 +490,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 															  material->properties.metallic,
 															  material->properties.roughness,
 															  material->properties.ao);
+
+			if (Scene* scene = resources.getSceneManager().getActiveScene()) {
+				scene->markDirty();
+			}
 		}
 	}
 
@@ -495,6 +503,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 void InspectorUi::render() {
 	Scene* scene = resources.getSceneManager().getActiveScene();
+	bool edited = false;
 
 	ImGui::PushStyleVarX(ImGuiStyleVar_WindowPadding, 0.0f);
 
@@ -531,8 +540,10 @@ void InspectorUi::render() {
 		ImGui::Indent(kContentIndent);
 		ImGui::Text("Name");
 		ImGui::SameLine();
-		if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer)))
+		if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer))) {
 			entity.setName(nameBuffer);
+			edited = true;
+		}
 
 		ImGui::Unindent(kContentIndent);
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
@@ -558,7 +569,8 @@ void InspectorUi::render() {
 			// Position
 			ImGui::Text("Position");
 			ImGui::NextColumn();
-			ImGui::DragFloat3("##Position", &transform->position.x, 0.1f, 0, 0, "%.2f");
+			if (ImGui::DragFloat3("##Position", &transform->position.x, 0.1f, 0, 0, "%.2f"))
+				edited = true;
 			ImGui::NextColumn();
 
 			// Rotation
@@ -567,13 +579,15 @@ void InspectorUi::render() {
 			glm::vec3 euler = glm::degrees(glm::eulerAngles(transform->rotation));
 			if (ImGui::DragFloat3("##Rotation", &euler.x, 0.5f, 0, 0, "%.2f")) {
 				transform->rotation = glm::quat(glm::radians(euler));
+				edited = true;
 			}
 			ImGui::NextColumn();
 
 			// Scale
 			ImGui::Text("Scale");
 			ImGui::NextColumn();
-			ImGui::DragFloat3("##Scale", &transform->scale.x, 0.1f, 0, 0, "%.2f");
+			if (ImGui::DragFloat3("##Scale", &transform->scale.x, 0.1f, 0, 0, "%.2f"))
+				edited = true;
 			ImGui::Columns(1);
 
 			ImGui::Unindent(kContentIndent);
@@ -611,6 +625,7 @@ void InspectorUi::render() {
 					bool isSelected = (material && matName == material->name);
 					if (ImGui::Selectable(matName.c_str(), isSelected)) {
 						meshComp->SetMaterial(kv.second);
+						edited = true;
 					}
 					if (isSelected)
 						ImGui::SetItemDefaultFocus();
@@ -685,6 +700,7 @@ void InspectorUi::render() {
 								}
 
 								meshComp->SetMaterial(mat);
+								edited = true;
 							}
 						}
 					}
@@ -750,20 +766,23 @@ void InspectorUi::render() {
 			int currentType = static_cast<int>(lightComp->getType());
 			if (ImGui::Combo("##LightType", &currentType, lightTypeLabels, IM_ARRAYSIZE(lightTypeLabels))) {
 				lightComp->setType(static_cast<LightType>(currentType));
+				edited = true;
 			}
 			ImGui::NextColumn();
 
 			// Color
 			ImGui::Text("Color");
 			ImGui::NextColumn();
-			ImGui::ColorEdit3(
-				"##LightColor", &lightComp->color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			if (ImGui::ColorEdit3(
+					"##LightColor", &lightComp->color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+				edited = true;
 			ImGui::NextColumn();
 
 			// Intensity
 			ImGui::Text("Intensity");
 			ImGui::NextColumn();
-			ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 1.0f, 0.0f, 1000.0f, "%.1f");
+			if (ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 1.0f, 0.0f, 1000.0f, "%.1f"))
+				edited = true;
 			ImGui::NextColumn();
 
 			ImGui::Columns(1);
@@ -788,19 +807,22 @@ void InspectorUi::render() {
 				// Constant (Kc)
 				ImGui::Text("Kc (Const)");
 				ImGui::NextColumn();
-				ImGui::DragFloat("##LightAttenKc", &lightComp->attenuationKc, 0.01f, 0.0f, 100.0f, "%.3f");
+				if (ImGui::DragFloat("##LightAttenKc", &lightComp->attenuationKc, 0.01f, 0.0f, 100.0f, "%.3f"))
+					edited = true;
 				ImGui::NextColumn();
 
 				// Linear (Kl)
 				ImGui::Text("Kl (Linear)");
 				ImGui::NextColumn();
-				ImGui::DragFloat("##LightAttenKl", &lightComp->attenuationKl, 0.01f, 0.0f, 100.0f, "%.3f");
+				if (ImGui::DragFloat("##LightAttenKl", &lightComp->attenuationKl, 0.01f, 0.0f, 100.0f, "%.3f"))
+					edited = true;
 				ImGui::NextColumn();
 
 				// Quadratic (Kq)
 				ImGui::Text("Kq (Quad)");
 				ImGui::NextColumn();
-				ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f");
+				if (ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f"))
+					edited = true;
 				ImGui::NextColumn();
 
 				ImGui::Columns(1);
@@ -831,6 +853,7 @@ void InspectorUi::render() {
 					if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
 						lightComp->outerConeAngle = lightComp->innerConeAngle;
 					}
+					edited = true;
 				}
 				ImGui::NextColumn();
 
@@ -844,6 +867,7 @@ void InspectorUi::render() {
 					if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
 						lightComp->innerConeAngle = lightComp->outerConeAngle;
 					}
+					edited = true;
 				}
 				ImGui::NextColumn();
 			}
@@ -884,6 +908,10 @@ void InspectorUi::render() {
 		if (selection.type == InspectorSelectionType::Material) {
 			InspectorUi::renderMaterialTab(fullPath);
 		}
+	}
+
+	if (edited && scene) {
+		scene->markDirty();
 	}
 
 	ImGui::PopStyleVar();

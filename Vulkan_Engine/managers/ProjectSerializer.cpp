@@ -96,6 +96,8 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 	file << root.dump(4);
 	file.close();
 
+	scene->clearDirty();
+
 	std::cout << "[ProjectSerializer] Saved scene to: " << filePath << "\n";
 	return true;
 }
@@ -202,6 +204,7 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 		}
 	}
 
+	scene->clearDirty();
 	std::cout << "[ProjectSerializer] Loaded scene from: " << filePath << "\n";
 	return true;
 }

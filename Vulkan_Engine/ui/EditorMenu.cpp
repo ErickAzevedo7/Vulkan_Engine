@@ -24,6 +24,20 @@ void EditorMenu::setWindow(GLFWwindow* w) {
 }
 
 void EditorMenu::render() {
+	if (window) {
+		Scene* scene = resourceContext.getSceneManager().getActiveScene();
+		std::string lastScene = EditorConfig::getLastScenePath();
+		std::string title = "Vulkan Engine";
+		if (!lastScene.empty()) {
+			std::filesystem::path p(lastScene);
+			title += " - " + p.filename().string();
+		}
+		if (scene && scene->getIsDirty()) {
+			title += " *";
+		}
+		glfwSetWindowTitle(window, title.c_str());
+	}
+
 	if (ImGui::BeginMainMenuBar()) {
 		// --- File Menu ---
 		if (ImGui::BeginMenu("File")) {
