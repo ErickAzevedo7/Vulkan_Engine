@@ -239,6 +239,12 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 		if (ImGui::IsKeyDown(ImGuiKey_D)) {
 			cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 		}
+		if (ImGui::IsKeyDown(ImGuiKey_E)) {
+			cameraPos += cameraSpeed * cameraUp;
+		}
+		if (ImGui::IsKeyDown(ImGuiKey_Q)) {
+			cameraPos -= cameraSpeed * cameraUp;
+		}
 	} else {
 		if (ImGui::IsKeyPressed(ImGuiKey_W))
 			currentGizmoOperation = ImGuizmo::TRANSLATE;
@@ -341,20 +347,20 @@ void EditorCamera::updateCursorLoop() {
 	bool moved = false;
 
 	// Check and wrap horizontally
-	if (mouse_pos.x < viewport_left) {
-		mouse_pos.x = viewport_right;
+	if (mouse_pos.x <= viewport_left) {
+		mouse_pos.x = viewport_right - 2.0f;
 		moved = true;
-	} else if (mouse_pos.x > viewport_right) {
-		mouse_pos.x = viewport_left;
+	} else if (mouse_pos.x >= viewport_right - 1.0f) {
+		mouse_pos.x = viewport_left + 2.0f;
 		moved = true;
 	}
 
 	// Check and wrap vertically
-	if (mouse_pos.y < viewport_top) {
-		mouse_pos.y = viewport_bottom;
+	if (mouse_pos.y <= viewport_top) {
+		mouse_pos.y = viewport_bottom - 2.0f;
 		moved = true;
-	} else if (mouse_pos.y > viewport_bottom) {
-		mouse_pos.y = viewport_top;
+	} else if (mouse_pos.y >= viewport_bottom - 1.0f) {
+		mouse_pos.y = viewport_top + 2.0f;
 		moved = true;
 	}
 
