@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
+#include <iostream>
 #include <string>
 
 #include "Entity.h"
@@ -22,7 +22,7 @@ MeshComponent::MeshComponent(Entity* owner, const std::string& meshName, MeshMan
 	this->material = nullptr;
 
 	if (!mesh) {
-		throw std::runtime_error("Mesh not found: " + meshName);
+		std::cerr << "[MeshComponent] Warning: Mesh not found: " << meshName << std::endl;
 	}
 }
 

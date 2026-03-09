@@ -105,9 +105,8 @@ Mesh* MeshManager::getMesh(std::string name) {
 		return &cube;
 	} else if (name == "sphere") {
 		return &sphere;
-	} else {
-		throw std::runtime_error("Mesh not found: " + name);
 	}
+	return nullptr;
 }
 
 void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue) {
@@ -115,11 +114,14 @@ void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue)
 		throw std::runtime_error("MeshManager: Buffer manager not set before loadDefaults!");
 	}
 	quad = createMesh(quadVertices, quadIndices, commandPool);
+	quad.name = "quad";
 	cube = createMesh(cubeVertices, cubeIndices, commandPool);
+	cube.name = "cube";
 	std::vector<Vertex> sphereVerts;
 	std::vector<uint32_t> sphereInds;
 	generateSphere(sphereVerts, sphereInds);
 	sphere = createMesh(sphereVerts, sphereInds, commandPool);
+	sphere.name = "sphere";
 }
 
 Mesh MeshManager::createMesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices, VkCommandPool commandPool) {
