@@ -47,7 +47,7 @@
 #include <imgui.h>
 
 // Standard library
-#include <chrono>
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -65,7 +65,8 @@ float EditorCamera::lastX = 0.0f;
 float EditorCamera::lastY = 0.0f;
 bool EditorCamera::isDragging = false;
 bool EditorCamera::useGameCameraView = false;
-VkExtent2D EditorCamera::extent;
+VkExtent2D EditorCamera::editorExtent;
+VkExtent2D EditorCamera::gameExtent;
 glm::mat4 EditorCamera::viewMatrix;
 glm::mat4 EditorCamera::projMatrix;
 ImGuizmo::OPERATION EditorCamera::currentGizmoOperation = ImGuizmo::TRANSLATE;
@@ -80,90 +81,108 @@ void EditorCamera::init(Renderer::VulkanDevice* device, ResourceContext* resourc
 	glfwGetFramebufferSize(vulkanDevice->getWindow(), &width, &height);
 	EditorCamera::lastX = width / 2.0f;
 	EditorCamera::lastY = height / 2.0f;
-	EditorCamera::extent = vulkanDevice->getSwapChainExtent();
+	EditorCamera::editorExtent = vulkanDevice->getSwapChainExtent();
+	EditorCamera::gameExtent = vulkanDevice->getSwapChainExtent();
 }
 
-void EditorCamera::setExtent(VkExtent2D newExtent) {
-	extent = newExtent;
+void EditorCamera::setEditorExtent(VkExtent2D newExtent) {
+	editorExtent = newExtent;
+}
+
+void EditorCamera::setGameExtent(VkExtent2D newExtent) {
+	gameExtent = newExtent;
 }
 
 void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 									   void* uniformBufferMapped,
+									   void* editorGlobalBufferMapped,
+									   void* gameGlobalBufferMapped,
 									   const glm::mat4* lightSpaceMatrices,
 									   const glm::vec4& lightPos_farPlane) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 	if (!resources)
 		return;
 	Scene* scene = resources->getSceneManager().getActiveScene();
 
 	std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
-	bool useGameCamera = EditorCamera::useGameCameraView || (scene->getState() == SceneState::Play);
-	bool foundGameCamera = false;
+	// --- Build Editor GlobalUBO (free-roam camera) ---
+	glm::mat4 editorView = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	float editorAspect = (editorExtent.height > 0)
+							 ? static_cast<float>(editorExtent.width) / static_cast<float>(editorExtent.height)
+							 : 1.0f;
+	glm::mat4 editorProj = glm::perspective(glm::radians(45.0f), editorAspect, 0.1f, 1000.0f);
+	editorProj[1][1] *= -1;
 
-	if (useGameCamera) {
-		for (const auto& entityPtr : *entities) {
-			auto* cc = entityPtr->getComponent<CameraComponent>();
-			if (cc && cc->isPrimary) {
-				auto* tc = entityPtr->getComponent<Transform>();
-				if (tc) {
-					// View matrix is inverse of camera's transform matrix
-					viewMatrix = glm::inverse(tc->getMatrix());
-					// Calculate aspect ratio dynamically
-					float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-					projMatrix = cc->getProjectionMatrix(aspect);
-					foundGameCamera = true;
-					break;
-				}
+	// Store editor matrices for gizmo/gridplane use
+	viewMatrix = editorView;
+	projMatrix = editorProj;
+
+	GlobalUBO editorGlobal{};
+	editorGlobal.view = editorView;
+	editorGlobal.proj = editorProj;
+	editorGlobal.viewPos = cameraPos;
+	if (lightSpaceMatrices) {
+		for (int i = 0; i < 6; i++) {
+			editorGlobal.lightSpaceMatrices[i] = lightSpaceMatrices[i];
+		}
+		editorGlobal.lightPos_farPlane = lightPos_farPlane;
+	}
+	memcpy(editorGlobalBufferMapped, &editorGlobal, sizeof(GlobalUBO));
+
+	// --- Build Game GlobalUBO (primary CameraComponent camera) ---
+	GlobalUBO gameGlobal{};
+	bool foundGameCamera = false;
+	for (const auto& entityPtr : *entities) {
+		auto* cc = entityPtr->getComponent<CameraComponent>();
+		if (cc && cc->isPrimary) {
+			auto* tc = entityPtr->getComponent<Transform>();
+			if (tc) {
+				gameGlobal.view = glm::inverse(tc->getMatrix());
+				float gameAspect = (gameExtent.height > 0)
+									   ? static_cast<float>(gameExtent.width) / static_cast<float>(gameExtent.height)
+									   : 1.0f;
+				gameGlobal.proj = cc->getProjectionMatrix(gameAspect);
+				gameGlobal.viewPos = glm::vec3(tc->getMatrix()[3]);
+				foundGameCamera = true;
+				break;
 			}
 		}
 	}
-
 	if (!foundGameCamera) {
-		viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-		projMatrix = glm::perspective(
-			glm::radians(45.0f), static_cast<float>(extent.width) / static_cast<float>(extent.height), 0.1f, 1000.0f);
-		projMatrix[1][1] *= -1;
+		// If no game camera, mirror the editor camera
+		gameGlobal = editorGlobal;
 	}
-
-	UniformBufferObject ubo{};
-
-	ubo.view = viewMatrix;
-
-	ubo.proj = projMatrix;
-
-	ubo.viewPos = cameraPos;
-
 	if (lightSpaceMatrices) {
 		for (int i = 0; i < 6; i++) {
-			ubo.lightSpaceMatrices[i] = lightSpaceMatrices[i];
+			gameGlobal.lightSpaceMatrices[i] = lightSpaceMatrices[i];
 		}
-		ubo.lightPos_farPlane = lightPos_farPlane;
+		gameGlobal.lightPos_farPlane = lightPos_farPlane;
 	}
+	memcpy(gameGlobalBufferMapped, &gameGlobal, sizeof(GlobalUBO));
 
+	// --- Write PerObjectUBO for each entity into the dynamic UBO ---
 	for (const auto& entityPtr : *entities) {
 		const Entity& entity = *entityPtr;
+		auto* t = entity.getComponent<Transform>();
+		if (!t)
+			continue;
 
-		glm::mat4 model = entity.getComponent<Transform>()->getMatrix();
-		ubo.model = model;
-		// normal matrix is inverse-transpose of model's upper-left 3x3
-		ubo.normal = glm::transpose(glm::inverse(model));
+		glm::mat4 model = t->getMatrix();
+
+		PerObjectUBO perObj{};
+		perObj.model = model;
+		perObj.normal = glm::transpose(glm::inverse(model));
 
 		size_t offset = entity.getID() * vulkanDevice->getDynamicAlignment();
 		char* base = static_cast<char*>(uniformBufferMapped);
-
-		memcpy(base + offset, &ubo, sizeof(ubo));
+		memcpy(base + offset, &perObj, sizeof(PerObjectUBO));
 	}
 
-	glm::mat4 view = glm::mat4(glm::mat3(ubo.view));
+	// Skybox and gridplane use editor camera
+	glm::mat4 skyView = glm::mat4(glm::mat3(editorView));
+	Skybox::updateSkyboxUniformBuffer(currentImage, skyView, editorProj);
 
-	Skybox::updateSkyboxUniformBuffer(currentImage, view, ubo.proj);
-
-	GridPlane::updateUniformBuffer(currentImage, glm::mat4(1.0f), ubo.view, ubo.proj);
+	GridPlane::updateUniformBuffer(currentImage, glm::mat4(1.0f), editorView, editorProj);
 
 	GridPlane::updateGridParamsBuffer(currentImage,
 									  cameraPos,

@@ -66,9 +66,7 @@ void GridPlane::updateUniformBuffer(uint32_t currentImage,
 									const glm::mat4& model,
 									const glm::mat4& view,
 									const glm::mat4& proj) {
-	UniformBufferObject ubo{};
-	ubo.model = model;
-	ubo.normal = glm::transpose(glm::inverse(model));
+	GlobalUBO ubo{};
 	ubo.view = view;
 	ubo.proj = proj;
 
@@ -294,7 +292,7 @@ void GridPlane::createDescriptorSets() {
 		VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = gridPlaneUniformBuffers[i];
 		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
+		bufferInfo.range = sizeof(GlobalUBO);
 
 		VkDescriptorBufferInfo gridParamsBufferInfo{};
 		gridParamsBufferInfo.buffer = gridParamsUniformBuffers[i];
@@ -327,7 +325,7 @@ void GridPlane::createDescriptorSets() {
 }
 
 void GridPlane::createGridPlaneUniformBuffers() {
-	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+	VkDeviceSize bufferSize = sizeof(GlobalUBO);
 	VkDeviceSize gridBufferSize = sizeof(GridParamsUBO);
 	gridPlaneUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	gridPlaneUniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);

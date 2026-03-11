@@ -10,6 +10,7 @@
 #include "managers/MeshManager.h"
 #include "managers/SceneManager.h"
 #include "renderer/RenderCommandList.h"
+#include "renderer/vulkan/VulkanCommandList.h"
 #include "Scene.h"
 #include "vulkan/vulkan_core.h"
 
@@ -26,8 +27,23 @@ void SceneRenderer::renderScene(Renderer::RenderCommandList& commandList,
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
 								uint32_t currentFrame,
-								uint64_t dynamicAlignment) {
+								uint64_t dynamicAlignment,
+								VkDescriptorSet globalSet) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
+
+	// Bind GlobalUBO (set=0) once at the top of every scene pass.
+	// Call vkCmdBindDescriptorSets directly to avoid the void* abstraction
+	// round-trip that can corrupt the VkDescriptorSet handle.
+	if (auto* vkList = dynamic_cast<Renderer::VulkanCommandList*>(&commandList)) {
+		vkCmdBindDescriptorSets(vkList->getCommandBuffer(),
+								VK_PIPELINE_BIND_POINT_GRAPHICS,
+								pipelineLayout,
+								0 /*firstSet*/,
+								1,
+								&globalSet,
+								0,
+								nullptr);
+	}
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
@@ -88,8 +104,21 @@ void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 									VkPipeline pipeline,
 									VkPipelineLayout pipelineLayout,
 									uint32_t currentFrame,
-									uint64_t dynamicAlignment) {
+									uint64_t dynamicAlignment,
+									VkDescriptorSet globalSet) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
+
+	// Bind GlobalUBO (set=0) — required by the vertex shader before any indexed draw.
+	if (auto* vkList = dynamic_cast<Renderer::VulkanCommandList*>(&commandList)) {
+		vkCmdBindDescriptorSets(vkList->getCommandBuffer(),
+								VK_PIPELINE_BIND_POINT_GRAPHICS,
+								pipelineLayout,
+								0 /*firstSet*/,
+								1,
+								&globalSet,
+								0,
+								nullptr);
+	}
 
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {

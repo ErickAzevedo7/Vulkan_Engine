@@ -84,9 +84,9 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 	Renderer::ResourceSetHandle frameSet = material->resourceSets[currentFrame];
 	VkDescriptorSet vkSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
 
-	// Bind descriptor sets (for uniforms/textures)
+	// Bind material descriptor set at slot 1 (set 0 = GlobalUBO, bound by ViewPort before SceneRenderer)
 	void* vkSetPtr = vkSet;
-	commandList.bindDescriptorSets(pipelineLayout, &vkSetPtr, 1, &dynamicOffset, 1);
+	commandList.bindDescriptorSets(pipelineLayout, &vkSetPtr, 1, &dynamicOffset, 1, 1 /*firstSet=1*/);
 
 	// Issue draw call
 	commandList.drawIndexed(mesh->indexCount, 1, 0, 0, 0);

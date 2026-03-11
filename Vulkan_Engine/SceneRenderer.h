@@ -21,7 +21,8 @@ public:
 							VkPipeline pipeline,
 							VkPipelineLayout pipelineLayout,
 							uint32_t currentFrame,
-							uint64_t dynamicAlignment);
+							uint64_t dynamicAlignment,
+							VkDescriptorSet globalSet);
 
 	static void renderShadows(Renderer::RenderCommandList& commandList,
 							  VkPipeline shadowPipeline,
@@ -43,7 +44,8 @@ public:
 								VkPipeline pipeline,
 								VkPipelineLayout pipelineLayout,
 								uint32_t currentFrame,
-								uint64_t dynamicAlignment);
+								uint64_t dynamicAlignment,
+								VkDescriptorSet globalSet);
 
 private:
 	static ResourceContext* resources;

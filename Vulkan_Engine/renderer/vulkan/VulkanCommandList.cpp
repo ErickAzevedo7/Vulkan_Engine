@@ -5,7 +5,6 @@
 
 #include "vulkan/vulkan_core.h"
 
-
 namespace Renderer {
 
 VulkanCommandList::VulkanCommandList(VkCommandBuffer cmd) : commandBuffer(cmd) {
@@ -30,12 +29,13 @@ void VulkanCommandList::bindDescriptorSets(void* pipelineLayout,
 										   void** descriptorSets,
 										   uint32_t setCount,
 										   uint32_t* dynamicOffsets,
-										   uint32_t dynamicOffsetCount) {
+										   uint32_t dynamicOffsetCount,
+										   uint32_t firstSet) {
 	VkDescriptorSet* vkSets = reinterpret_cast<VkDescriptorSet*>(descriptorSets);
 	vkCmdBindDescriptorSets(commandBuffer,
 							VK_PIPELINE_BIND_POINT_GRAPHICS,
 							static_cast<VkPipelineLayout>(pipelineLayout),
-							0,
+							firstSet,
 							setCount,
 							vkSets,
 							dynamicOffsetCount,

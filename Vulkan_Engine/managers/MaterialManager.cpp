@@ -379,13 +379,6 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 	} else {
 		Renderer::ResourceSetLayoutDesc desc;
 
-		// Binding 0: Material properties (UBO) - Vertex + Fragment
-		Renderer::ResourceBinding binding0;
-		binding0.binding = 0;
-		binding0.type = Renderer::ResourceType::UniformBufferDynamic; // Changing to Dynamic to match Pipeline
-		binding0.count = 1;
-		binding0.stages = Renderer::ShaderStage::Vertex; // Vertex only to match VulkanCore pipeline
-
 		// Binding 1: Albedo Texture (Sampler) - Fragment
 		Renderer::ResourceBinding binding1;
 		binding1.binding = 1;
@@ -407,18 +400,8 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		binding3.count = 1;
 		binding3.stages = Renderer::ShaderStage::Fragment; // Access in fragment shader?
 
-		// Wait, `MaterialManager` should only manage Material-specific resources?
-		// Global UBO (Binding 0) is usually set once or shared.
-		// But if the shader expects one set, we must provide all bindings in that set.
-
-		// This refactoring reveals a design choice: Are we keeping one monolithic descriptor set?
-		// Yes, for now.
-
-		desc.bindings.push_back(binding0); // Global UBO
 		desc.bindings.push_back(binding1); // Texture
 		desc.bindings.push_back(binding2); // Light Buffer
-
-		// Material UBO
 		desc.bindings.push_back(binding3); // Material UBO
 
 		// Binding 4: Shadow Map (Sampler) - Fragment
@@ -460,6 +443,14 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		binding8.count = 1;
 		binding8.stages = Renderer::ShaderStage::Fragment;
 		desc.bindings.push_back(binding8);
+
+		// Binding 9: PerObjectUBO (model, normal) - Dynamic per entity
+		Renderer::ResourceBinding binding9;
+		binding9.binding = 9;
+		binding9.type = Renderer::ResourceType::UniformBufferDynamic;
+		binding9.count = 1;
+		binding9.stages = Renderer::ShaderStage::Vertex;
+		desc.bindings.push_back(binding9);
 
 		layout = resourceBinder->createLayout(desc);
 		layoutCache[layoutKey] = layout;
@@ -521,25 +512,26 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		// Update via Binder
 		resourceBinder->updateSet(material->resourceSets[i], bufferBindings, imageBindings);
 
-		// Update Global UBO and Shadow Map Manually
+		// Update Global UBO (binding 0) and Shadow Map Manually
 		VkDescriptorSet vkSet =
 			*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
 
 		std::vector<VkWriteDescriptorSet> manualWrites;
 
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
+		// Binding 9: PerObjectUBO (dynamic per-entity model/normal matrices)
+		VkDescriptorBufferInfo perObjectBufferInfo{};
+		perObjectBufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
+		perObjectBufferInfo.offset = 0;
+		perObjectBufferInfo.range = sizeof(PerObjectUBO);
 
-		VkWriteDescriptorSet uboWrite{};
-		uboWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		uboWrite.dstSet = vkSet;
-		uboWrite.dstBinding = 0;
-		uboWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		uboWrite.descriptorCount = 1;
-		uboWrite.pBufferInfo = &bufferInfo;
-		manualWrites.push_back(uboWrite);
+		VkWriteDescriptorSet perObjectWrite{};
+		perObjectWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		perObjectWrite.dstSet = vkSet;
+		perObjectWrite.dstBinding = 9;
+		perObjectWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		perObjectWrite.descriptorCount = 1;
+		perObjectWrite.pBufferInfo = &perObjectBufferInfo;
+		manualWrites.push_back(perObjectWrite);
 
 		VkDescriptorImageInfo shadowInfo{};
 		VkWriteDescriptorSet shadowWrite{};

@@ -5,14 +5,14 @@ layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec2 fragTexCoord;
 layout(location = 3) in vec3 fragViewPos;
 
-layout(binding = 1) uniform sampler2D texSampler;
-layout(binding = 4) uniform sampler2D shadowSampler;
-layout(binding = 5) uniform samplerCube shadowCubeSampler;
-layout(binding = 6) uniform samplerCube irradianceMap;
-layout(binding = 7) uniform samplerCube prefilterMap;
-layout(binding = 8) uniform sampler2D   brdfLUT;
+layout(set=1, binding=1) uniform sampler2D texSampler;
+layout(set=1, binding=4) uniform sampler2D shadowSampler;
+layout(set=1, binding=5) uniform samplerCube shadowCubeSampler;
+layout(set=1, binding=6) uniform samplerCube irradianceMap;
+layout(set=1, binding=7) uniform samplerCube prefilterMap;
+layout(set=1, binding=8) uniform sampler2D   brdfLUT;
 
-layout(binding = 2) uniform Light {
+layout(set=1, binding=2) uniform Light {
     vec4 colorIntensity; // rgb=color, a=intensity
     vec4 direction;      // xyz=direction, w=pad
     vec4 positionType;   // xyz=position, w=type (0=directional,1=point,2=spot)
@@ -25,7 +25,7 @@ layout(binding = 2) uniform Light {
     float _pad[2];
 } light;
 
-layout(binding = 3) uniform MaterialProps {
+layout(set=1, binding=3) uniform MaterialProps {
     vec4 albedo_pad; // xyz = albedo, w is padding
     float metallic;
     float roughness;

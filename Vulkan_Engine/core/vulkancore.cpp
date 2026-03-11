@@ -55,6 +55,15 @@ VkExtent2D VulkanCore::swapChainExtent;
 VkSampleCountFlagBits VulkanCore::msaaSamples;
 std::vector<VkImageView> VulkanCore::swapChainImageViews;
 
+std::vector<VkBuffer> VulkanCore::editorGlobalBuffers;
+std::vector<void*> VulkanCore::editorGlobalBuffersMapped;
+std::vector<VkBuffer> VulkanCore::gameGlobalBuffers;
+std::vector<void*> VulkanCore::gameGlobalBuffersMapped;
+
+VkDescriptorSetLayout VulkanCore::globalDescriptorSetLayout = VK_NULL_HANDLE;
+std::vector<VkDescriptorSet> VulkanCore::editorGlobalDescriptorSets;
+std::vector<VkDescriptorSet> VulkanCore::gameGlobalDescriptorSets;
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const uint32_t WIDTH = 800;
@@ -130,11 +139,13 @@ void VulkanCore::initVulkan() {
 	createSwapChain();
 	createImageViews();
 	createRenderPass();
+	createGlobalDescriptorSetLayout(); // must precede createGraphicsPipeline
 	createDescriptorSetLayout();
 	createGraphicsPipeline();
 	createCommandPool();
 	createTextureSampler();
 	createUniformBuffers();
+	createGlobalDescriptorSets(); // depends on uniform buffers
 	createCommandBuffers();
 	createSyncObjects();
 }
@@ -279,14 +290,6 @@ std::vector<VkCommandBuffer> VulkanCore::getCommandBuffers() {
 	return commandBuffers;
 }
 
-std::vector<VkDescriptorSet> VulkanCore::getDescriptorSets() {
-	return descriptorSets;
-}
-
-VkImageView VulkanCore::getTextureImageView() {
-	return textureImageView;
-}
-
 VkSampler VulkanCore::getTextureSampler() {
 	return textureSampler;
 }
@@ -309,6 +312,126 @@ std::vector<VkBuffer> VulkanCore::getUniformBuffers() {
 
 VkDeviceSize VulkanCore::getDynamicAlignment() {
 	return dynamicAlignment;
+}
+
+std::vector<VkBuffer>& VulkanCore::getEditorGlobalBuffers() {
+	return editorGlobalBuffers;
+}
+
+std::vector<void*>& VulkanCore::getEditorGlobalBuffersMapped() {
+	return editorGlobalBuffersMapped;
+}
+
+std::vector<VkBuffer>& VulkanCore::getGameGlobalBuffers() {
+	return gameGlobalBuffers;
+}
+
+std::vector<void*>& VulkanCore::getGameGlobalBuffersMapped() {
+	return gameGlobalBuffersMapped;
+}
+
+VkDescriptorSetLayout VulkanCore::getGlobalDescriptorSetLayout() {
+	return globalDescriptorSetLayout;
+}
+
+std::vector<VkDescriptorSet>& VulkanCore::getEditorGlobalDescriptorSets() {
+	return editorGlobalDescriptorSets;
+}
+
+std::vector<VkDescriptorSet>& VulkanCore::getGameGlobalDescriptorSets() {
+	return gameGlobalDescriptorSets;
+}
+
+void VulkanCore::createGlobalDescriptorSetLayout() {
+	// Set 0: just the GlobalUBO — non-dynamic plain UBO
+	VkDescriptorSetLayoutBinding globalBinding{};
+	globalBinding.binding = 0;
+	globalBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	globalBinding.descriptorCount = 1;
+	globalBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	globalBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &globalBinding;
+
+	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create global descriptor set layout!");
+	}
+}
+
+void VulkanCore::createGlobalDescriptorSets() {
+	// Create descriptor pool: 2 * 2 = 4 sets (editor+game, per frame)
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 2);
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 2);
+
+	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &globalDescriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create global descriptor pool!");
+	}
+
+	// Allocate all sets
+	std::vector<VkDescriptorSetLayout> editorLayouts(MAX_FRAMES_IN_FLIGHT, globalDescriptorSetLayout);
+	std::vector<VkDescriptorSetLayout> gameLayouts(MAX_FRAMES_IN_FLIGHT, globalDescriptorSetLayout);
+
+	editorGlobalDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	gameGlobalDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = globalDescriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.pSetLayouts = editorLayouts.data();
+
+	if (vkAllocateDescriptorSets(device, &allocInfo, editorGlobalDescriptorSets.data()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate editor global descriptor sets!");
+	}
+
+	allocInfo.pSetLayouts = gameLayouts.data();
+	if (vkAllocateDescriptorSets(device, &allocInfo, gameGlobalDescriptorSets.data()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate game global descriptor sets!");
+	}
+
+	// Write buffer references into all sets
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		// Editor
+		VkDescriptorBufferInfo editorBufInfo{};
+		editorBufInfo.buffer = editorGlobalBuffers[i];
+		editorBufInfo.offset = 0;
+		editorBufInfo.range = sizeof(GlobalUBO);
+
+		VkWriteDescriptorSet editorWrite{};
+		editorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		editorWrite.dstSet = editorGlobalDescriptorSets[i];
+		editorWrite.dstBinding = 0;
+		editorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		editorWrite.descriptorCount = 1;
+		editorWrite.pBufferInfo = &editorBufInfo;
+
+		// Game
+		VkDescriptorBufferInfo gameBufInfo{};
+		gameBufInfo.buffer = gameGlobalBuffers[i];
+		gameBufInfo.offset = 0;
+		gameBufInfo.range = sizeof(GlobalUBO);
+
+		VkWriteDescriptorSet gameWrite{};
+		gameWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		gameWrite.dstSet = gameGlobalDescriptorSets[i];
+		gameWrite.dstBinding = 0;
+		gameWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		gameWrite.descriptorCount = 1;
+		gameWrite.pBufferInfo = &gameBufInfo;
+
+		std::array<VkWriteDescriptorSet, 2> writes = {editorWrite, gameWrite};
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+	}
 }
 
 VkBool32 VKAPI_CALL VulkanCore::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -415,7 +538,6 @@ VkSampleCountFlagBits VulkanCore::getMaxUsableSampleCount() {
 	if (counts & VK_SAMPLE_COUNT_2_BIT) {
 		return VK_SAMPLE_COUNT_2_BIT;
 	}
-
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
@@ -507,6 +629,33 @@ void VulkanCore::createUniformBuffers() {
 							uniformBuffersMemory[i]);
 
 		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+	}
+
+	// --- GlobalUBO buffers for Editor and Game cameras ---
+	VkDeviceSize globalUboSize = sizeof(GlobalUBO);
+
+	editorGlobalBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	editorGlobalBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	editorGlobalBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	gameGlobalBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	gameGlobalBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	gameGlobalBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		Utils::createBuffer(globalUboSize,
+							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+							editorGlobalBuffers[i],
+							editorGlobalBuffersMemory[i]);
+		vkMapMemory(device, editorGlobalBuffersMemory[i], 0, globalUboSize, 0, &editorGlobalBuffersMapped[i]);
+
+		Utils::createBuffer(globalUboSize,
+							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+							gameGlobalBuffers[i],
+							gameGlobalBuffersMemory[i]);
+		vkMapMemory(device, gameGlobalBuffersMemory[i], 0, globalUboSize, 0, &gameGlobalBuffersMapped[i]);
 	}
 }
 
@@ -662,12 +811,8 @@ void VulkanCore::createRenderPass() {
 }
 
 void VulkanCore::createDescriptorSetLayout() {
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+	// NOTE: Binding 0 (GlobalUBO) lives in globalDescriptorSetLayout (set 0).
+	// This layout is for set 1 — material-specific bindings only: 1..9.
 
 	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
 	samplerLayoutBinding.binding = 1;
@@ -728,15 +873,23 @@ void VulkanCore::createDescriptorSetLayout() {
 	brdfLutLayoutBinding.pImmutableSamplers = nullptr;
 	brdfLutLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 9> bindings = {uboLayoutBinding,
-															samplerLayoutBinding,
+	// Binding 9: PerObjectUBO (model, normal matrices) - DYNAMIC, one slot per entity
+	VkDescriptorSetLayoutBinding perObjectLayoutBinding{};
+	perObjectLayoutBinding.binding = 9;
+	perObjectLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	perObjectLayoutBinding.descriptorCount = 1;
+	perObjectLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	perObjectLayoutBinding.pImmutableSamplers = nullptr;
+
+	std::array<VkDescriptorSetLayoutBinding, 9> bindings = {samplerLayoutBinding,
 															lightLayoutBinding,
 															materialPropsLayoutBinding,
 															shadowMapLayoutBinding,
 															shadowCubeMapLayoutBinding,
 															irradianceMapLayoutBinding,
 															prefilterMapLayoutBinding,
-															brdfLutLayoutBinding};
+															brdfLutLayoutBinding,
+															perObjectLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -844,10 +997,12 @@ void VulkanCore::createGraphicsPipeline() {
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
 
+	std::array<VkDescriptorSetLayout, 2> setLayouts = {globalDescriptorSetLayout, descriptorSetLayout};
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+	pipelineLayoutInfo.pSetLayouts = setLayouts.data();
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -1136,9 +1291,30 @@ void VulkanCore::cleanup() {
 		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	// Cleanup GlobalUBO buffers for Editor and Game cameras
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		if (i < editorGlobalBuffers.size()) {
+			vkDestroyBuffer(device, editorGlobalBuffers[i], nullptr);
+			vkFreeMemory(device, editorGlobalBuffersMemory[i], nullptr);
+		}
+		if (i < gameGlobalBuffers.size()) {
+			vkDestroyBuffer(device, gameGlobalBuffers[i], nullptr);
+			vkFreeMemory(device, gameGlobalBuffersMemory[i], nullptr);
+		}
+	}
 
+	// Legacy descriptor resources removed
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+
+	// Destroy global descriptor pool + layout (for set 0 — GlobalUBO)
+	if (globalDescriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(device, globalDescriptorPool, nullptr);
+		globalDescriptorPool = VK_NULL_HANDLE;
+	}
+	if (globalDescriptorSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(device, globalDescriptorSetLayout, nullptr);
+		globalDescriptorSetLayout = VK_NULL_HANDLE;
+	}
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);

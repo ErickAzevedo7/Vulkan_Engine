@@ -13,7 +13,6 @@
 #include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
 
-
 void MousePick::init(Renderer::VulkanDevice* device, ResourceContext* resources) {
 	vulkanDevice = device;
 	mousePickExtent = vulkanDevice->getSwapChainExtent();
@@ -360,11 +359,15 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	Renderer::VulkanCommandList commandList(commandBuffer);
+
+	// renderMousePick internally binds the GlobalUBO at set=0 before any draw.
+	VkDescriptorSet editorGlobalSet = VulkanCore::getEditorGlobalDescriptorSets()[VulkanCore::getCurrentFrame()];
 	SceneRenderer::renderMousePick(commandList,
 								   mousePickPipeline,
 								   vulkanDevice->getPipelineLayout(),
 								   VulkanCore::getCurrentFrame(),
-								   VulkanCore::getDynamicAlignment());
+								   VulkanCore::getDynamicAlignment(),
+								   editorGlobalSet);
 
 	vkCmdEndRenderPass(commandBuffer);
 

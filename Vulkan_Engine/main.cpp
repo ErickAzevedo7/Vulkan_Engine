@@ -101,7 +101,8 @@ public:
 		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					  mousePick.getMousePickExtent(),
 					  ibl.getEnvCubemapImageView(),
-					  ibl.getEnvCubemapSampler());
+					  ibl.getEnvCubemapSampler(),
+					  false /*editorViewport*/);
 		hdrTonemap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 						viewPort.hdrResolveImageView,
 						mousePick.getMousePickExtent().width,
@@ -115,6 +116,17 @@ public:
 					 mousePick.getMousePickImageViews(),
 					 ldrImageViews,
 					 mousePick.getMousePickExtent());
+
+		// Game viewport — same size as editor for now (can be independent)
+		gameViewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+						  mousePick.getMousePickExtent(),
+						  ibl.getEnvCubemapImageView(),
+						  ibl.getEnvCubemapSampler(),
+						  true /*isGameViewport*/);
+		gameHdrTonemap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
+							gameViewPort.hdrResolveImageView,
+							mousePick.getMousePickExtent().width,
+							mousePick.getMousePickExtent().height);
 		editorCamera.init(
 			static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext, &inspector);
 
@@ -125,6 +137,8 @@ public:
 		changeImGuizmoStyle();
 		mainLoop();
 
+		gameHdrTonemap.cleanup();
+		gameViewPort.cleanup();
 		hdrTonemap.cleanup();
 		outline.cleanup();
 		viewPort.cleanup();
@@ -181,8 +195,11 @@ public:
 		}
 
 		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
-		editorCamera.updateUniformBuffer(VulkanCore::getCurrentFrame(),
-										 engineCore.getUniformBuffersMapped()[VulkanCore::getCurrentFrame()],
+		uint32_t frame = VulkanCore::getCurrentFrame();
+		editorCamera.updateUniformBuffer(frame,
+										 engineCore.getUniformBuffersMapped()[frame],
+										 VulkanCore::getEditorGlobalBuffersMapped()[frame],
+										 VulkanCore::getGameGlobalBuffersMapped()[frame],
 										 lightSpaceMatrices,
 										 lightPos_farPlane);
 
@@ -191,23 +208,32 @@ public:
 		mousePick.recordMousePickCommandBuffer(mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
 											   imageIndex);
 
+		VkDescriptorSet editorGlobalSet = VulkanCore::getEditorGlobalDescriptorSets()[frame];
+		VkDescriptorSet gameGlobalSet = VulkanCore::getGameGlobalDescriptorSets()[frame];
+
 		viewPort.recordViewportCommandBuffer(
-			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex, lightSpaceMatrices[0]);
+			viewPort.m_ViewportCommandBuffers[frame], imageIndex, lightSpaceMatrices[0], editorGlobalSet);
+
+		gameViewPort.recordViewportCommandBuffer(
+			gameViewPort.m_ViewportCommandBuffers[frame], imageIndex, lightSpaceMatrices[0], gameGlobalSet);
 
 		// Assuming an exposure of 1.0 for now, could be passed from UI
-		hdrTonemap.recordHdrCommandBuffer(VulkanCore::getCurrentFrame(), imageIndex, exposure);
+		hdrTonemap.recordHdrCommandBuffer(frame, imageIndex, exposure);
+		gameHdrTonemap.recordHdrCommandBuffer(frame, imageIndex, exposure);
 
-		outline.recordOutlineCommandBuffer(outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()], imageIndex);
+		outline.recordOutlineCommandBuffer(outline.outlineCommandBuffers[frame], imageIndex);
 
-		recordImguiCommandBuffer(uiManager.getCommandBuffers()[VulkanCore::getCurrentFrame()], imageIndex);
+		recordImguiCommandBuffer(uiManager.getCommandBuffers()[frame], imageIndex);
 
-		std::array<VkCommandBuffer, 6> submitCommandBuffers = {
-			shadowMap.getCommandBuffer(VulkanCore::getCurrentFrame()),
-			mousePick.mousePickCommandBuffers[VulkanCore::getCurrentFrame()],
-			viewPort.m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()],
-			static_cast<VkCommandBuffer>(hdrTonemap.getCommandBuffer(VulkanCore::getCurrentFrame())),
-			outline.outlineCommandBuffers[VulkanCore::getCurrentFrame()],
-			uiManager.getCommandBuffers()[VulkanCore::getCurrentFrame()],
+		std::array<VkCommandBuffer, 8> submitCommandBuffers = {
+			shadowMap.getCommandBuffer(frame),
+			mousePick.mousePickCommandBuffers[frame],
+			viewPort.m_ViewportCommandBuffers[frame],
+			static_cast<VkCommandBuffer>(hdrTonemap.getCommandBuffer(frame)),
+			gameViewPort.m_ViewportCommandBuffers[frame],
+			static_cast<VkCommandBuffer>(gameHdrTonemap.getCommandBuffer(frame)),
+			outline.outlineCommandBuffers[frame],
+			uiManager.getCommandBuffers()[frame],
 		};
 
 		VkSubmitInfo submitInfo{};
@@ -264,6 +290,13 @@ public:
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+		gameSceneTexture.resize(gameHdrTonemap.getLdrImageViewCount());
+		for (uint32_t i = 0; i < gameHdrTonemap.getLdrImageViewCount(); i++)
+			gameSceneTexture[i] =
+				ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
+											static_cast<VkImageView>(gameHdrTonemap.getLdrImageView(i)),
+											VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
 		while (!glfwWindowShouldClose(engineCore.getWindow())) {
 			double currentFrame = glfwGetTime();
 			deltaTime = currentFrame - lastFrame;
@@ -271,7 +304,8 @@ public:
 			glfwPollEvents();
 
 			if (engineCore.getSwapChainRecreated()) {
-				recreateRenderPasses();
+				recreateEditorViewportResources();
+				recreateGameViewportResources();
 
 				engineCore.setSwapChainRecreated(false);
 			}
@@ -332,15 +366,14 @@ public:
 			uint32_t viewportWidth = (viewportSize.x > 0.0f) ? static_cast<uint32_t>(viewportSize.x) : 0;
 			uint32_t viewportHeight = (viewportSize.y > 0.0f) ? static_cast<uint32_t>(viewportSize.y) : 0;
 
-			this->viewportExtent = VkExtent2D{viewportWidth, viewportHeight};
+			this->editorViewportExtent = VkExtent2D{viewportWidth, viewportHeight};
+			EditorCamera::setEditorExtent(this->editorViewportExtent);
 
-			if (viewportExtent.width > 0 && viewportExtent.height > 0 &&
-				(viewportExtent.width != mousePick.mousePickExtent.width ||
-				 viewportExtent.height != mousePick.mousePickExtent.height)) {
-				mousePick.mousePickExtent = viewportExtent;
-				EditorCamera::setExtent(viewportExtent);
-
-				recreateRenderPasses();
+			if (editorViewportExtent.width > 0 && editorViewportExtent.height > 0 &&
+				(editorViewportExtent.width != mousePick.mousePickExtent.width ||
+				 editorViewportExtent.height != mousePick.mousePickExtent.height)) {
+				mousePick.mousePickExtent = editorViewportExtent;
+				recreateEditorViewportResources();
 			}
 
 			inputProcess();
@@ -383,20 +416,18 @@ public:
 			uint32_t gameWidth = (gameSize.x > 0.0f) ? static_cast<uint32_t>(gameSize.x) : 0;
 			uint32_t gameHeight = (gameSize.y > 0.0f) ? static_cast<uint32_t>(gameSize.y) : 0;
 
-			// We only update internal render resolution based on whichever window is currently focused or active
-			if (ImGui::IsWindowFocused() || (activeScene && activeScene->getState() == SceneState::Play)) {
-				this->viewportExtent = VkExtent2D{gameWidth, gameHeight};
-				if (viewportExtent.width > 0 && viewportExtent.height > 0 &&
-					(viewportExtent.width != mousePick.mousePickExtent.width ||
-					 viewportExtent.height != mousePick.mousePickExtent.height)) {
-					mousePick.mousePickExtent = viewportExtent;
-					EditorCamera::setExtent(viewportExtent);
-					recreateRenderPasses();
-				}
+			VkExtent2D newGameExtent = VkExtent2D{gameWidth, gameHeight};
+			EditorCamera::setGameExtent(newGameExtent);
+
+			if (newGameExtent.width > 0 && newGameExtent.height > 0 &&
+				(newGameExtent.width != gameViewportExtent.width ||
+				 newGameExtent.height != gameViewportExtent.height)) {
+				this->gameViewportExtent = newGameExtent;
+				recreateGameViewportResources();
 			}
 
 			ImVec2 gamePanelSize = ImGui::GetContentRegionAvail();
-			ImGui::Image((ImTextureID)sceneTexture[imageIndex], ImVec2{gamePanelSize.x, gamePanelSize.y});
+			ImGui::Image((ImTextureID)gameSceneTexture[imageIndex], ImVec2{gamePanelSize.x, gamePanelSize.y});
 
 			ImGui::End();
 			ImGui::PopStyleVar(2);
@@ -421,6 +452,8 @@ public:
 
 		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++)
 			ImGui_ImplVulkan_RemoveTexture(sceneTexture[i]);
+		for (uint32_t i = 0; i < gameHdrTonemap.getLdrImageViewCount(); i++)
+			ImGui_ImplVulkan_RemoveTexture(gameSceneTexture[i]);
 	}
 
 private:
@@ -435,10 +468,14 @@ private:
 	ViewPort viewPort;
 	MousePick mousePick;
 	Renderer::VulkanHdr hdrTonemap;
+	Renderer::VulkanHdr gameHdrTonemap;
 	Outline outline;
 	UIManager uiManager;
-	VkExtent2D viewportExtent;
+	VkExtent2D editorViewportExtent;
+	VkExtent2D gameViewportExtent;
+	ViewPort gameViewPort;
 	std::vector<VkDescriptorSet> sceneTexture;
+	std::vector<VkDescriptorSet> gameSceneTexture;
 	Renderer::VulkanShadowMap shadowMap;
 	VulkanIBL ibl;
 	float exposure = 1.0f;
@@ -465,10 +502,10 @@ private:
 		uiManager.recordCommandBuffer(commandBuffer, ImageIndex);
 	}
 
-	void recreateRenderPasses() {
+	void recreateEditorViewportResources() {
 		vkDeviceWaitIdle(VulkanCore::getDevice());
 
-		// Update VulkanDevice with the new swapchain properties
+		// Update VulkanDevice with the new swapchain properties if needed
 		static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice())
 			->updateSwapchain(engineCore.getSwapChainExtent(),
 							  static_cast<uint32_t>(engineCore.getSwapChainImageViews().size()));
@@ -481,6 +518,7 @@ private:
 		viewPort.recreateViewport(mousePick.getMousePickExtent());
 		hdrTonemap.recreateHdr(
 			viewPort.hdrResolveImageView, mousePick.getMousePickExtent().width, mousePick.getMousePickExtent().height);
+
 		std::vector<VkImageView> ldrImageViews(hdrTonemap.getLdrImageViewCount());
 		for (uint32_t i = 0; i < hdrTonemap.getLdrImageViewCount(); i++) {
 			ldrImageViews[i] = static_cast<VkImageView>(hdrTonemap.getLdrImageView(i));
@@ -492,6 +530,23 @@ private:
 			sceneTexture[i] = ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
 														  outline.outlineColorImageViews[i],
 														  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+
+	void recreateGameViewportResources() {
+		vkDeviceWaitIdle(VulkanCore::getDevice());
+
+		for (uint32_t i = 0; i < gameHdrTonemap.getLdrImageViewCount(); i++)
+			ImGui_ImplVulkan_RemoveTexture(gameSceneTexture[i]);
+
+		gameViewPort.recreateViewport(gameViewportExtent);
+		gameHdrTonemap.recreateHdr(
+			gameViewPort.hdrResolveImageView, gameViewportExtent.width, gameViewportExtent.height);
+
+		for (uint32_t i = 0; i < gameHdrTonemap.getLdrImageViewCount(); i++)
+			gameSceneTexture[i] =
+				ImGui_ImplVulkan_AddTexture(engineCore.getTextureSampler(),
+											static_cast<VkImageView>(gameHdrTonemap.getLdrImageView(i)),
+											VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
 	void cleanup() {

@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 
-
 namespace Renderer {
 
 /**
@@ -33,7 +32,8 @@ public:
 									void** descriptorSets,
 									uint32_t setCount,
 									uint32_t* dynamicOffsets,
-									uint32_t dynamicOffsetCount) = 0;
+									uint32_t dynamicOffsetCount,
+									uint32_t firstSet = 0) = 0;
 
 	/**
 	 * @brief Push constant data directly to the shader

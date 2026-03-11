@@ -4,7 +4,6 @@
 
 #include "renderer/RenderCommandList.h"
 
-
 namespace Renderer {
 
 /**
@@ -28,7 +27,8 @@ public:
 							void** descriptorSets,
 							uint32_t setCount,
 							uint32_t* dynamicOffsets,
-							uint32_t dynamicOffsetCount) override;
+							uint32_t dynamicOffsetCount,
+							uint32_t firstSet = 0) override;
 	void pushConstants(
 		void* pipelineLayout, uint32_t stageFlags, uint32_t offset, uint32_t size, const void* pValues) override;
 	void draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) override;
@@ -40,6 +40,11 @@ public:
 
 private:
 	VkCommandBuffer commandBuffer;
+
+public:
+	VkCommandBuffer getCommandBuffer() const {
+		return commandBuffer;
+	}
 };
 
 } // namespace Renderer

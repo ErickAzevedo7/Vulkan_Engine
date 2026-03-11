@@ -3,6 +3,9 @@
 // External libraries - required for interface
 #include <cstdint>
 #include <GLFW/glfw3.h>
+#include <optional>
+#include <string>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 #include "vulkan/vk_platform.h"
@@ -12,10 +15,6 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 
-// C++ standard library (only what's needed in the interface)
-#include <optional>
-#include <string>
-#include <vector>
 
 // GLM (needed for UniformBufferObject in interface)
 #include <glm/glm.hpp>
@@ -52,15 +51,25 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct UniformBufferObject {
-	alignas(16) glm::mat4 model;
-	alignas(16) glm::mat4 normal;
+// Per-camera, per-render-pass data. Two instances exist in the engine:
+// one for the Editor camera, one for the Game/CameraComponent camera.
+struct GlobalUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 	alignas(16) glm::mat4 lightSpaceMatrices[6];
 	alignas(16) glm::vec4 lightPos_farPlane;
 	alignas(16) glm::vec3 viewPos;
 };
+
+// Per-entity data written once per entity per frame.
+struct PerObjectUBO {
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 normal;
+};
+
+// Legacy alias so existing code that references UniformBufferObject still compiles.
+// TODO: migrate callers to GlobalUBO / PerObjectUBO directly.
+using UniformBufferObject = PerObjectUBO;
 
 extern std::vector<Vertex> vertices;
 extern std::vector<uint32_t> indices;
@@ -138,10 +147,6 @@ public:
 
 	std::vector<VkCommandBuffer> getCommandBuffers();
 
-	std::vector<VkDescriptorSet> getDescriptorSets();
-
-	VkImageView getTextureImageView();
-
 	VkSampler getTextureSampler();
 
 	std::vector<void*> getUniformBuffersMapped();
@@ -151,6 +156,17 @@ public:
 	static std::vector<VkBuffer> getUniformBuffers();
 
 	static VkDeviceSize getDynamicAlignment();
+
+	// --- Global UBO (per-camera) accessors ---
+	static std::vector<VkBuffer>& getEditorGlobalBuffers();
+	static std::vector<void*>& getEditorGlobalBuffersMapped();
+	static std::vector<VkBuffer>& getGameGlobalBuffers();
+	static std::vector<void*>& getGameGlobalBuffersMapped();
+
+	// Global descriptor set accessors (one per frame, set=0 slot)
+	static VkDescriptorSetLayout getGlobalDescriptorSetLayout();
+	static std::vector<VkDescriptorSet>& getEditorGlobalDescriptorSets();
+	static std::vector<VkDescriptorSet>& getGameGlobalDescriptorSets();
 
 private:
 	GLFWwindow* window;
@@ -182,12 +198,23 @@ private:
 	static std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
-	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
+
+	// Separate small GlobalUBO buffers for Editor and Game cameras
+	static std::vector<VkBuffer> editorGlobalBuffers;
+	std::vector<VkDeviceMemory> editorGlobalBuffersMemory;
+	static std::vector<void*> editorGlobalBuffersMapped;
+
+	static std::vector<VkBuffer> gameGlobalBuffers;
+	std::vector<VkDeviceMemory> gameGlobalBuffersMemory;
+	static std::vector<void*> gameGlobalBuffersMapped;
+
+	// Global descriptor layout + pool + per-frame sets for Editor and Game
+	static VkDescriptorSetLayout globalDescriptorSetLayout;
+	VkDescriptorPool globalDescriptorPool;
+	static std::vector<VkDescriptorSet> editorGlobalDescriptorSets;
+	static std::vector<VkDescriptorSet> gameGlobalDescriptorSets;
+
 	uint32_t mipLevels;
-	VkImage textureImage;
-	VkDeviceMemory textureImageMemory;
-	VkImageView textureImageView;
 	VkSampler textureSampler;
 
 	static VkSampleCountFlagBits msaaSamples;
@@ -209,6 +236,9 @@ private:
 	findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 	void createUniformBuffers();
+
+	void createGlobalDescriptorSetLayout();
+	void createGlobalDescriptorSets();
 
 	void createTextureSampler();
 

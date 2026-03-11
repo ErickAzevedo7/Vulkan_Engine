@@ -34,11 +34,13 @@ public:
 	static float lastY;
 	static bool useGameCameraView;
 	void init(Renderer::VulkanDevice* device, ResourceContext* resources, InspectorUi* inspector);
-
-	static void setExtent(VkExtent2D newExtent);
+	static void setEditorExtent(VkExtent2D newExtent);
+	static void setGameExtent(VkExtent2D newExtent);
 
 	void updateUniformBuffer(uint32_t currentImage,
 							 void* uniformBufferMapped,
+							 void* editorGlobalBufferMapped,
+							 void* gameGlobalBufferMapped,
 							 const glm::mat4* lightSpaceMatrices = nullptr,
 							 const glm::vec4& lightPos_farPlane = glm::vec4(0.0f));
 	static void mousePosHandler();
@@ -54,7 +56,8 @@ private:
 	static InspectorUi* inspector;
 	static bool isDragging;
 	static void updateCursorLoop();
-	static VkExtent2D extent;
+	static VkExtent2D editorExtent;
+	static VkExtent2D gameExtent;
 	static glm::mat4 viewMatrix;
 	static glm::mat4 projMatrix;
 	static ImGuizmo::OPERATION currentGizmoOperation;

@@ -20,9 +20,11 @@
 void ViewPort::init(Renderer::VulkanDevice* device,
 					VkExtent2D viewportExtent,
 					VkImageView skyboxView,
-					VkSampler skyboxSampler) {
+					VkSampler skyboxSampler,
+					bool gameViewport) {
 	vulkanDevice = device;
 	this->viewportExtent = viewportExtent;
+	this->isGameViewport = gameViewport;
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -51,11 +53,13 @@ void ViewPort::init(Renderer::VulkanDevice* device,
 	}
 
 	createViewportRenderPass();
-
 	createViewportFramebuffers();
 
-	GridPlane::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
-	Skybox::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass, skyboxView, skyboxSampler);
+	// Only init singletons for the Editor viewport; Game viewport reuses them
+	if (!isGameViewport) {
+		GridPlane::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass);
+		Skybox::init(vulkanDevice, m_ViewportCommandPool, m_ViewportRenderPass, skyboxView, skyboxSampler);
+	}
 }
 
 void ViewPort::cleanupFramebuffers() {
@@ -88,9 +92,11 @@ void ViewPort::recreateViewport(VkExtent2D viewportExtent) {
 }
 
 void ViewPort::cleanup() {
-	GridPlane::cleanup();
-
-	Skybox::cleanup();
+	// Only the editor viewport owns the GridPlane and Skybox singletons
+	if (!isGameViewport) {
+		GridPlane::cleanup();
+		Skybox::cleanup();
+	}
 
 	for (auto framebuffer : m_ViewportFramebuffers) {
 		vkDestroyFramebuffer(vulkanDevice->getDevice(), framebuffer, nullptr);
@@ -268,11 +274,10 @@ void ViewPort::createViewportFramebuffers() {
 
 void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 										   uint32_t imageIndex,
-										   const glm::mat4& lightSpaceMatrix) {
+										   const glm::mat4& lightSpaceMatrix,
+										   VkDescriptorSet globalDescriptorSet) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	// beginInfo.flags = 0;
-	// // Optional beginInfo.pInheritanceInfo = nullptr; // Optional
 
 	if (vkBeginCommandBuffer(m_ViewportCommandBuffers[VulkanCore::getCurrentFrame()], &beginInfo) != VK_SUCCESS) {
 		throw std::runtime_error("failed to begin recording command buffer!");
@@ -309,14 +314,23 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 	scissor.extent = viewportExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	// --- Bind GlobalUBO descriptor set at set=0, shared across all draws in this pass ---
+	vkCmdBindDescriptorSets(commandBuffer,
+							VK_PIPELINE_BIND_POINT_GRAPHICS,
+							vulkanDevice->getPipelineLayout(),
+							0 /*firstSet*/,
+							1,
+							&globalDescriptorSet,
+							0,
+							nullptr);
+
 	VkDeviceSize offsets[] = {0};
 	uint32_t skyboxDynamicOffset[] = {0};
 	uint32_t gridPlaneDynamicOffset[] = {0, 0};
 
+	// Skybox draws in both editor and game viewports
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &Skybox::getSkyboxVertexBuffer(), offsets);
-
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Skybox::getSkyboxPipeline());
-
 	vkCmdBindDescriptorSets(commandBuffer,
 							VK_PIPELINE_BIND_POINT_GRAPHICS,
 							Skybox::getSkyboxPipelineLayout(),
@@ -325,7 +339,6 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 							Skybox::getSkyboxDescriptorSet().data(),
 							1,
 							skyboxDynamicOffset);
-
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
 	// Push the directional light view-projection matrix at offset 16 (after pickColor+usePickColor)
@@ -341,20 +354,22 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 							   vulkanDevice->getPipeline(),
 							   vulkanDevice->getPipelineLayout(),
 							   VulkanCore::getCurrentFrame(),
-							   VulkanCore::getDynamicAlignment());
+							   VulkanCore::getDynamicAlignment(),
+							   globalDescriptorSet);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GridPlane::getGridPlanePipeline());
-
-	vkCmdBindDescriptorSets(commandBuffer,
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							GridPlane::getGridPlanePipelineLayout(),
-							0,
-							1,
-							GridPlane::getGridPlaneDescriptorSets().data(),
-							2,
-							gridPlaneDynamicOffset);
-
-	vkCmdDraw(commandBuffer, 4, 1, 0, 0);
+	// Editor viewport draws GridPlane (no grid in game view)
+	if (!isGameViewport) {
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GridPlane::getGridPlanePipeline());
+		vkCmdBindDescriptorSets(commandBuffer,
+								VK_PIPELINE_BIND_POINT_GRAPHICS,
+								GridPlane::getGridPlanePipelineLayout(),
+								0,
+								1,
+								GridPlane::getGridPlaneDescriptorSets().data(),
+								2,
+								gridPlaneDynamicOffset);
+		vkCmdDraw(commandBuffer, 4, 1, 0, 0);
+	}
 
 	vkCmdEndRenderPass(commandBuffer);
 
