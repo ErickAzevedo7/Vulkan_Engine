@@ -149,8 +149,14 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 		}
 	}
 	if (!foundGameCamera) {
-		// If no game camera, mirror the editor camera
+		// If no game camera, mirror the editor camera but adjust aspect ratio
 		gameGlobal = editorGlobal;
+
+		float gameAspect = (gameExtent.height > 0)
+							   ? static_cast<float>(gameExtent.width) / static_cast<float>(gameExtent.height)
+							   : 1.0f;
+		gameGlobal.proj = glm::perspective(glm::radians(45.0f), gameAspect, 0.1f, 1000.0f);
+		gameGlobal.proj[1][1] *= -1;
 	}
 	if (lightSpaceMatrices) {
 		for (int i = 0; i < 6; i++) {
