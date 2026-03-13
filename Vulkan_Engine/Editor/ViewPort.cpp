@@ -325,20 +325,22 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 							nullptr);
 
 	VkDeviceSize offsets[] = {0};
-	uint32_t skyboxDynamicOffset[] = {0};
 	uint32_t gridPlaneDynamicOffset[] = {0, 0};
 
 	// Skybox draws in both editor and game viewports
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &Skybox::getSkyboxVertexBuffer(), offsets);
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Skybox::getSkyboxPipeline());
+
+	// Bind GlobalDescriptorSet (set 0) and SkyboxDescriptorSet (set 1)
+	VkDescriptorSet skyboxSets[] = {globalDescriptorSet, Skybox::getSkyboxDescriptorSet()[VulkanCore::getCurrentFrame()]};
 	vkCmdBindDescriptorSets(commandBuffer,
 							VK_PIPELINE_BIND_POINT_GRAPHICS,
 							Skybox::getSkyboxPipelineLayout(),
 							0,
-							1,
-							Skybox::getSkyboxDescriptorSet().data(),
-							1,
-							skyboxDynamicOffset);
+							2,
+							skyboxSets,
+							0,
+							nullptr);
 	vkCmdDraw(commandBuffer, 36, 1, 0, 0);
 
 	// Push the directional light view-projection matrix at offset 16 (after pickColor+usePickColor)

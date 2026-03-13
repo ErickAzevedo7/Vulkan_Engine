@@ -184,9 +184,6 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 		memcpy(base + offset, &perObj, sizeof(PerObjectUBO));
 	}
 
-	// Skybox and gridplane use editor camera
-	glm::mat4 skyView = glm::mat4(glm::mat3(editorView));
-	Skybox::updateSkyboxUniformBuffer(currentImage, skyView, editorProj);
 
 	GridPlane::updateUniformBuffer(currentImage, glm::mat4(1.0f), editorView, editorProj);
 

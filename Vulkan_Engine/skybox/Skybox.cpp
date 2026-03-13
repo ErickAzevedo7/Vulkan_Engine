@@ -14,7 +14,6 @@
 #include "renderer/vulkan/VulkanDevice.h"
 #include "vulkan/vulkan_core.h"
 
-#include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
 
 // initialize static members
@@ -25,8 +24,6 @@ VkBuffer Skybox::skyboxVertexBuffer;
 VkDeviceMemory Skybox::skyboxVertexBufferMemory;
 VkPipeline Skybox::skyboxPipeline;
 VkPipelineLayout Skybox::skyboxPipelineLayout;
-std::vector<VkBuffer> Skybox::skyboxUniformBuffers;
-std::vector<VkDeviceMemory> Skybox::skyboxUniformBuffersMemory;
 Renderer::VulkanDevice* Skybox::vulkanDevice = nullptr;
 
 void Skybox::init(Renderer::VulkanDevice* device,
@@ -35,7 +32,6 @@ void Skybox::init(Renderer::VulkanDevice* device,
 				  VkImageView envView,
 				  VkSampler envSampler) {
 	vulkanDevice = device;
-	createSkyboxUniformBuffers();
 	createDescriptorSet(envView, envSampler);
 	createSkyboxVertexBuffer(commandPool);
 	createSkyboxPipeline(renderPass);
@@ -43,8 +39,6 @@ void Skybox::init(Renderer::VulkanDevice* device,
 
 void Skybox::cleanup() {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(vulkanDevice->getDevice(), skyboxUniformBuffers[i], nullptr);
-		vkFreeMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[i], nullptr);
 	}
 	vkDestroyDescriptorPool(vulkanDevice->getDevice(), skyboxDescriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(vulkanDevice->getDevice(), skyboxDescriptorSetLayout, nullptr);
@@ -68,31 +62,6 @@ VkPipeline Skybox::getSkyboxPipeline() {
 
 VkPipelineLayout Skybox::getSkyboxPipelineLayout() {
 	return skyboxPipelineLayout;
-}
-
-void Skybox::updateSkyboxUniformBuffer(uint32_t currentImage, const glm::mat4& view, const glm::mat4& proj) {
-	SkyboxUniformBufferObject ubo{};
-	ubo.view = view;
-	ubo.proj = proj;
-
-	void* data;
-	vkMapMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
-	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(vulkanDevice->getDevice(), skyboxUniformBuffersMemory[currentImage]);
-}
-
-void Skybox::createSkyboxUniformBuffers() {
-	VkDeviceSize bufferSize = sizeof(SkyboxUniformBufferObject);
-	skyboxUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	skyboxUniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		Utils::createBuffer(bufferSize,
-							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-							skyboxUniformBuffers[i],
-							skyboxUniformBuffersMemory[i]);
-	}
 }
 
 void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
@@ -202,10 +171,12 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
 
+	VkDescriptorSetLayout layouts[] = {VulkanCore::getGlobalDescriptorSetLayout(), skyboxDescriptorSetLayout};
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &skyboxDescriptorSetLayout;
+	pipelineLayoutInfo.setLayoutCount = 2;
+	pipelineLayoutInfo.pSetLayouts = layouts;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -296,8 +267,8 @@ void Skybox::createDescriptorSet(VkImageView envView, VkSampler envSampler) {
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 2;
-	layoutInfo.pBindings = samplerLayoutBinding.data();
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &samplerLayoutBinding[1];
 
 	if (vkCreateDescriptorSetLayout(vulkanDevice->getDevice(), &layoutInfo, nullptr, &skyboxDescriptorSetLayout) !=
 		VK_SUCCESS) {
@@ -317,40 +288,21 @@ void Skybox::createDescriptorSet(VkImageView envView, VkSampler envSampler) {
 	}
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = skyboxUniformBuffers[i];
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(SkyboxUniformBufferObject);
-
 		VkDescriptorImageInfo imageInfo{};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		imageInfo.imageView = envView;
 		imageInfo.sampler = envSampler;
 
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = skyboxDescriptorSet[i];
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &bufferInfo;
-		descriptorWrites[0].pImageInfo = nullptr; // Optional
-		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.pNext = nullptr;
+		descriptorWrite.dstSet = skyboxDescriptorSet[i];
+		descriptorWrite.dstBinding = 1;
+		descriptorWrite.dstArrayElement = 0;
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pImageInfo = &imageInfo;
 
-		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].pNext = nullptr;
-		descriptorWrites[1].dstSet = skyboxDescriptorSet[i];
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].descriptorCount = 1;
-		descriptorWrites[1].pImageInfo = &imageInfo;
-
-		vkUpdateDescriptorSets(vulkanDevice->getDevice(),
-							   static_cast<uint32_t>(descriptorWrites.size()),
-							   descriptorWrites.data(),
-							   0,
-							   nullptr);
+		vkUpdateDescriptorSets(vulkanDevice->getDevice(), 1, &descriptorWrite, 0, nullptr);
 	}
 }

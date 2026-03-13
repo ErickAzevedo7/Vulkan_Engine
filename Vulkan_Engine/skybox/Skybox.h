@@ -16,10 +16,6 @@ struct SkyboxVertex {
 	glm::vec3 pos;
 };
 
-struct SkyboxUniformBufferObject {
-	glm::mat4 view;
-	glm::mat4 proj;
-};
 
 // Cube vertices (positions only)
 const std::vector<SkyboxVertex> skyboxVertices = {
@@ -60,7 +56,6 @@ public:
 
 	static VkPipelineLayout getSkyboxPipelineLayout();
 
-	static void updateSkyboxUniformBuffer(unsigned int currentImage, const glm::mat4& view, const glm::mat4& proj);
 
 private:
 	static std::vector<VkDescriptorSet> skyboxDescriptorSet;
@@ -71,10 +66,7 @@ private:
 	static Renderer::VulkanDevice* vulkanDevice;
 	static VkPipeline skyboxPipeline;
 	static VkPipelineLayout skyboxPipelineLayout;
-	static std::vector<VkBuffer> skyboxUniformBuffers;
-	static std::vector<VkDeviceMemory> skyboxUniformBuffersMemory;
 
-	static void createSkyboxUniformBuffers();
 
 	static void createSkyboxPipeline(VkRenderPass renderPass);
 
