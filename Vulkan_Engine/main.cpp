@@ -77,16 +77,13 @@ public:
 
 		// Initialize ResourceContext managers (create pools/buffers)
 		resourceContext.init(&engineCore);
+		resourceContext.getLightManager().initDescriptorResources(engineCore.getDevice(),
+																  engineCore.getGlobalDescriptorPool());
 
-		// IBL must be initialized BEFORE loadDefaults() so that when materials are
-		// first created their descriptor set slot 6 (irradianceMap) receives the
-		// real cubemap view instead of a 2D fallback placeholder.
+		// IBL must be initialized BEFORE loadDefaults()
 		ibl.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 				 VulkanCore::getCommandPool(),
 				 "common/texture/skybox/environment.hdr");
-		resourceContext.getMaterialManager().setIrradianceMap(ibl.getIrradianceImageView(), ibl.getIrradianceSampler());
-		resourceContext.getMaterialManager().setSpecularIBL(
-			ibl.getPrefilterImageView(), ibl.getPrefilterSampler(), ibl.getBrdfLutImageView(), ibl.getBrdfLutSampler());
 
 		// Initialize resource managers (textures, materials, lights)
 		// ResourceContext constructor created the managers, now load content
@@ -97,6 +94,19 @@ public:
 		inspector.setAssetBrowser(&assetBrowser);
 
 		SceneRenderer::init(&resourceContext);
+		SceneRenderer::initDescriptorResources(
+			engineCore.getDevice(), engineCore.getGlobalDescriptorPool(), VulkanCore::getPhysicalDevice());
+
+		// Create graphics pipeline AFTER managers have initialized their layouts
+		engineCore.createGraphicsPipeline(resourceContext.getLightManager().getDescriptorSetLayout(),
+										  resourceContext.getMaterialManager().getStandardLayout(),
+										  SceneRenderer::getPerObjectDescriptorSetLayout());
+
+		// Update VulkanDevice abstraction with the now-valid pipeline handles
+		auto* vulkanDev = static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice());
+		vulkanDev->updatePipeline(engineCore.getPipeline(), engineCore.getPipelineLayout());
+		vulkanDev->updateDynamicAlignment(SceneRenderer::getDynamicAlignment());
+
 		mousePick.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()), &resourceContext);
 		viewPort.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					  mousePick.getMousePickExtent(),
@@ -197,7 +207,7 @@ public:
 		// Update per-frame camera UBO first so command buffer recordings use up-to-date data
 		uint32_t frame = VulkanCore::getCurrentFrame();
 		editorCamera.updateUniformBuffer(frame,
-										 engineCore.getUniformBuffersMapped()[frame],
+										 SceneRenderer::getUniformBuffersMapped()[frame],
 										 VulkanCore::getEditorGlobalBuffersMapped()[frame],
 										 VulkanCore::getGameGlobalBuffersMapped()[frame],
 										 lightSpaceMatrices,
@@ -495,7 +505,14 @@ private:
 		shadowMap.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
 					   1024,
 					   1024); // Initialize as PointLight to ensure 6 layers and cube view
-		resourceContext.getMaterialManager().setShadowMap(&shadowMap);
+
+		resourceContext.getLightManager().updateDescriptorSets(&shadowMap,
+															   ibl.getIrradianceImageView(),
+															   ibl.getIrradianceSampler(),
+															   ibl.getPrefilterImageView(),
+															   ibl.getPrefilterSampler(),
+															   ibl.getBrdfLutImageView(),
+															   ibl.getBrdfLutSampler());
 	}
 
 	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ImageIndex) {

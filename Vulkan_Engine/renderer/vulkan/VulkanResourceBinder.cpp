@@ -9,8 +9,8 @@
 #include "renderer/RenderTypes.h"
 #include "vulkan/vulkan_core.h"
 #include "VulkanBuffer.h"
-
 #include "VulkanTexture.h"
+
 
 namespace Renderer {
 
@@ -364,6 +364,16 @@ void* VulkanResourceBinder::getNativeHandle(ResourceSetHandle set) const {
 
 	// Return pointer to VkDescriptorSet
 	return const_cast<VkDescriptorSet*>(&it->second);
+}
+void* VulkanResourceBinder::getNativeLayoutHandle(ResourceSetLayoutHandle layout) const {
+	if (!layout.isValid())
+		return nullptr;
+
+	auto it = layouts.find(layout.id);
+	if (it == layouts.end())
+		return nullptr;
+
+	return const_cast<VkDescriptorSetLayout*>(&it->second);
 }
 
 // ============================================================================

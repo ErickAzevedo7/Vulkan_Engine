@@ -354,7 +354,6 @@ void ViewPort::recordViewportCommandBuffer(VkCommandBuffer commandBuffer,
 							   vulkanDevice->getPipeline(),
 							   vulkanDevice->getPipelineLayout(),
 							   VulkanCore::getCurrentFrame(),
-							   VulkanCore::getDynamicAlignment(),
 							   globalDescriptorSet);
 
 	// Editor viewport draws GridPlane (no grid in game view)

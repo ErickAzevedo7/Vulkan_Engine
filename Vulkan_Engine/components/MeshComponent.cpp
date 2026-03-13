@@ -1,8 +1,10 @@
 #include "MeshComponent.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include "Entity.h"
@@ -11,6 +13,7 @@
 #include "renderer/GraphicsResourceBinder.h"
 #include "renderer/RenderCommandList.h"
 #include "renderer/RenderTypes.h"
+#include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -35,7 +38,6 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 						   VkPipeline pipeline,
 						   VkPipelineLayout pipelineLayout,
 						   uint32_t currentFrame,
-						   uint64_t dynamicAlignment,
 						   int useMousePick,
 						   MeshManager& meshManager,
 						   Renderer::GraphicsResourceBinder& binder) const {
@@ -78,15 +80,24 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 	if (id >= maxEntities) {
 		throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
 	}
-	uint32_t dynamicOffset = static_cast<uint32_t>(id * dynamicAlignment);
+	uint32_t dynamicOffset = static_cast<uint32_t>(id * SceneRenderer::getDynamicAlignment());
 
-	// Retrieve native handle from binder
+	// Retrieve native handle for Material (Set 2) from binder
 	Renderer::ResourceSetHandle frameSet = material->resourceSets[currentFrame];
-	VkDescriptorSet vkSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
+	VkDescriptorSet matSet = *static_cast<VkDescriptorSet*>(binder.getNativeHandle(frameSet));
 
-	// Bind material descriptor set at slot 1 (set 0 = GlobalUBO, bound by ViewPort before SceneRenderer)
-	void* vkSetPtr = vkSet;
-	commandList.bindDescriptorSets(pipelineLayout, &vkSetPtr, 1, &dynamicOffset, 1, 1 /*firstSet=1*/);
+	// Retrieve native handle for PerObject (Set 3) from SceneRenderer
+	VkDescriptorSet perObjSet = SceneRenderer::getPerObjectDescriptorSets()[currentFrame];
+
+	// Bind material descriptor set at slot 2, per-object set at slot 3
+	std::array<VkDescriptorSet, 2> setsToBind = {matSet, perObjSet};
+
+	commandList.bindDescriptorSets(pipelineLayout,
+								   reinterpret_cast<void**>(setsToBind.data()),
+								   2 /*descriptorSetCount*/,
+								   &dynamicOffset,
+								   1 /*dynamicOffsetCount*/,
+								   2 /*firstSet=2*/);
 
 	// Issue draw call
 	commandList.drawIndexed(mesh->indexCount, 1, 0, 0, 0);

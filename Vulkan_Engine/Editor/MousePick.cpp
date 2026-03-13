@@ -366,7 +366,6 @@ void MousePick::recordMousePickCommandBuffer(VkCommandBuffer commandBuffer, uint
 								   mousePickPipeline,
 								   vulkanDevice->getPipelineLayout(),
 								   VulkanCore::getCurrentFrame(),
-								   VulkanCore::getDynamicAlignment(),
 								   editorGlobalSet);
 
 	vkCmdEndRenderPass(commandBuffer);

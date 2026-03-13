@@ -10,8 +10,8 @@ layout(set=0, binding=0) uniform GlobalUBO {
     vec3 viewPos;
 } global;
 
-// Per-entity data — dynamic UBO (one slot per entity), in the material set
-layout(set=1, binding=9) uniform PerObjectUBO {
+// Per-entity data — dynamic UBO in Set 3
+layout(set=3, binding=0) uniform PerObjectUBO {
     mat4 model;
     mat4 normal;
 } obj;

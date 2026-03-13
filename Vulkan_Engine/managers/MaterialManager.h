@@ -84,6 +84,8 @@ public:
 						VkImageView brdfLutView,
 						VkSampler brdfLutSampler);
 
+	VkDescriptorSetLayout getStandardLayout() const;
+
 	// Get VkBuffer for descriptor writes (temporary until descriptor abstraction)
 	VkBuffer getMaterialPropertyBuffer(Material* material, uint32_t frame);
 
@@ -100,8 +102,7 @@ private:
 	VkImageView brdfLutView = VK_NULL_HANDLE;
 	VkSampler brdfLutSamplerHandle = VK_NULL_HANDLE;
 
-	// Layout key -> Handle map (to reuse layouts)
-	std::unordered_map<std::string, Renderer::ResourceSetLayoutHandle> layoutCache;
+	Renderer::ResourceSetLayoutHandle standardPbrLayout = {0};
 
 	void destroyMaterialInternal(const std::string& name);
 	std::unordered_map<std::string, Material*> materials;

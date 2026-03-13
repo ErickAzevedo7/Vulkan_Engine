@@ -63,6 +63,7 @@ public:
 				   const std::vector<ResourceImageBinding>& imageBindings) override;
 
 	void* getNativeHandle(ResourceSetHandle set) const override;
+	void* getNativeLayoutHandle(ResourceSetLayoutHandle layout) const;
 
 private:
 	// Vulkan state

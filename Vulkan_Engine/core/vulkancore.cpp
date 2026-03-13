@@ -47,10 +47,9 @@ VkDevice VulkanCore::device = VK_NULL_HANDLE;
 VkQueue VulkanCore::graphicsQueue = VK_NULL_HANDLE;
 VkQueue VulkanCore::presentQueue = VK_NULL_HANDLE;
 VkCommandPool VulkanCore::commandPool = VK_NULL_HANDLE;
-std::vector<VkBuffer> VulkanCore::uniformBuffers;
-VkDescriptorSetLayout VulkanCore::descriptorSetLayout = VK_NULL_HANDLE;
+
+VkDescriptorSetLayout VulkanCore::globalDescriptorSetLayout = VK_NULL_HANDLE;
 uint32_t VulkanCore::currentFrame = 0;
-VkDeviceSize VulkanCore::dynamicAlignment;
 VkExtent2D VulkanCore::swapChainExtent;
 VkSampleCountFlagBits VulkanCore::msaaSamples;
 std::vector<VkImageView> VulkanCore::swapChainImageViews;
@@ -60,7 +59,6 @@ std::vector<void*> VulkanCore::editorGlobalBuffersMapped;
 std::vector<VkBuffer> VulkanCore::gameGlobalBuffers;
 std::vector<void*> VulkanCore::gameGlobalBuffersMapped;
 
-VkDescriptorSetLayout VulkanCore::globalDescriptorSetLayout = VK_NULL_HANDLE;
 std::vector<VkDescriptorSet> VulkanCore::editorGlobalDescriptorSets;
 std::vector<VkDescriptorSet> VulkanCore::gameGlobalDescriptorSets;
 
@@ -139,9 +137,8 @@ void VulkanCore::initVulkan() {
 	createSwapChain();
 	createImageViews();
 	createRenderPass();
-	createGlobalDescriptorSetLayout(); // must precede createGraphicsPipeline
-	createDescriptorSetLayout();
-	createGraphicsPipeline();
+	createGlobalDescriptorSetLayout(); // Global layout is still owned by core
+
 	createCommandPool();
 	createTextureSampler();
 	createUniformBuffers();
@@ -246,8 +243,8 @@ void VulkanCore::setFramebufferResized(bool value) {
 	framebufferResized = value;
 }
 
-VkDescriptorSetLayout VulkanCore::getDescriptorSetLayout() {
-	return descriptorSetLayout;
+VkDescriptorSetLayout VulkanCore::getGlobalDescriptorSetLayout() {
+	return globalDescriptorSetLayout;
 }
 
 void VulkanCore::setSwapChainRecreated(bool value) {
@@ -298,20 +295,8 @@ VkSampleCountFlagBits VulkanCore::getmsaaSamples() {
 	return msaaSamples;
 }
 
-std::vector<void*> VulkanCore::getUniformBuffersMapped() {
-	return uniformBuffersMapped;
-}
-
 VkCommandPool VulkanCore::getCommandPool() {
 	return commandPool;
-}
-
-std::vector<VkBuffer> VulkanCore::getUniformBuffers() {
-	return uniformBuffers;
-}
-
-VkDeviceSize VulkanCore::getDynamicAlignment() {
-	return dynamicAlignment;
 }
 
 std::vector<VkBuffer>& VulkanCore::getEditorGlobalBuffers() {
@@ -328,10 +313,6 @@ std::vector<VkBuffer>& VulkanCore::getGameGlobalBuffers() {
 
 std::vector<void*>& VulkanCore::getGameGlobalBuffersMapped() {
 	return gameGlobalBuffersMapped;
-}
-
-VkDescriptorSetLayout VulkanCore::getGlobalDescriptorSetLayout() {
-	return globalDescriptorSetLayout;
 }
 
 std::vector<VkDescriptorSet>& VulkanCore::getEditorGlobalDescriptorSets() {
@@ -362,16 +343,19 @@ void VulkanCore::createGlobalDescriptorSetLayout() {
 }
 
 void VulkanCore::createGlobalDescriptorSets() {
-	// Create descriptor pool: 2 * 2 = 4 sets (editor+game, per frame)
-	VkDescriptorPoolSize poolSize{};
-	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 2);
+	std::array<VkDescriptorPoolSize, 3> poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 10); // Generous padding
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 10); // Generous padding
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 10); // Generous padding
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = 1;
-	poolInfo.pPoolSizes = &poolSize;
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 2);
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 10); // Generous padding
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &globalDescriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create global descriptor pool!");
@@ -607,30 +591,6 @@ VkFormat VulkanCore::findDepthFormat() {
 }
 
 void VulkanCore::createUniformBuffers() {
-	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(VulkanCore::getPhysicalDevice(), &properties);
-
-	size_t minUboAlignment = properties.limits.minUniformBufferOffsetAlignment;
-	dynamicAlignment = sizeof(UniformBufferObject);
-	if (minUboAlignment > 0) {
-		dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
-	}
-
-	size_t bufferSize = 1000 * dynamicAlignment;
-	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-	uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
-
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		Utils::createBuffer(bufferSize,
-							VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-							uniformBuffers[i],
-							uniformBuffersMemory[i]);
-
-		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
-	}
-
 	// --- GlobalUBO buffers for Editor and Game cameras ---
 	VkDeviceSize globalUboSize = sizeof(GlobalUBO);
 
@@ -810,99 +770,14 @@ void VulkanCore::createRenderPass() {
 	}
 }
 
-void VulkanCore::createDescriptorSetLayout() {
-	// NOTE: Binding 0 (GlobalUBO) lives in globalDescriptorSetLayout (set 0).
-	// This layout is for set 1 — material-specific bindings only: 1..9.
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding lightLayoutBinding{};
-	lightLayoutBinding.binding = 2;
-	lightLayoutBinding.descriptorCount = 1;
-	lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	lightLayoutBinding.pImmutableSamplers = nullptr;
-	lightLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding materialPropsLayoutBinding{};
-	materialPropsLayoutBinding.binding = 3;
-	materialPropsLayoutBinding.descriptorCount = 1;
-	materialPropsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	materialPropsLayoutBinding.pImmutableSamplers = nullptr;
-	materialPropsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding shadowMapLayoutBinding{};
-	shadowMapLayoutBinding.binding = 4;
-	shadowMapLayoutBinding.descriptorCount = 1;
-	shadowMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	shadowMapLayoutBinding.pImmutableSamplers = nullptr;
-	shadowMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding shadowCubeMapLayoutBinding{};
-	shadowCubeMapLayoutBinding.binding = 5;
-	shadowCubeMapLayoutBinding.descriptorCount = 1;
-	shadowCubeMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	shadowCubeMapLayoutBinding.pImmutableSamplers = nullptr;
-	shadowCubeMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	// Binding 6: IBL irradiance cubemap (samplerCube)
-	VkDescriptorSetLayoutBinding irradianceMapLayoutBinding{};
-	irradianceMapLayoutBinding.binding = 6;
-	irradianceMapLayoutBinding.descriptorCount = 1;
-	irradianceMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	irradianceMapLayoutBinding.pImmutableSamplers = nullptr;
-	irradianceMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	// Binding 7: IBL pre-filtered specular env cubemap (samplerCube)
-	VkDescriptorSetLayoutBinding prefilterMapLayoutBinding{};
-	prefilterMapLayoutBinding.binding = 7;
-	prefilterMapLayoutBinding.descriptorCount = 1;
-	prefilterMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	prefilterMapLayoutBinding.pImmutableSamplers = nullptr;
-	prefilterMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	// Binding 8: BRDF integration LUT (sampler2D)
-	VkDescriptorSetLayoutBinding brdfLutLayoutBinding{};
-	brdfLutLayoutBinding.binding = 8;
-	brdfLutLayoutBinding.descriptorCount = 1;
-	brdfLutLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	brdfLutLayoutBinding.pImmutableSamplers = nullptr;
-	brdfLutLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	// Binding 9: PerObjectUBO (model, normal matrices) - DYNAMIC, one slot per entity
-	VkDescriptorSetLayoutBinding perObjectLayoutBinding{};
-	perObjectLayoutBinding.binding = 9;
-	perObjectLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	perObjectLayoutBinding.descriptorCount = 1;
-	perObjectLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	perObjectLayoutBinding.pImmutableSamplers = nullptr;
-
-	std::array<VkDescriptorSetLayoutBinding, 9> bindings = {samplerLayoutBinding,
-															lightLayoutBinding,
-															materialPropsLayoutBinding,
-															shadowMapLayoutBinding,
-															shadowCubeMapLayoutBinding,
-															irradianceMapLayoutBinding,
-															prefilterMapLayoutBinding,
-															brdfLutLayoutBinding,
-															perObjectLayoutBinding};
-
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(VulkanCore::getDevice(), &layoutInfo, nullptr, &descriptorSetLayout) !=
-		VK_SUCCESS) {
-		throw std::runtime_error("failed to create descriptor set layout!");
+void VulkanCore::createGraphicsPipeline(VkDescriptorSetLayout lightLayout,
+										VkDescriptorSetLayout matLayout,
+										VkDescriptorSetLayout objLayout) {
+	if (globalDescriptorSetLayout == VK_NULL_HANDLE || lightLayout == VK_NULL_HANDLE || matLayout == VK_NULL_HANDLE ||
+		objLayout == VK_NULL_HANDLE) {
+		throw std::runtime_error("VulkanCore: One or more descriptor set layouts are null!");
 	}
-}
 
-void VulkanCore::createGraphicsPipeline() {
 	auto vertShaderCode = Utils::readFile("shaders/vert.spv");
 	auto fragShaderCode = Utils::readFile("shaders/frag.spv");
 
@@ -987,8 +862,7 @@ void VulkanCore::createGraphicsPipeline() {
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(float) * 3 + sizeof(int) // pickColor + usePickColor (16 bytes)
-							 + sizeof(float) * 16; // mat4 lightSpaceMatrix    (64 bytes)
+	pushConstantRange.size = sizeof(PushConstantData);
 
 	std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
@@ -997,7 +871,7 @@ void VulkanCore::createGraphicsPipeline() {
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
 
-	std::array<VkDescriptorSetLayout, 2> setLayouts = {globalDescriptorSetLayout, descriptorSetLayout};
+	std::array<VkDescriptorSetLayout, 4> setLayouts = {globalDescriptorSetLayout, lightLayout, matLayout, objLayout};
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1013,7 +887,7 @@ void VulkanCore::createGraphicsPipeline() {
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.flags = VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
-	pipelineInfo.basePipelineIndex = 0;
+	pipelineInfo.basePipelineIndex = -1;
 	pipelineInfo.stageCount = 2;
 	pipelineInfo.pStages = shaderStages;
 	pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -1027,6 +901,7 @@ void VulkanCore::createGraphicsPipeline() {
 	pipelineInfo.layout = pipelineLayout;
 	pipelineInfo.renderPass = renderPass;
 	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
 	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
@@ -1286,11 +1161,6 @@ void VulkanCore::cleanup() {
 
 	vkDestroySampler(device, textureSampler, nullptr);
 
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
-	}
-
 	// Cleanup GlobalUBO buffers for Editor and Game cameras
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		if (i < editorGlobalBuffers.size()) {
@@ -1304,7 +1174,6 @@ void VulkanCore::cleanup() {
 	}
 
 	// Legacy descriptor resources removed
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 	// Destroy global descriptor pool + layout (for set 0 — GlobalUBO)
 	if (globalDescriptorPool != VK_NULL_HANDLE) {

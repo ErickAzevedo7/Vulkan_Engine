@@ -15,6 +15,7 @@
 #include "renderer/vulkan/VulkanDevice.h"
 #include "renderer/vulkan/VulkanResourceBinder.h"
 #include "renderer/vulkan/VulkanTexture.h"
+#include "SceneRenderer.h"
 #include "vulkan/vulkan_core.h"
 
 ResourceContext::ResourceContext() {
@@ -44,7 +45,7 @@ void ResourceContext::init(VulkanCore* engineCore) {
 							 engineCore->getPresentQueue(),
 							 VulkanCore::getCommandPool(),
 							 engineCore->getGraphicsQueueFamily(),
-							 VulkanCore::getDynamicAlignment(),
+							 SceneRenderer::getDynamicAlignment(),
 							 VulkanCore::getmsaaSamples(),
 							 engineCore->getSwapChainImageFormat(),
 							 VulkanCore::getSwapChainExtent(),
@@ -93,6 +94,7 @@ void ResourceContext::init(VulkanCore* engineCore) {
 	lightManager->setBufferManager(bufferManager.get());
 	materialManager->setBufferManager(bufferManager.get());
 	materialManager->setResourceBinder(resourceBinder.get());
+	materialManager->init(); // Create standard layout
 	materialManager->setLightManager(lightManager.get());
 	textureManager->setGraphicsTexture(graphicsTexture.get());
 	meshManager->setBufferManager(bufferManager.get());
@@ -107,7 +109,7 @@ void ResourceContext::init(VulkanCore* engineCore) {
 void ResourceContext::cleanup() {
 	// Explicitly release resources in reverse dependency order
 	// Scene -> Light -> Material -> Texture -> Buffers
-	// Using unique_ptr::reset() triggers destructors immediately
+	SceneRenderer::cleanup();
 	sceneManager.reset();
 	lightManager.reset();
 	materialManager.reset();

@@ -20,6 +20,7 @@
 #include "renderer/GraphicsResourceBinder.h" // Added
 #include "renderer/RenderTypes.h"
 #include "renderer/vulkan/VulkanBuffer.h"
+#include "renderer/vulkan/VulkanResourceBinder.h"
 #include "renderer/vulkan/VulkanShadowMap.h"
 #include "renderer/vulkan/VulkanTexture.h"
 #include "vulkan/vulkan_core.h"
@@ -28,6 +29,7 @@
 #include "glm/ext/vector_float4.hpp"
 #include "nlohmann/json.hpp"
 #include "nlohmann/json_fwd.hpp"
+
 
 // Helper to produce a consistent key for material map lookups (normalizes
 // path separators to '/'). If a non-path logical name is used (e.g. "default")
@@ -47,8 +49,24 @@ MaterialManager::MaterialManager(TextureManager& textureManager) : textureManage
 }
 
 void MaterialManager::init() {
-	// Note: loadAllFromAssets() moved to ResourceContext::loadDefaults()
-	// to ensure textures are loaded first
+	if (resourceBinder && !standardPbrLayout.isValid()) {
+		Renderer::ResourceSetLayoutDesc desc;
+		desc.debugName = "StandardPBR";
+
+		Renderer::ResourceBinding texBinding;
+		texBinding.binding = 0;
+		texBinding.type = Renderer::ResourceType::CombinedTextureSampler;
+		texBinding.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(texBinding);
+
+		Renderer::ResourceBinding propBinding;
+		propBinding.binding = 1;
+		propBinding.type = Renderer::ResourceType::UniformBuffer;
+		propBinding.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(propBinding);
+
+		standardPbrLayout = resourceBinder->createLayout(desc);
+	}
 }
 
 MaterialManager::~MaterialManager() {
@@ -77,13 +95,10 @@ MaterialManager::~MaterialManager() {
 	}
 	materials.clear();
 
-	// Destroy layouts
-	if (resourceBinder) {
-		for (auto& pair : layoutCache) {
-			resourceBinder->destroyLayout(pair.second);
-		}
+	// Destroy standard layout
+	if (resourceBinder && standardPbrLayout.isValid()) {
+		resourceBinder->destroyLayout(standardPbrLayout);
 	}
-	layoutCache.clear();
 }
 
 void MaterialManager::loadDefault() {
@@ -370,90 +385,12 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 
 	material->resourceSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-	// Get or create layout
-	std::string layoutKey = "StandardMaterial";
-	Renderer::ResourceSetLayoutHandle layout;
-
-	if (layoutCache.find(layoutKey) != layoutCache.end()) {
-		layout = layoutCache[layoutKey];
-	} else {
-		Renderer::ResourceSetLayoutDesc desc;
-
-		// Binding 1: Albedo Texture (Sampler) - Fragment
-		Renderer::ResourceBinding binding1;
-		binding1.binding = 1;
-		binding1.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding1.count = 1;
-		binding1.stages = Renderer::ShaderStage::Fragment;
-
-		// Binding 2: Light Buffer (UBO) - Fragment
-		Renderer::ResourceBinding binding2;
-		binding2.binding = 2;
-		binding2.type = Renderer::ResourceType::UniformBuffer; // Or StorageBuffer if it was? Uniform in main.cpp
-		binding2.count = 1;
-		binding2.stages = Renderer::ShaderStage::Fragment;
-
-		// Binding 3: Material Properties (UBO) - Fragment
-		Renderer::ResourceBinding binding3;
-		binding3.binding = 3;
-		binding3.type = Renderer::ResourceType::UniformBuffer;
-		binding3.count = 1;
-		binding3.stages = Renderer::ShaderStage::Fragment; // Access in fragment shader?
-
-		desc.bindings.push_back(binding1); // Texture
-		desc.bindings.push_back(binding2); // Light Buffer
-		desc.bindings.push_back(binding3); // Material UBO
-
-		// Binding 4: Shadow Map (Sampler) - Fragment
-		Renderer::ResourceBinding binding4;
-		binding4.binding = 4;
-		binding4.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding4.count = 1;
-		binding4.stages = Renderer::ShaderStage::Fragment;
-		desc.bindings.push_back(binding4);
-
-		// Binding 5: Shadow Map Cube (Sampler) - Fragment
-		Renderer::ResourceBinding binding5;
-		binding5.binding = 5;
-		binding5.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding5.count = 1;
-		binding5.stages = Renderer::ShaderStage::Fragment;
-		desc.bindings.push_back(binding5);
-
-		// Binding 6: Irradiance Map (Cube Sampler) - Fragment
-		Renderer::ResourceBinding binding6;
-		binding6.binding = 6;
-		binding6.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding6.count = 1;
-		binding6.stages = Renderer::ShaderStage::Fragment;
-		desc.bindings.push_back(binding6);
-
-		// Binding 7: Pre-filtered Specular Map (Cube Sampler) - Fragment
-		Renderer::ResourceBinding binding7;
-		binding7.binding = 7;
-		binding7.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding7.count = 1;
-		binding7.stages = Renderer::ShaderStage::Fragment;
-		desc.bindings.push_back(binding7);
-
-		// Binding 8: BRDF Integration LUT (2D Sampler) - Fragment
-		Renderer::ResourceBinding binding8;
-		binding8.binding = 8;
-		binding8.type = Renderer::ResourceType::CombinedTextureSampler;
-		binding8.count = 1;
-		binding8.stages = Renderer::ShaderStage::Fragment;
-		desc.bindings.push_back(binding8);
-
-		// Binding 9: PerObjectUBO (model, normal) - Dynamic per entity
-		Renderer::ResourceBinding binding9;
-		binding9.binding = 9;
-		binding9.type = Renderer::ResourceType::UniformBufferDynamic;
-		binding9.count = 1;
-		binding9.stages = Renderer::ShaderStage::Vertex;
-		desc.bindings.push_back(binding9);
-
-		layout = resourceBinder->createLayout(desc);
-		layoutCache[layoutKey] = layout;
+	// Use the official standard PBR layout defined in init()
+	Renderer::ResourceSetLayoutHandle layout = standardPbrLayout;
+	if (!layout.isValid()) {
+		// Fallback for safety, though it should be initialized in init()
+		init();
+		layout = standardPbrLayout;
 	}
 
 	// Allocate and update sets
@@ -464,11 +401,7 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		std::vector<Renderer::ResourceBufferBinding> bufferBindings;
 		std::vector<Renderer::ResourceImageBinding> imageBindings;
 
-		// 1. Global UBO (Binding 0)
-		// We use the native handle escape hatch to update the Global UBO manually
-		// because it is managed by VulkanCore and not yet wrapped in a BufferHandle.
-
-		// Binding 1: Texture
+		// Binding 0: Texture
 		Texture* texture = nullptr;
 		try {
 			texture = textureManager.getTexture(texturePath);
@@ -477,174 +410,31 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		}
 
 		Renderer::ResourceImageBinding texBinding;
-		texBinding.binding = 1;
+		texBinding.binding = 0;
 		texBinding.texture = texture->handle;
 		texBinding.sampler = texture->sampler;
 		imageBindings.push_back(texBinding);
 
-		// Binding 3: Material Properties
+		// Binding 1: Material Properties
 		Renderer::ResourceBufferBinding matBinding;
-		matBinding.binding = 3;
+		matBinding.binding = 1;
 		matBinding.buffer = material->propertyBuffers[i]; // BufferHandle
 		matBinding.offset = 0;
 		matBinding.range = sizeof(MaterialProperties);
 		bufferBindings.push_back(matBinding);
 
-		// Binding 2: Light Buffer (from LightManager)
-		if (lightManager) {
-			Renderer::ResourceBufferBinding lightBinding;
-			lightBinding.binding = 2;
-			lightBinding.buffer = lightManager->getLightBufferHandle(static_cast<uint32_t>(i));
-			lightBinding.offset = 0;
-			lightBinding.range = ~0ull; // Whole buffer
-			bufferBindings.push_back(lightBinding);
-		}
-
-		// Binding 4: Default Shadow Map Texture (only if shadowMap is missing)
-		Renderer::ResourceImageBinding shadowBinding;
-		shadowBinding.binding = 4;
-		if (!shadowMap) {
-			shadowBinding.texture = textureManager.getTexture(textureManager.kDefaultTextureKey)->handle;
-			shadowBinding.sampler = textureManager.getTexture(textureManager.kDefaultTextureKey)->sampler;
-			imageBindings.push_back(shadowBinding);
-		}
-
 		// Update via Binder
 		resourceBinder->updateSet(material->resourceSets[i], bufferBindings, imageBindings);
-
-		// Update Global UBO (binding 0) and Shadow Map Manually
-		VkDescriptorSet vkSet =
-			*static_cast<VkDescriptorSet*>(resourceBinder->getNativeHandle(material->resourceSets[i]));
-
-		std::vector<VkWriteDescriptorSet> manualWrites;
-
-		// Binding 9: PerObjectUBO (dynamic per-entity model/normal matrices)
-		VkDescriptorBufferInfo perObjectBufferInfo{};
-		perObjectBufferInfo.buffer = VulkanCore::getUniformBuffers()[i];
-		perObjectBufferInfo.offset = 0;
-		perObjectBufferInfo.range = sizeof(PerObjectUBO);
-
-		VkWriteDescriptorSet perObjectWrite{};
-		perObjectWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		perObjectWrite.dstSet = vkSet;
-		perObjectWrite.dstBinding = 9;
-		perObjectWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		perObjectWrite.descriptorCount = 1;
-		perObjectWrite.pBufferInfo = &perObjectBufferInfo;
-		manualWrites.push_back(perObjectWrite);
-
-		VkDescriptorImageInfo shadowInfo{};
-		VkWriteDescriptorSet shadowWrite{};
-		if (shadowMap) {
-			shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			shadowInfo.imageView =
-				static_cast<VkImageView>(shadowMap->getDepth2DView()); // 2D view for directional light sampling
-			shadowInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler());
-
-			shadowWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			shadowWrite.dstSet = vkSet;
-			shadowWrite.dstBinding = 4;
-			shadowWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			shadowWrite.descriptorCount = 1;
-			shadowWrite.pImageInfo = &shadowInfo;
-			manualWrites.push_back(shadowWrite);
-		}
-
-		VkDescriptorImageInfo shadowCubeInfo{};
-		VkWriteDescriptorSet shadowCubeWrite{};
-		if (shadowMap) {
-			shadowCubeInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			shadowCubeInfo.imageView = static_cast<VkImageView>(shadowMap->getDepthCubeImageView());
-			shadowCubeInfo.sampler = static_cast<VkSampler>(shadowMap->getDepthSampler()); // Reuse sampler
-
-			shadowCubeWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			shadowCubeWrite.dstSet = vkSet;
-			shadowCubeWrite.dstBinding = 5;
-			shadowCubeWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			shadowCubeWrite.descriptorCount = 1;
-			shadowCubeWrite.pImageInfo = &shadowCubeInfo;
-			manualWrites.push_back(shadowCubeWrite);
-		}
-
-		// Binding 6: Irradiance Map — use real view if available, else default texture
-		VkDescriptorImageInfo irrInfo{};
-		VkWriteDescriptorSet irrWrite{};
-		{
-			if (irradianceView != VK_NULL_HANDLE) {
-				irrInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				irrInfo.imageView = irradianceView;
-				irrInfo.sampler = irradianceSampler;
-			} else {
-				// Fallback: plain white 1x1 default texture
-				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
-				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
-				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
-				irrInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				irrInfo.imageView = vkTex->getImageView(def->handle);
-				irrInfo.sampler = vkTex->getSampler(def->sampler);
-			}
-			irrWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			irrWrite.dstSet = vkSet;
-			irrWrite.dstBinding = 6;
-			irrWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			irrWrite.descriptorCount = 1;
-			irrWrite.pImageInfo = &irrInfo;
-			manualWrites.push_back(irrWrite);
-		}
-
-		// Binding 7: Pre-filtered Specular Map (use real view if available, else default)
-		VkDescriptorImageInfo prefilterInfo{};
-		VkWriteDescriptorSet prefilterWrite{};
-		{
-			if (prefilterView != VK_NULL_HANDLE) {
-				prefilterInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				prefilterInfo.imageView = prefilterView;
-				prefilterInfo.sampler = prefilterSamplerHandle;
-			} else {
-				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
-				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
-				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
-				prefilterInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				prefilterInfo.imageView = vkTex->getImageView(def->handle);
-				prefilterInfo.sampler = vkTex->getSampler(def->sampler);
-			}
-			prefilterWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			prefilterWrite.dstSet = vkSet;
-			prefilterWrite.dstBinding = 7;
-			prefilterWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			prefilterWrite.descriptorCount = 1;
-			prefilterWrite.pImageInfo = &prefilterInfo;
-			manualWrites.push_back(prefilterWrite);
-		}
-
-		// Binding 8: BRDF Integration LUT (use real view if available, else default)
-		VkDescriptorImageInfo brdfInfo{};
-		VkWriteDescriptorSet brdfWrite{};
-		{
-			if (brdfLutView != VK_NULL_HANDLE) {
-				brdfInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				brdfInfo.imageView = brdfLutView;
-				brdfInfo.sampler = brdfLutSamplerHandle;
-			} else {
-				Texture* def = textureManager.getTexture(textureManager.kDefaultTextureKey);
-				Renderer::GraphicsTexture* gfxTex = textureManager.getGraphicsTexture();
-				auto* vkTex = static_cast<Renderer::VulkanTexture*>(gfxTex);
-				brdfInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				brdfInfo.imageView = vkTex->getImageView(def->handle);
-				brdfInfo.sampler = vkTex->getSampler(def->sampler);
-			}
-			brdfWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			brdfWrite.dstSet = vkSet;
-			brdfWrite.dstBinding = 8;
-			brdfWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			brdfWrite.descriptorCount = 1;
-			brdfWrite.pImageInfo = &brdfInfo;
-			manualWrites.push_back(brdfWrite);
-		}
-
-		vkUpdateDescriptorSets(
-			VulkanCore::getDevice(), static_cast<uint32_t>(manualWrites.size()), manualWrites.data(), 0, nullptr);
 	}
+}
+
+VkDescriptorSetLayout MaterialManager::getStandardLayout() const {
+	if (resourceBinder && standardPbrLayout.isValid()) {
+		auto* vkBinder = static_cast<Renderer::VulkanResourceBinder*>(resourceBinder);
+		auto* layoutPtr = static_cast<VkDescriptorSetLayout*>(vkBinder->getNativeLayoutHandle(standardPbrLayout));
+		return layoutPtr ? *layoutPtr : VK_NULL_HANDLE;
+	}
+	return VK_NULL_HANDLE;
 }
 
 void MaterialManager::createMaterialPropertyBuffers(Material* material) {

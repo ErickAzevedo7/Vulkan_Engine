@@ -40,6 +40,12 @@ public:
 	/** Call after swapchain recreation to update extent/image count. */
 	void updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount);
 
+	/** Call after pipeline recreation to update handles. */
+	void updatePipeline(VkPipeline newPipeline, VkPipelineLayout newLayout);
+
+	/** Call after SceneRenderer calculates dynamic alignment. */
+	void updateDynamicAlignment(VkDeviceSize alignment);
+
 	// --- GraphicsDevice interface ---
 
 	void* getNativeDevice() const override;

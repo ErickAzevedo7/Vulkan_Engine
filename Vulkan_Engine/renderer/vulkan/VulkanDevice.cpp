@@ -47,6 +47,15 @@ void VulkanDevice::updateSwapchain(VkExtent2D newExtent, uint32_t newImageCount)
 	swapchainImageCount = newImageCount;
 }
 
+void VulkanDevice::updatePipeline(VkPipeline newPipeline, VkPipelineLayout newLayout) {
+	pipeline = newPipeline;
+	pipelineLayout = newLayout;
+}
+
+void VulkanDevice::updateDynamicAlignment(VkDeviceSize alignment) {
+	dynamicAlignmentValue = alignment;
+}
+
 void* VulkanDevice::getNativeDevice() const {
 	return (void*)device;
 }

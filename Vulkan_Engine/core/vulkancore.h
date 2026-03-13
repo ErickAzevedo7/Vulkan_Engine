@@ -15,7 +15,6 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 
-
 // GLM (needed for UniformBufferObject in interface)
 #include <glm/glm.hpp>
 
@@ -23,6 +22,10 @@
 
 // Forward declarations
 struct Vertex;
+class LightManager;
+namespace Renderer {
+class VulkanShadowMap;
+} // namespace Renderer
 
 extern const int MAX_FRAMES_IN_FLIGHT;
 
@@ -67,6 +70,13 @@ struct PerObjectUBO {
 	alignas(16) glm::mat4 normal;
 };
 
+// Push constant data layout (matches shader.frag)
+struct PushConstantData {
+	glm::vec3 pickColor;
+	int usePickColor;
+	glm::mat4 lightSpaceMatrix;
+};
+
 // Legacy alias so existing code that references UniformBufferObject still compiles.
 // TODO: migrate callers to GlobalUBO / PerObjectUBO directly.
 using UniformBufferObject = PerObjectUBO;
@@ -88,7 +98,9 @@ public:
 	void initWindow();
 
 	void initVulkan();
-
+	void createGraphicsPipeline(VkDescriptorSetLayout lightLayout,
+								VkDescriptorSetLayout matLayout,
+								VkDescriptorSetLayout objLayout);
 	void cleanup();
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
@@ -127,6 +139,10 @@ public:
 
 	static VkDescriptorSetLayout getDescriptorSetLayout();
 
+	VkDescriptorPool getGlobalDescriptorPool() const {
+		return globalDescriptorPool;
+	}
+
 	void setSwapChainRecreated(bool value);
 
 	static std::vector<VkImageView> getSwapChainImageViews();
@@ -149,13 +165,7 @@ public:
 
 	VkSampler getTextureSampler();
 
-	std::vector<void*> getUniformBuffersMapped();
-
 	static VkCommandPool getCommandPool();
-
-	static std::vector<VkBuffer> getUniformBuffers();
-
-	static VkDeviceSize getDynamicAlignment();
 
 	// --- Global UBO (per-camera) accessors ---
 	static std::vector<VkBuffer>& getEditorGlobalBuffers();
@@ -183,7 +193,6 @@ private:
 	static VkExtent2D swapChainExtent;
 	static std::vector<VkImageView> swapChainImageViews;
 	VkRenderPass renderPass;
-	static VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
@@ -195,9 +204,6 @@ private:
 	static uint32_t currentFrame;
 	bool framebufferResized;
 	bool swapChainRecreated;
-	static std::vector<VkBuffer> uniformBuffers;
-	std::vector<VkDeviceMemory> uniformBuffersMemory;
-	std::vector<void*> uniformBuffersMapped;
 
 	// Separate small GlobalUBO buffers for Editor and Game cameras
 	static std::vector<VkBuffer> editorGlobalBuffers;
@@ -218,8 +224,6 @@ private:
 	VkSampler textureSampler;
 
 	static VkSampleCountFlagBits msaaSamples;
-
-	static VkDeviceSize dynamicAlignment;
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 														VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -249,10 +253,6 @@ private:
 	void createCommandPool();
 
 	void createRenderPass();
-
-	void createDescriptorSetLayout();
-
-	void createGraphicsPipeline();
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
