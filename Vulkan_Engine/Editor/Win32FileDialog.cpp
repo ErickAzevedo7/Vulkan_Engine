@@ -1,12 +1,12 @@
-// Win32FileDialog.cpp
 // Isolated windows headers to avoid conflicts.
 #include "Win32FileDialog.h"
 
 // clang-format off
+
 #include <windows.h>
 #include <commdlg.h>
+#include <minwindef.h>
 // clang-format on
-
 #include <GLFW/glfw3.h>
 #include <string>
 

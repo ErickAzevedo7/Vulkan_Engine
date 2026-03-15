@@ -22,14 +22,12 @@
 #include "renderer/vulkan/VulkanBuffer.h"
 #include "renderer/vulkan/VulkanResourceBinder.h"
 #include "renderer/vulkan/VulkanShadowMap.h"
-#include "renderer/vulkan/VulkanTexture.h"
 #include "vulkan/vulkan_core.h"
 
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 #include "nlohmann/json.hpp"
 #include "nlohmann/json_fwd.hpp"
-
 
 // Helper to produce a consistent key for material map lookups (normalizes
 // path separators to '/'). If a non-path logical name is used (e.g. "default")

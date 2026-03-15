@@ -12,8 +12,10 @@
 #include "managers/EditorConfig.h"
 #include "managers/ProjectSerializer.h"
 #include "managers/SceneManager.h"
+#include "Scene.h"
 
 #include "glm/ext/vector_float3.hpp"
+
 
 EditorMenu::EditorMenu(ResourceContext& resourceContext, GLFWwindow* window)
 	: resourceContext(resourceContext), window(window) {

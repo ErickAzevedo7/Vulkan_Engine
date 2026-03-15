@@ -27,7 +27,6 @@
 #include <glm/gtx/matrix_decompose.hpp> // decompose
 
 #include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_float3x3.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/quaternion_float.hpp"
@@ -183,7 +182,6 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 		char* base = static_cast<char*>(uniformBufferMapped);
 		memcpy(base + offset, &perObj, sizeof(PerObjectUBO));
 	}
-
 
 	GridPlane::updateUniformBuffer(currentImage, glm::mat4(1.0f), editorView, editorProj);
 

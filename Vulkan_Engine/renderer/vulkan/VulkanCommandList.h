@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <vulkan/vulkan.h>
 
 #include "renderer/RenderCommandList.h"
+#include "vulkan/vulkan_core.h"
 
 namespace Renderer {
 

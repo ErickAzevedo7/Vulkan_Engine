@@ -8,14 +8,12 @@ class VulkanDevice;
 #include <glm/glm.hpp>
 #include <vector>
 
-#include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
 
 // Vertex structure
 struct SkyboxVertex {
 	glm::vec3 pos;
 };
-
 
 // Cube vertices (positions only)
 const std::vector<SkyboxVertex> skyboxVertices = {
@@ -56,7 +54,6 @@ public:
 
 	static VkPipelineLayout getSkyboxPipelineLayout();
 
-
 private:
 	static std::vector<VkDescriptorSet> skyboxDescriptorSet;
 	static VkDescriptorSetLayout skyboxDescriptorSetLayout;
@@ -66,7 +63,6 @@ private:
 	static Renderer::VulkanDevice* vulkanDevice;
 	static VkPipeline skyboxPipeline;
 	static VkPipelineLayout skyboxPipelineLayout;
-
 
 	static void createSkyboxPipeline(VkRenderPass renderPass);
 
