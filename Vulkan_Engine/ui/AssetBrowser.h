@@ -48,7 +48,7 @@ private:
 	char fileFilter[128] = "";
 	std::unordered_map<std::string, VkDescriptorSet> thumbnailDescriptorSets;
 
-	static constexpr const char* kAssetsRootPath = "assets";
+	std::string resolvedRootPath; // Set in constructor — absolute path to solution-root "projects\"
 
 	void InitFileIcons();
 	void ScanCurrentFolderContents();

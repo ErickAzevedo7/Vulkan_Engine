@@ -1,4 +1,5 @@
 #include "Entity.h"
+#include "components/Component.h"
 
 #include <atomic>
 #include <cstdint>
@@ -18,6 +19,9 @@ std::string Entity::getName() const {
 }
 
 void Entity::addComponent(Component* component) {
+	if (component) {
+		component->owner = this;
+	}
 	components.push_back(component);
 }
 

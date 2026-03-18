@@ -7,7 +7,8 @@
 #include "glm/trigonometric.hpp"
 
 
-CameraComponent::CameraComponent(Entity* parent) : owner(parent) {
+CameraComponent::CameraComponent(Entity* parent) {
+	this->owner = parent;
 }
 
 CameraComponent::~CameraComponent() {

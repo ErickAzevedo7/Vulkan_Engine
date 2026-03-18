@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <stdexcept>
 #include <stdio.h>
 #include <vector>
@@ -40,6 +41,8 @@
 #include "managers/MeshManager.h"
 #include "managers/ProjectSerializer.h"
 #include "managers/SceneManager.h"
+#include "managers/ScriptCompiler.h"
+#include "managers/ScriptPluginLoader.h"
 #include "postprocess/outline.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "renderer/vulkan/VulkanHdr.h"
@@ -313,6 +316,11 @@ public:
 			lastFrame = currentFrame;
 			glfwPollEvents();
 
+			// Tick scene (scripts, future physics, etc.) every frame
+			if (Scene* activeScene = resourceContext.getSceneManager().getActiveScene()) {
+				activeScene->onUpdate(static_cast<float>(deltaTime));
+			}
+
 			if (engineCore.getSwapChainRecreated()) {
 				recreateEditorViewportResources();
 				recreateGameViewportResources();
@@ -513,6 +521,26 @@ private:
 															   ibl.getPrefilterSampler(),
 															   ibl.getBrdfLutImageView(),
 															   ibl.getBrdfLutSampler());
+
+		// --- Script System ---
+		// Built-in scripts self-register via the SCRIPT macro.
+		// Scripts are loaded on-demand via ScriptCompiler + ScriptPluginLoader
+		// when .h files are dragged into the Inspector.
+
+		// Setup the per-script compiler (auto-detects cl.exe via vswhere)
+		{
+			char exeBuf[MAX_PATH] = {};
+			GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
+			std::filesystem::path solutionRoot = std::filesystem::path(exeBuf).parent_path() / ".." / "..";
+			solutionRoot = std::filesystem::weakly_canonical(solutionRoot);
+
+			std::filesystem::path projectsDir = solutionRoot / "projects";
+			std::string engineRoot = (solutionRoot / "Vulkan_Engine").string();
+			std::string engineLib = (solutionRoot / "x64" / "Debug" / "Vulkan_Engine.lib").string();
+			std::string glmInclude = (solutionRoot / "Vulkan_Engine" / "vcpkg_installed" / "x64-windows" / "x64-windows" / "include").string();
+
+			ScriptCompiler::setupConfig(projectsDir.string(), engineRoot, engineLib, glmInclude);
+		}
 	}
 
 	void recordImguiCommandBuffer(VkCommandBuffer commandBuffer, uint32_t ImageIndex) {
@@ -570,10 +598,15 @@ private:
 		uiManager.cleanup();
 		shadowMap.cleanup();
 		ibl.cleanup();
+
+		// Shutdown script system
+		ScriptCompiler::shutdown();
+		ScriptPluginLoader::unloadAll();
 	}
 
 	void inputProcess() {
 		editorCamera.inputProcess(mousePick);
+		ScriptCompiler::tick(); // Deliver async compile callbacks on the main thread
 	}
 
 	void changeImGuizmoStyle() {

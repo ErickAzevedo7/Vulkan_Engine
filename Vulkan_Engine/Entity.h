@@ -23,6 +23,15 @@ public:
 		return id;
 	}
 
+	void setID(uint32_t newId) {
+		id = newId;
+	}
+
+	static void updateNextID(uint32_t loadedId) {
+		uint32_t current = nextID.load();
+		while (loadedId >= current && !nextID.compare_exchange_weak(current, loadedId + 1));
+	}
+
 	template<typename T> T* getComponent() const {
 		static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
 		for (const auto& component : components) {

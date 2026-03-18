@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Entity.h"
+#include "components/ScriptComponent.h"
 
 Scene::Scene(std::string name) {
 	this->name = std::move(name);
@@ -57,6 +58,15 @@ size_t Scene::getEntityCount() const {
 	return entities.size();
 }
 
+Entity* Scene::findEntityById(uint32_t id) const {
+	for (const auto& entity : entities) {
+		if (entity->getID() == id) {
+			return entity.get();
+		}
+	}
+	return nullptr;
+}
+
 void Scene::clear() {
 	entities.clear();
 	markDirty();
@@ -80,16 +90,28 @@ void Scene::clearDirty() {
 
 void Scene::onRuntimeStart() {
 	state = SceneState::Play;
-	// Future: initialize physics, scripts, etc.
+	for (const auto& ePtr : entities) {
+		if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+			sc->onStart();
+		}
+	}
 }
 
 void Scene::onRuntimeStop() {
+	for (const auto& ePtr : entities) {
+		if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+			sc->onStop();
+		}
+	}
 	state = SceneState::Edit;
-	// Future: cleanup physics, scripts, etc.
 }
 
 void Scene::onUpdate(float deltaTime) {
 	if (state == SceneState::Play) {
-		// Future: update physics, scripts, etc.
+		for (const auto& ePtr : entities) {
+			if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+				sc->onUpdate(deltaTime);
+			}
+		}
 	}
 }

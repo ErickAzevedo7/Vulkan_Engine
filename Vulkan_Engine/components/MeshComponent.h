@@ -44,7 +44,7 @@ public:
 	}
 
 private:
-	Entity* owner;
+
 	Mesh* mesh;
 	Material* material;
 	bool visible;

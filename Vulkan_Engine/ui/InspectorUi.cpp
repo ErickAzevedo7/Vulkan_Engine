@@ -14,6 +14,10 @@
 #include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "components/ScriptComponent.h"
+#include "managers/ScriptCompiler.h"
+#include "managers/ScriptPluginLoader.h"
+#include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
@@ -937,6 +941,156 @@ void InspectorUi::render() {
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 		ImGui::Separator();
 		ImGui::PopStyleVar();
+
+		// ----------------------------------------------------------------
+		// Script component section
+		// ----------------------------------------------------------------
+		auto* scriptComp = entity.getComponent<ScriptComponent>();
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+		if (scriptComp && ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::PopStyleVar(3);
+
+			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+			ImGui::Indent(kContentIndent);
+
+			ImGui::Columns(2, "##ScriptColumns", false);
+			ImGui::SetColumnWidth(0, 80.0f);
+
+			// Script name (read-only label — the type is fixed once attached)
+			ImGui::Text("Type");
+			ImGui::NextColumn();
+			ImGui::TextDisabled("%s", scriptComp->scriptName.c_str());
+			ImGui::NextColumn();
+
+			// Enabled toggle
+			ImGui::Text("Enabled");
+			ImGui::NextColumn();
+			if (ImGui::Checkbox("##ScriptEnabled", &scriptComp->enabled))
+				edited = true;
+			ImGui::NextColumn();
+
+			ImGui::Columns(1);
+			ImGui::Unindent(kContentIndent);
+			ImGui::PopStyleVar();
+		} else if (!scriptComp) {
+			ImGui::PopStyleVar(3);
+
+			// ── Drop target zone ──────────────────────────────────────────
+			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+			ImGui::Indent(kContentIndent);
+
+			// Draw a styled drop zone rectangle
+			ImVec2 zoneSize(ImGui::GetContentRegionAvail().x - kContentIndent, 32.0f);
+			ImVec2 zonePos = ImGui::GetCursorScreenPos();
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+
+			bool isHovered = ImGui::IsMouseHoveringRect(zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y));
+			ImU32 borderCol = isHovered ? IM_COL32(130, 180, 255, 200) : IM_COL32(120, 120, 120, 120);
+			ImU32 fillCol   = isHovered ? IM_COL32(60,  90,  160, 60)  : IM_COL32(50,  50,  50,  60);
+
+			dl->AddRectFilled(zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y), fillCol, 4.0f);
+			dl->AddRect      (zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y), borderCol, 4.0f, 0, 1.5f);
+
+			// Centre the label text
+			const char* label = "Drop script here";
+			ImVec2 textSize = ImGui::CalcTextSize(label);
+			ImVec2 textPos(zonePos.x + (zoneSize.x - textSize.x) * 0.5f,
+			               zonePos.y + (zoneSize.y - textSize.y) * 0.5f);
+			dl->AddText(textPos, IM_COL32(180, 180, 180, 200), label);
+
+			// Invisible button to capture drop
+			ImGui::InvisibleButton("##ScriptDropZone", zoneSize);
+
+			if (ImGui::BeginDragDropTarget()) {
+				// Accept a script type dragged from the Script Palette
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCRIPT_TYPE")) {
+					std::string scriptName(static_cast<const char*>(payload->Data), payload->DataSize - 1);
+					ScriptComponent* sc = ScriptRegistry::create(scriptName);
+					if (sc) {
+						entity.addComponent(sc);
+						edited = true;
+					}
+				}
+			// Accept a .dll dragged from the Asset Browser — load it as a plugin
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+					std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
+					std::filesystem::path p(filePath);
+					std::string ext = p.extension().string();
+					for (auto& c : ext) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+
+					if (ext == ".dll") {
+						ScriptPluginLoader::loadPlugin(filePath);
+					}
+					// Accept a .h header — direct attachment flow
+					else if (ext == ".h") {
+						std::string scriptName = p.stem().string();
+						uint32_t targetEntityId = entity.getID();
+
+						auto attachScript = [this, targetEntityId, scriptName]() {
+							Scene* activeScene = resources.getSceneManager().getActiveScene();
+							if (!activeScene) return;
+
+							Entity* target = activeScene->findEntityById(targetEntityId);
+							if (target) {
+								ScriptComponent* sc = ScriptRegistry::create(scriptName);
+								if (sc) {
+									target->addComponent(sc);
+								}
+							}
+						};
+
+						// CASE 1: Script is already registered (loaded in some DLL)
+						auto registered = ScriptRegistry::getRegisteredNames();
+						bool alreadyRegistered = false;
+						for (const auto& r : registered) {
+							if (r == scriptName) { alreadyRegistered = true; break; }
+						}
+
+						if (alreadyRegistered) {
+							attachScript();
+						} else {
+							// CASE 2: Compile it asynchronously, then attach
+							ScriptCompiler::compileAsync(filePath, [attachScript](bool ok, const std::string& dllPath) {
+								if (ok) {
+									ScriptPluginLoader::loadPlugin(dllPath);
+									attachScript();
+								} else {
+									std::cerr << "[Inspector] Script compile failed. Check build logs.\n";
+								}
+							});
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			ImGui::Unindent(kContentIndent);
+		} else {
+			ImGui::PopStyleVar(3);
+		}
+
+
+			ImGui::Separator();
+
+			// ── Compile Spinner ─────────────────────────────────────────────────
+			// Shown while a background script compile is in progress.
+			if (ScriptCompiler::isCompiling()) {
+				ImGui::Dummy(ImVec2(0.0f, 4.0f));
+				ImGui::Indent(kContentIndent);
+
+				// Animate a rotating spinner character
+				const char* spinnerFrames[] = { "|" , "/" , "-" , "\\" };
+				int frame = static_cast<int>(ImGui::GetTime() * 8.0) % 4;
+				ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f),
+								   "%s Compiling %s...",
+								   spinnerFrames[frame],
+								   ScriptCompiler::compilingScriptName().c_str());
+
+			ImGui::Unindent(kContentIndent);
+		}
 	} else if ((selection.type == InspectorSelectionType::Asset ||
 				selection.type == InspectorSelectionType::Material) &&
 			   !selection.assetPath.empty()) {

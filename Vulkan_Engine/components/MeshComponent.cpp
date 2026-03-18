@@ -19,7 +19,8 @@
 #include "glm/ext/vector_float3.hpp"
 
 MeshComponent::MeshComponent(Entity* owner, const std::string& meshName, MeshManager& meshManager)
-	: Component(), owner(owner), visible(true) {
+	: Component(), visible(true) {
+	this->owner = owner;
 	mesh = meshManager.getMesh(meshName);
 
 	this->material = nullptr;
@@ -31,7 +32,6 @@ MeshComponent::MeshComponent(Entity* owner, const std::string& meshName, MeshMan
 
 MeshComponent::~MeshComponent() {
 	mesh = nullptr;
-	owner = nullptr;
 }
 
 void MeshComponent::render(Renderer::RenderCommandList& commandList,

@@ -26,6 +26,9 @@ public:
 	// Get the number of entities in the scene
 	size_t getEntityCount() const;
 
+	// Find an entity by its unique ID, or nullptr if not found
+	Entity* findEntityById(uint32_t id) const;
+
 	// Clear all entities from the scene
 	void clear();
 

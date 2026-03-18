@@ -77,7 +77,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;BUILDING_ENGINE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
@@ -92,7 +92,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;BUILDING_ENGINE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -106,7 +106,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;BUILDING_ENGINE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -117,6 +117,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- Generate an import .lib so script DLLs can link back into the engine EXE -->
+      <ImportLibrary>$(SolutionDir)x64\$(Configuration)\Vulkan_Engine.lib</ImportLibrary>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -125,7 +127,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;BUILDING_ENGINE;%(PreprocessorDefinitions);GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_DEPTH_ZERO_TO_ONE</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\stb;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\tiny_obj_loader;$(ProjectDir)external\imgui;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine;C:\VulkanSDK\1.4.309.0\Include;C:\Users\erick\OneDrive\Documentos\Visual Studio 2022\Libraires\glm-1.0.1;C:\Users\erick\source\repos\Vulkan_Engine\Vulkan_Engine\ImGuizmo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -137,6 +139,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>C:\VulkanSDK\1.4.309.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ImportLibrary>$(SolutionDir)x64\$(Configuration)\Vulkan_Engine.lib</ImportLibrary>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -150,8 +153,7 @@
     <ClCompile Include="external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="managers\LightManager.cpp" />
     <ClCompile Include="ui\AssetBrowser.cpp" />
-    <ClCompile Include="components\\Component.cpp" />
-    <ClCompile Include="components\LightComponent.cpp" />
+    <ClCompile Include="components\Component.cpp" />
     <ClCompile Include="components\MeshComponent.cpp" />
     <ClCompile Include="components\Transform.cpp" />
     <ClCompile Include="components\CameraComponent.cpp" />
@@ -181,6 +183,11 @@
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="managers\ProjectSerializer.cpp" />
+    <ClCompile Include="managers\ScriptRegistry.cpp" />
+    <ClCompile Include="managers\ScriptCompiler.cpp" />
+    <ClCompile Include="managers\ScriptPluginLoader.cpp" />
+
+    <ClCompile Include="Behaviour.cpp" />
     <ClCompile Include="Editor\ViewPort.cpp" />
     <ClCompile Include="core\vulkancore.cpp" />
     <ClCompile Include="core\events\EventBus.cpp" />
@@ -210,6 +217,8 @@
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="components\CameraComponent.h" />
+    <ClInclude Include="components\ScriptComponent.h" />
+    <ClInclude Include="Behaviour.h" />
     <ClInclude Include="context\ResourceContext.h" />
     <ClInclude Include="core\utils\Utils.h" />
     <ClInclude Include="Editor\EditorCamera.h" />
@@ -219,12 +228,13 @@
     <ClInclude Include="gridPlane\GridPlane.h" />
     <ClInclude Include="managers\MeshManager.h" />
     <ClInclude Include="managers\EditorConfig.h" />
+    <ClInclude Include="managers\ScriptRegistry.h" />
+    <ClInclude Include="managers\ScriptPluginLoader.h" />
     <ClInclude Include="managers\MaterialManager.h" />
     <ClInclude Include="renderer\vulkan\VulkanHdr.h" />
     <ClInclude Include="renderer\Hdr.h" />
     <ClInclude Include="postprocess\outline.h" />
     <ClInclude Include="Scene.h" />
-    <ClInclude Include="components\Transform.h" />
     <ClInclude Include="core\Vertices.h" />
     <ClInclude Include="SceneRenderer.h" />
     <ClInclude Include="managers\TextureManager.h" />

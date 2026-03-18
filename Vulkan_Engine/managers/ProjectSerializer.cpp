@@ -10,6 +10,8 @@
 #include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "components/ScriptComponent.h"
+#include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "Entity.h"
@@ -50,6 +52,7 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 		const Entity& entity = *entityPtr;
 		json ej;
 		ej["name"] = entity.getName();
+		ej["id"] = entity.getID();
 
 		// --- Transform ---
 		if (auto* t = entity.getComponent<Transform>()) {
@@ -94,6 +97,14 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			cj["farPlane"] = cc->farPlane;
 			cj["isPrimary"] = cc->isPrimary;
 			ej["camera"] = cj;
+		}
+
+		// --- Script ---
+		if (auto* sc = entity.getComponent<ScriptComponent>()) {
+			json sj;
+			sj["name"] = sc->scriptName;
+			sj["enabled"] = sc->enabled;
+			ej["script"] = sj;
 		}
 
 		root["entities"].push_back(ej);
@@ -149,6 +160,11 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 		std::string name = ej.value("name", "Entity");
 		Entity& entity = scene->createEntity(name);
 
+		if (ej.contains("id")) {
+			uint32_t id = ej["id"];
+			entity.setID(id);
+			Entity::updateNextID(id);
+		}
 		// --- Transform ---
 		if (ej.contains("transform")) {
 			const auto& tj = ej["transform"];
@@ -223,6 +239,20 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			cc->farPlane = cj.value("farPlane", 1000.0f);
 			cc->isPrimary = cj.value("isPrimary", true);
 			entity.addComponent(cc);
+		}
+
+		// --- Script ---
+		if (ej.contains("script")) {
+			const auto& sj = ej["script"];
+			std::string scriptName = sj.value("name", "MyScript");
+			bool enabled = sj.value("enabled", true);
+
+			// Use registry — supports both built-in and DLL scripts
+			ScriptComponent* sc = ScriptRegistry::create(scriptName);
+			if (sc) {
+				sc->enabled = enabled;
+				entity.addComponent(sc);
+			}
 		}
 	}
 

@@ -6,7 +6,6 @@
 
 #include "glm/ext/matrix_float4x4.hpp"
 
-
 class Entity;
 
 class CameraComponent : public Component {
@@ -14,7 +13,6 @@ public:
 	CameraComponent(Entity* parent);
 	~CameraComponent();
 
-	Entity* owner{nullptr};
 
 	float fov = 45.0f;
 	float nearPlane = 0.1f;
