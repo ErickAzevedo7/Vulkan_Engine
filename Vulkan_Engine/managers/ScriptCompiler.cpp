@@ -5,6 +5,7 @@
 #include <Windows.h>
 #endif
 
+#include "ScriptPluginLoader.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -276,4 +277,30 @@ void ScriptCompiler::shutdown() {
     if (s_thread.joinable()) {
         s_thread.join();
     }
+}
+
+bool ScriptCompiler::loadFromHeader(const std::string& headerPath) {
+    if (headerPath.empty()) return false;
+    
+    namespace fs = std::filesystem;
+    fs::path header(headerPath);
+    std::string scriptName = header.stem().string();
+    
+    // If output dir is unknown, we can't load
+    if (s_outputDir.empty()) {
+        // Try to load config if we have a projectsDir nearby
+        // (This happens on cold start before any compile)
+        char exeBuf[MAX_PATH] = {};
+        GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
+        fs::path projectsDir = fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
+        projectsDir = fs::weakly_canonical(projectsDir);
+        if (!loadConfig(projectsDir.string())) return false;
+    }
+    
+    fs::path dllPath = fs::path(s_outputDir) / (scriptName + ".dll");
+    if (fs::exists(dllPath)) {
+        return ScriptPluginLoader::loadPlugin(dllPath.string());
+    }
+    
+    return false;
 }

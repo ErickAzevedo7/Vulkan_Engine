@@ -27,6 +27,9 @@ public:
 	/// Create an instance of the named script, or nullptr if not found.
 	static ScriptComponent* create(const std::string& name);
 
+	/// Check if a script type is already registered.
+	static bool exists(const std::string& name);
+
 	/// All registered script names.
 	static std::vector<std::string> getRegisteredNames();
 

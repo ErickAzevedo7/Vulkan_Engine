@@ -17,6 +17,9 @@ public:
 	// Name identifying this script type (used for serialization)
 	std::string scriptName;
 
+	// Absolute path to the .h file that defines this script
+	std::string headerPath;
+
 	// Set to false to pause the script without removing it
 	bool enabled = true;
 

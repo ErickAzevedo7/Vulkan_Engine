@@ -11,6 +11,7 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
+#include "managers/ScriptCompiler.h"
 #include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
@@ -26,7 +27,7 @@
 
 using json = nlohmann::json;
 
-bool ProjectSerializer::save(const std::string& filePath, Scene* scene, ResourceContext& resources) {
+bool ProjectSerializer::save(const std::string& filePath, Scene* scene, ResourceContext& resources, bool shouldClearDirty) {
 	if (!scene) {
 		std::cerr << "[ProjectSerializer] save: scene is null\n";
 		return false;
@@ -103,6 +104,7 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 		if (auto* sc = entity.getComponent<ScriptComponent>()) {
 			json sj;
 			sj["name"] = sc->scriptName;
+			sj["header_path"] = sc->headerPath;
 			sj["enabled"] = sc->enabled;
 			ej["script"] = sj;
 		}
@@ -118,7 +120,9 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 	file << root.dump(4);
 	file.close();
 
-	scene->clearDirty();
+	if (shouldClearDirty) {
+		scene->clearDirty();
+	}
 
 	std::cout << "[ProjectSerializer] Saved scene to: " << filePath << "\n";
 	return true;
@@ -245,11 +249,18 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 		if (ej.contains("script")) {
 			const auto& sj = ej["script"];
 			std::string scriptName = sj.value("name", "MyScript");
+			std::string headerPath = sj.value("header_path", "");
 			bool enabled = sj.value("enabled", true);
 
-			// Use registry — supports both built-in and DLL scripts
+			// Automatic restoration: If the script type isn't registered yet,
+			// try to load its DLL from the stored header path.
+			if (!headerPath.empty() && !ScriptRegistry::exists(scriptName)) {
+				ScriptCompiler::loadFromHeader(headerPath);
+			}
+
 			ScriptComponent* sc = ScriptRegistry::create(scriptName);
 			if (sc) {
+				sc->headerPath = headerPath;
 				sc->enabled = enabled;
 				entity.addComponent(sc);
 			}

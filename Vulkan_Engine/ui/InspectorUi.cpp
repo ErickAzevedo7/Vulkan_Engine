@@ -1012,6 +1012,7 @@ void InspectorUi::render() {
 					if (sc) {
 						entity.addComponent(sc);
 						edited = true;
+						scene->markDirty();
 					}
 				}
 			// Accept a .dll dragged from the Asset Browser — load it as a plugin
@@ -1029,7 +1030,7 @@ void InspectorUi::render() {
 						std::string scriptName = p.stem().string();
 						uint32_t targetEntityId = entity.getID();
 
-						auto attachScript = [this, targetEntityId, scriptName]() {
+						auto attachScript = [this, targetEntityId, scriptName, filePath]() {
 							Scene* activeScene = resources.getSceneManager().getActiveScene();
 							if (!activeScene) return;
 
@@ -1037,7 +1038,9 @@ void InspectorUi::render() {
 							if (target) {
 								ScriptComponent* sc = ScriptRegistry::create(scriptName);
 								if (sc) {
+									sc->headerPath = filePath;
 									target->addComponent(sc);
+									activeScene->markDirty();
 								}
 							}
 						};

@@ -33,6 +33,10 @@ public:
     /// Ensures any background compilation threads are joined.
     static void shutdown();
 
+    /// Helper to loading a plugin given its original header path.
+    /// Derives the expected DLL path and loads it via ScriptPluginLoader.
+    static bool loadFromHeader(const std::string& headerPath);
+
     /// Generates/updates ScriptCompilerConfig.json in the projects/ folder.
     /// Called once on engine startup to detect cl.exe and engine paths.
     static void setupConfig(const std::string& projectsDir,

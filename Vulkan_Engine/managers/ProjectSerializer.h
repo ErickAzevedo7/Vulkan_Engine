@@ -14,7 +14,7 @@ public:
     /// @param scene     The scene to serialize
     /// @param resources Resource context for material/mesh lookup
     /// @return true on success
-    static bool save(const std::string& filePath, Scene* scene, ResourceContext& resources);
+    static bool save(const std::string& filePath, Scene* scene, ResourceContext& resources, bool shouldClearDirty = true);
 
     /// Load a scene from file, replacing the current active scene contents.
     /// @param filePath  Full path including filename

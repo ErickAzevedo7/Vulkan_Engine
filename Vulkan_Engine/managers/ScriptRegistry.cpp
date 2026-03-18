@@ -18,10 +18,13 @@ std::unordered_map<std::string, std::function<ScriptComponent*()>>& ScriptRegist
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+bool ScriptRegistry::exists(const std::string& name) {
+	return registry().find(name) != registry().end();
+}
+
 ScriptComponent* ScriptRegistry::create(const std::string& name) {
 	auto it = registry().find(name);
 	if (it == registry().end()) {
-		std::cerr << "[ScriptRegistry] Unknown script type: '" << name << "'\n";
 		return nullptr;
 	}
 	return it->second();

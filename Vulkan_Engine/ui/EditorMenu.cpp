@@ -154,8 +154,8 @@ void EditorMenu::newScene() {
 			lc->range = 20.0f; // shadow far plane
 		}
 
-		// Immediately save the newly created empty scene
-		ProjectSerializer::save(path, scene, resourceContext);
+		// Mark as dirty so the user can save to the chosen path when ready
+		scene->markDirty();
 		EditorConfig::setLastScenePath(path);
 	}
 }
@@ -217,7 +217,8 @@ void EditorMenu::onPlay() {
 		std::filesystem::create_directories("projects/temp");
 		editorSceneBackupPath = "projects/temp/play_backup.iscene";
 
-		ProjectSerializer::save(editorSceneBackupPath, scene, resourceContext);
+		// Silent save: don't clear the dirty flag so we don't lose the "*" in the title
+		ProjectSerializer::save(editorSceneBackupPath, scene, resourceContext, false);
 
 		scene->onRuntimeStart();
 	}
