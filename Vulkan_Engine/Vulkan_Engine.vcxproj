@@ -186,6 +186,7 @@
     <ClCompile Include="managers\ScriptRegistry.cpp" />
     <ClCompile Include="managers\ScriptCompiler.cpp" />
     <ClCompile Include="managers\ScriptPluginLoader.cpp" />
+    <ClCompile Include="ExposedVariable.cpp" />
 
     <ClCompile Include="Behaviour.cpp" />
     <ClCompile Include="Editor\ViewPort.cpp" />
@@ -218,6 +219,7 @@
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="components\CameraComponent.h" />
     <ClInclude Include="components\ScriptComponent.h" />
+    <ClInclude Include="ExposedVariable.h" />
     <ClInclude Include="Behaviour.h" />
     <ClInclude Include="context\ResourceContext.h" />
     <ClInclude Include="core\utils\Utils.h" />

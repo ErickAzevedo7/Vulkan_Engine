@@ -106,6 +106,7 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			sj["name"] = sc->scriptName;
 			sj["header_path"] = sc->headerPath;
 			sj["enabled"] = sc->enabled;
+			sj["inspector_props"] = sc->getInspectorPropertiesJson();
 			ej["script"] = sj;
 		}
 
@@ -252,8 +253,6 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			std::string headerPath = sj.value("header_path", "");
 			bool enabled = sj.value("enabled", true);
 
-			// Automatic restoration: If the script type isn't registered yet,
-			// try to load its DLL from the stored header path.
 			if (!headerPath.empty() && !ScriptRegistry::exists(scriptName)) {
 				ScriptCompiler::loadFromHeader(headerPath);
 			}
@@ -262,6 +261,9 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			if (sc) {
 				sc->headerPath = headerPath;
 				sc->enabled = enabled;
+				if (sj.contains("inspector_props")) {
+					sc->setInspectorPropertiesFromJson(sj["inspector_props"]);
+				}
 				entity.addComponent(sc);
 			}
 		}

@@ -972,6 +972,44 @@ void InspectorUi::render() {
 				edited = true;
 			ImGui::NextColumn();
 
+			// Inspector properties
+			auto inspectorProps = scriptComp->getInspectorProperties();
+			for (const auto& prop : inspectorProps) {
+				ImGui::Text("%s", prop.name.c_str());
+				ImGui::NextColumn();
+				bool changed = false;
+				switch (prop.type) {
+				case InspectorPropertyType::Float: {
+					float* val = std::get<float*>(prop.ptr);
+					changed = ImGui::DragFloat(("##" + prop.name).c_str(), val, 0.1f);
+					break;
+				}
+				case InspectorPropertyType::Int: {
+					int* val = std::get<int*>(prop.ptr);
+					changed = ImGui::DragInt(("##" + prop.name).c_str(), val, 1.0f);
+					break;
+				}
+				case InspectorPropertyType::Bool: {
+					bool* val = std::get<bool*>(prop.ptr);
+					changed = ImGui::Checkbox(("##" + prop.name).c_str(), val);
+					break;
+				}
+				case InspectorPropertyType::Vec3: {
+					glm::vec3* val = std::get<glm::vec3*>(prop.ptr);
+					changed = ImGui::DragFloat3(("##" + prop.name).c_str(), &val->x, 0.1f);
+					break;
+				}
+				case InspectorPropertyType::Vec4: {
+					glm::vec4* val = std::get<glm::vec4*>(prop.ptr);
+					changed = ImGui::DragFloat4(("##" + prop.name).c_str(), &val->x, 0.1f);
+					break;
+				}
+				}
+				if (changed)
+					edited = true;
+				ImGui::NextColumn();
+			}
+
 			ImGui::Columns(1);
 			ImGui::Unindent(kContentIndent);
 			ImGui::PopStyleVar();

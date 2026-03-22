@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 
+#include "ExposedVariable.h"
 #include "ScriptRegistry.h"
 
 #ifdef _WIN32
@@ -44,6 +45,7 @@ void ScriptPluginLoader::unloadAll() {
 	// CRITICAL: Clear registry map first!
 	// This destroys all std::function objects pointing into the DLLs while the code is still mapped.
 	ScriptRegistry::clear();
+	InspectorPropertyRegistry::instance().clear();
 
 	for (HMODULE h : loadedModules) {
 		FreeLibrary(h);
