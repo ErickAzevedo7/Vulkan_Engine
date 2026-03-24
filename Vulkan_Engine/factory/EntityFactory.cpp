@@ -40,10 +40,6 @@ Entity& EntityFactory::createPrimitive(ResourceContext& resources,
 	}
 	entity.addComponent(meshComp);
 
-	// Add transform component
-	Transform* transformComp = new Transform();
-	entity.addComponent(transformComp);
-
 	return entity;
 }
 
@@ -60,11 +56,10 @@ Entity& EntityFactory::createLight(ResourceContext& resources,
 
 	Entity& entity = scene->createEntity(name);
 
-	// Add transform component
-	Transform* transform = new Transform();
-	transform->position = position;
-	transform->scale = glm::vec3(0.5f); // Smaller scale for light visualization
-	entity.addComponent(transform);
+	if (Transform* transform = entity.getComponent<Transform>()) {
+		transform->position = position;
+		transform->scale = glm::vec3(0.5f); // Smaller scale for light visualization
+	}
 
 	// Add mesh component for visualization (small cube)
 	// Commented out to prevent the light source from casting a shadow when pointing straight down!
@@ -91,10 +86,9 @@ Entity& EntityFactory::createCamera(Scene* scene, const std::string& name, const
 
 	Entity& entity = scene->createEntity(name);
 
-	// Add transform component
-	Transform* transform = new Transform();
-	transform->position = position;
-	entity.addComponent(transform);
+	if (Transform* transform = entity.getComponent<Transform>()) {
+		transform->position = position;
+	}
 
 	// Add camera component
 	CameraComponent* camera = new CameraComponent(&entity);

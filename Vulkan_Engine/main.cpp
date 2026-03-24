@@ -161,6 +161,11 @@ public:
 		// ResourceContext cleanup handled by destructor
 		resourceContext.cleanup();
 
+		// Shutdown script system AFTER scenes/entities are destroyed.
+		// Otherwise ScriptComponent instances may be deleted after plugin unload.
+		ScriptCompiler::shutdown();
+		ScriptPluginLoader::unloadAll();
+
 		engineCore.cleanup();
 	}
 
@@ -598,10 +603,6 @@ private:
 		uiManager.cleanup();
 		shadowMap.cleanup();
 		ibl.cleanup();
-
-		// Shutdown script system
-		ScriptCompiler::shutdown();
-		ScriptPluginLoader::unloadAll();
 	}
 
 	void inputProcess() {

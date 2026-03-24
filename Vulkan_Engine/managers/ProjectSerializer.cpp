@@ -173,19 +173,18 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 		// --- Transform ---
 		if (ej.contains("transform")) {
 			const auto& tj = ej["transform"];
-			Transform* t = new Transform();
+			Transform* t = entity.getComponent<Transform>();
 
-			if (tj.contains("position") && tj["position"].size() == 3) {
+			if (t && tj.contains("position") && tj["position"].size() == 3) {
 				t->position = {tj["position"][0], tj["position"][1], tj["position"][2]};
 			}
-			if (tj.contains("rotation") && tj["rotation"].size() == 4) {
+			if (t && tj.contains("rotation") && tj["rotation"].size() == 4) {
 				// stored as w, x, y, z
 				t->rotation = glm::quat(tj["rotation"][0], tj["rotation"][1], tj["rotation"][2], tj["rotation"][3]);
 			}
-			if (tj.contains("scale") && tj["scale"].size() == 3) {
+			if (t && tj.contains("scale") && tj["scale"].size() == 3) {
 				t->scale = {tj["scale"][0], tj["scale"][1], tj["scale"][2]};
 			}
-			entity.addComponent(t);
 		}
 
 		// --- Mesh ---

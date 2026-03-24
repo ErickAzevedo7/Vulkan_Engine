@@ -15,9 +15,6 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
-#include "managers/ScriptCompiler.h"
-#include "managers/ScriptPluginLoader.h"
-#include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
@@ -26,6 +23,9 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
 #include "managers/MaterialManager.h"
+#include "managers/ScriptCompiler.h"
+#include "managers/ScriptPluginLoader.h"
+#include "managers/ScriptRegistry.h"
 #include "managers/TextureManager.h"
 #include "renderer/vulkan/VulkanTexture.h"
 #include "Scene.h"
@@ -35,6 +35,7 @@
 #include "glm/ext/quaternion_float.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
+
 
 // Initialize constants
 // Constants are initialized in the constructor/header
@@ -537,6 +538,53 @@ void InspectorUi::render() {
 		}
 
 		Entity& entity = *entityPtr;
+		bool removeMeshComponent = false;
+		bool removeLightComponent = false;
+		bool removeCameraComponent = false;
+		bool removeScriptComponent = false;
+
+		auto drawComponentMenu =
+			[&](const char* popupId, bool& removeFlag, const ImVec2& headerMin, const ImVec2& headerMax) {
+				const float headerHeight = headerMax.y - headerMin.y;
+				const float buttonSize = ImMax(16.0f, headerHeight - 4.0f);
+				const ImVec2 buttonPos(headerMax.x - buttonSize - 6.0f,
+									   headerMin.y + (headerHeight - buttonSize) * 0.5f);
+
+				ImGui::SetCursorScreenPos(buttonPos);
+				std::string buttonId = std::string("##btn_") + popupId;
+				if (ImGui::InvisibleButton(buttonId.c_str(), ImVec2(buttonSize, buttonSize))) {
+					ImGui::OpenPopup(popupId);
+				}
+
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				const ImVec2 c = ImGui::GetItemRectMin();
+				const ImVec2 d = ImGui::GetItemRectMax();
+				if (ImGui::IsItemHovered()) {
+					ImU32 hoverBg = ImGui::GetColorU32(ImGuiCol_FrameBgHovered);
+					dl->AddRectFilled(c, d, hoverBg, 3.0f);
+				}
+				const float cx = (c.x + d.x) * 0.5f;
+				const float cy = (c.y + d.y) * 0.5f;
+				const float r = 1.6f;
+				const float gap = 4.2f;
+				const ImU32 dotCol = ImGui::GetColorU32(ImGuiCol_Text);
+				dl->AddCircleFilled(ImVec2(cx, cy - gap), r, dotCol);
+				dl->AddCircleFilled(ImVec2(cx, cy), r, dotCol);
+				dl->AddCircleFilled(ImVec2(cx, cy + gap), r, dotCol);
+
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 4.0f));
+				ImGui::SetNextWindowPos(ImVec2(c.x, d.y + 2.0f), ImGuiCond_Appearing);
+				if (ImGui::BeginPopup(popupId)) {
+					if (ImGui::MenuItem("Remove Component")) {
+						removeFlag = true;
+						edited = true;
+					}
+					ImGui::EndPopup();
+				}
+				ImGui::PopStyleVar(2);
+			};
+
 		char nameBuffer[256];
 		strncpy_s(nameBuffer, entity.getName().c_str(), sizeof(nameBuffer));
 		nameBuffer[sizeof(nameBuffer) - 1] = 0;
@@ -551,17 +599,20 @@ void InspectorUi::render() {
 		}
 
 		ImGui::Unindent(kContentIndent);
-		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-		ImGui::Separator();
-		ImGui::PopStyleVar();
 
 		// Transform section
 		auto* transform = entity.getComponent<Transform>();
+		auto* meshComp = entity.getComponent<MeshComponent>();
+		auto* lightComp = entity.getComponent<LightComponent>();
+		auto* cameraComp = entity.getComponent<CameraComponent>();
+		auto* scriptComp = entity.getComponent<ScriptComponent>();
+		bool transformOpen = false;
 		// Make collapsing header more compact by reducing FramePadding vertically
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
 		if (transform && ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+			transformOpen = true;
 			ImGui::PopStyleVar(3);
 
 			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
@@ -601,536 +652,663 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-		ImGui::Separator();
-		ImGui::PopStyleVar();
+		if (meshComp || lightComp || cameraComp || scriptComp) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
 
 		// Mesh / material section
-		auto* meshComp = entity.getComponent<MeshComponent>();
+		bool meshOpen = false;
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-		if (meshComp && ImGui::CollapsingHeader("Mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (meshComp) {
+			meshOpen =
+				ImGui::CollapsingHeader("Mesh", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 meshHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 meshHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("MeshComponentMenu", removeMeshComponent, meshHeaderMin, meshHeaderMax);
 			ImGui::PopStyleVar(3);
 
-			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+			if (meshOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
 
-			ImGui::Indent(kContentIndent);
+				ImGui::Indent(kContentIndent);
 
-			Material* material = meshComp->GetMaterial();
-			const char* currentMatName = material ? material->name.c_str() : "<none>";
+				Material* material = meshComp->GetMaterial();
+				const char* currentMatName = material ? material->name.c_str() : "<none>";
 
-			ImGui::Text("Material");
-			ImGui::SameLine();
-			if (ImGui::BeginCombo("##Material", currentMatName)) {
-				// Simple combo over all known materials
-				const auto& allMaterials = resources.getMaterialManager().getAllMaterials();
-				for (const auto& kv : allMaterials) {
-					const std::string& matName = kv.first;
-					bool isSelected = (material && matName == material->name);
-					if (ImGui::Selectable(matName.c_str(), isSelected)) {
-						meshComp->SetMaterial(kv.second);
-						edited = true;
+				ImGui::Text("Material");
+				ImGui::SameLine();
+				if (ImGui::BeginCombo("##Material", currentMatName)) {
+					// Simple combo over all known materials
+					const auto& allMaterials = resources.getMaterialManager().getAllMaterials();
+					for (const auto& kv : allMaterials) {
+						const std::string& matName = kv.first;
+						bool isSelected = (material && matName == material->name);
+						if (ImGui::Selectable(matName.c_str(), isSelected)) {
+							meshComp->SetMaterial(kv.second);
+							edited = true;
+						}
+						if (isSelected)
+							ImGui::SetItemDefaultFocus();
 					}
-					if (isSelected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-
-			if (material) {
-				// Square drop target for material files (.mat) dragged from the AssetBrowser
-				const char* matLabel = "Material";
-				ImVec2 labelSize = ImGui::CalcTextSize(matLabel);
-				ImVec2 squareSize(labelSize.y, labelSize.y);
-				ImGui::InvisibleButton("MaterialDropTarget", squareSize);
-				bool isHovered = ImGui::IsItemHovered();
-
-				ImDrawList* dl = ImGui::GetWindowDrawList();
-				ImVec2 min = ImGui::GetItemRectMin();
-				ImVec2 max = ImGui::GetItemRectMax();
-				ImU32 borderCol = ImGui::GetColorU32(isHovered ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
-				dl->AddRect(min, max, borderCol, 3.0f);
-
-				// Preview the material's albedo texture (look up by key)
-				Texture* previewTex = nullptr;
-				try {
-					previewTex = resources.getTextureManager().getTexture(material->albedoTextureKey);
-				} catch (...) {
-					previewTex = nullptr;
+					ImGui::EndCombo();
 				}
 
-				if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
-					ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
-					ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
+				if (material) {
+					// Square drop target for material files (.mat) dragged from the AssetBrowser
+					const char* matLabel = "Material";
+					ImVec2 labelSize = ImGui::CalcTextSize(matLabel);
+					ImVec2 squareSize(labelSize.y, labelSize.y);
+					ImGui::InvisibleButton("MaterialDropTarget", squareSize);
+					bool isHovered = ImGui::IsItemHovered();
 
-					// Resolve handle to VkDescriptorSet via getOrCreateImGuiTextureSet
-					VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
+					ImDrawList* dl = ImGui::GetWindowDrawList();
+					ImVec2 min = ImGui::GetItemRectMin();
+					ImVec2 max = ImGui::GetItemRectMax();
+					ImU32 borderCol = ImGui::GetColorU32(isHovered ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
+					dl->AddRect(min, max, borderCol, 3.0f);
 
-					if (texSet != VK_NULL_HANDLE) {
-						dl->AddImage(reinterpret_cast<ImTextureID>(texSet), innerMin, innerMax);
+					// Preview the material's albedo texture (look up by key)
+					Texture* previewTex = nullptr;
+					try {
+						previewTex = resources.getTextureManager().getTexture(material->albedoTextureKey);
+					} catch (...) {
+						previewTex = nullptr;
 					}
-				} else {
-					// Fallback: simple inner shadow box
-					float inset = 2.0f;
-					ImVec2 innerMin(min.x + inset, min.y + inset);
-					ImVec2 innerMax(max.x - inset, max.y - inset);
-					ImVec4 shadowBase = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-					shadowBase.w *= 0.9f;
-					ImU32 shadowCol = ImGui::ColorConvertFloat4ToU32(shadowBase);
-					dl->AddRectFilled(innerMin, innerMax, shadowCol, 2.0f);
-				}
 
-				// Attach drag-drop target to the square
-				if (ImGui::BeginDragDropTarget()) {
-					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
-						const char* droppedPath = static_cast<const char*>(payload->Data);
-						if (droppedPath && droppedPath[0] != '\0') {
-							std::filesystem::path p(droppedPath);
-							std::string ext = p.extension().string();
-							for (auto& c : ext)
-								c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+					if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
+						ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
+						ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
 
-							// Only accept material assets here
-							if (ext == ".mat") {
-								// Derive material name from .mat filename
-								std::string matName = getMaterialNameFromPath(droppedPath);
+						// Resolve handle to VkDescriptorSet via getOrCreateImGuiTextureSet
+						VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
 
-								// Ensure material exists via MaterialManager
-								Material* mat = resources.getMaterialManager().loadMaterialFromFile(droppedPath);
-								if (!mat) {
-									// Fallback: create with default albedo if file not valid yet
-									mat = resources.getMaterialManager().createMaterial(matName, "default");
-									resources.getMaterialManager().saveMaterialToFile(droppedPath, matName, "default");
+						if (texSet != VK_NULL_HANDLE) {
+							dl->AddImage(reinterpret_cast<ImTextureID>(texSet), innerMin, innerMax);
+						}
+					} else {
+						// Fallback: simple inner shadow box
+						float inset = 2.0f;
+						ImVec2 innerMin(min.x + inset, min.y + inset);
+						ImVec2 innerMax(max.x - inset, max.y - inset);
+						ImVec4 shadowBase = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+						shadowBase.w *= 0.9f;
+						ImU32 shadowCol = ImGui::ColorConvertFloat4ToU32(shadowBase);
+						dl->AddRectFilled(innerMin, innerMax, shadowCol, 2.0f);
+					}
+
+					// Attach drag-drop target to the square
+					if (ImGui::BeginDragDropTarget()) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+							const char* droppedPath = static_cast<const char*>(payload->Data);
+							if (droppedPath && droppedPath[0] != '\0') {
+								std::filesystem::path p(droppedPath);
+								std::string ext = p.extension().string();
+								for (auto& c : ext)
+									c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+
+								// Only accept material assets here
+								if (ext == ".mat") {
+									// Derive material name from .mat filename
+									std::string matName = getMaterialNameFromPath(droppedPath);
+
+									// Ensure material exists via MaterialManager
+									Material* mat = resources.getMaterialManager().loadMaterialFromFile(droppedPath);
+									if (!mat) {
+										// Fallback: create with default albedo if file not valid yet
+										mat = resources.getMaterialManager().createMaterial(matName, "default");
+										resources.getMaterialManager().saveMaterialToFile(
+											droppedPath, matName, "default");
+									}
+
+									meshComp->SetMaterial(mat);
+									edited = true;
 								}
-
-								meshComp->SetMaterial(mat);
-								edited = true;
 							}
 						}
+						ImGui::EndDragDropTarget();
 					}
-					ImGui::EndDragDropTarget();
-				}
 
-				ImGui::SameLine();
-				ImGui::TextUnformatted(matLabel);
+					ImGui::SameLine();
+					ImGui::TextUnformatted(matLabel);
 
-				if (!material->filePath.empty()) {
-					ImGui::Unindent(kContentIndent);
+					if (!material->filePath.empty()) {
+						ImGui::Unindent(kContentIndent);
 
-					ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-					ImGui::Separator();
-					ImGui::PopStyleVar();
+						ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+						ImGui::Separator();
+						ImGui::PopStyleVar();
 
-					// Get icon from AssetBrowser if available
-					ImTextureID iconTex = 0;
-					if (assetBrowser) {
-						const FileEntry fe{material->name, material->filePath};
-						const FileIcon& icon = assetBrowser->GetIconForEntry(fe);
-						if (icon.imguiTexture != VK_NULL_HANDLE) {
-							iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+						// Get icon from AssetBrowser if available
+						ImTextureID iconTex = 0;
+						if (assetBrowser) {
+							const FileEntry fe{material->name, material->filePath};
+							const FileIcon& icon = assetBrowser->GetIconForEntry(fe);
+							if (icon.imguiTexture != VK_NULL_HANDLE) {
+								iconTex = reinterpret_cast<ImTextureID>(icon.imguiTexture);
+							}
 						}
-					}
 
-					ImGuiTreeNodeFlags matFlags = ImGuiTreeNodeFlags_DefaultOpen;
-					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
-					if (drawIconCollapsingHeader("MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
-						ImGui::Dummy(ImVec2(0.0f, 6.0f));
-						renderMaterialTab(material->filePath);
+						ImGuiTreeNodeFlags matFlags = ImGuiTreeNodeFlags_DefaultOpen;
+						ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+						if (drawIconCollapsingHeader("MaterialHeader", iconTex, material->name.c_str(), matFlags)) {
+							ImGui::Dummy(ImVec2(0.0f, 6.0f));
+							renderMaterialTab(material->filePath);
+						}
+						ImGui::PopStyleVar();
 					}
-					ImGui::PopStyleVar();
 				}
 			}
 		} else {
 			ImGui::PopStyleVar(3);
 		}
 
-		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-		ImGui::Separator();
-		ImGui::PopStyleVar();
+		if (meshComp && (lightComp || cameraComp || scriptComp)) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
 
 		// Light component section
-		auto* lightComp = entity.getComponent<LightComponent>();
+		bool lightOpen = false;
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-		if (lightComp && ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (lightComp) {
+			lightOpen =
+				ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 lightHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 lightHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("LightComponentMenu", removeLightComponent, lightHeaderMin, lightHeaderMax);
 			ImGui::PopStyleVar(3);
 
-			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
-			ImGui::Indent(kContentIndent);
+			if (lightOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+				ImGui::Indent(kContentIndent);
 
-			ImGui::Columns(2, "##LightColumns", false);
-			ImGui::SetColumnWidth(0, 80.0f);
-
-			// Light Type
-			ImGui::Text("Type");
-			ImGui::NextColumn();
-			const char* lightTypeLabels[] = {"Directional", "Point", "Spot"};
-			int currentType = static_cast<int>(lightComp->getType());
-			if (ImGui::Combo("##LightType", &currentType, lightTypeLabels, IM_ARRAYSIZE(lightTypeLabels))) {
-				lightComp->setType(static_cast<LightType>(currentType));
-				edited = true;
-			}
-			ImGui::NextColumn();
-
-			// Color
-			ImGui::Text("Color");
-			ImGui::NextColumn();
-			if (ImGui::ColorEdit3(
-					"##LightColor", &lightComp->color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
-				edited = true;
-			ImGui::NextColumn();
-
-			// Intensity
-			ImGui::Text("Intensity");
-			ImGui::NextColumn();
-			if (ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 1.0f, 0.0f, 1000.0f, "%.1f"))
-				edited = true;
-			ImGui::NextColumn();
-
-			ImGui::Columns(1);
-
-			ImGui::Columns(1);
-
-			// Attenuation section (for point/spot lights)
-			if (lightComp->getType() != LightType::Directional) {
-				ImGui::Spacing();
-				ImGui::Spacing();
-
-				ImGuiIO& ioAtt = ImGui::GetIO();
-				ImGui::PushFont(ioAtt.Fonts->Fonts[1]); // Bold font
-				ImGui::TextUnformatted("Attenuation");
-				ImGui::PopFont();
-
-				ImGui::Spacing();
-
-				ImGui::Columns(2, "##LightAttenColumns", false);
+				ImGui::Columns(2, "##LightColumns", false);
 				ImGui::SetColumnWidth(0, 80.0f);
 
-				// Constant (Kc)
-				ImGui::Text("Kc (Const)");
+				// Light Type
+				ImGui::Text("Type");
 				ImGui::NextColumn();
-				if (ImGui::DragFloat("##LightAttenKc", &lightComp->attenuationKc, 0.01f, 0.0f, 100.0f, "%.3f"))
+				const char* lightTypeLabels[] = {"Directional", "Point", "Spot"};
+				int currentType = static_cast<int>(lightComp->getType());
+				if (ImGui::Combo("##LightType", &currentType, lightTypeLabels, IM_ARRAYSIZE(lightTypeLabels))) {
+					lightComp->setType(static_cast<LightType>(currentType));
+					edited = true;
+				}
+				ImGui::NextColumn();
+
+				// Color
+				ImGui::Text("Color");
+				ImGui::NextColumn();
+				if (ImGui::ColorEdit3("##LightColor",
+									  &lightComp->color.x,
+									  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
 					edited = true;
 				ImGui::NextColumn();
 
-				// Linear (Kl)
-				ImGui::Text("Kl (Linear)");
+				// Intensity
+				ImGui::Text("Intensity");
 				ImGui::NextColumn();
-				if (ImGui::DragFloat("##LightAttenKl", &lightComp->attenuationKl, 0.01f, 0.0f, 100.0f, "%.3f"))
-					edited = true;
-				ImGui::NextColumn();
-
-				// Quadratic (Kq)
-				ImGui::Text("Kq (Quad)");
-				ImGui::NextColumn();
-				if (ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f"))
+				if (ImGui::DragFloat("##LightIntensity", &lightComp->intensity, 1.0f, 0.0f, 1000.0f, "%.1f"))
 					edited = true;
 				ImGui::NextColumn();
 
 				ImGui::Columns(1);
-			}
 
-			// Spotlight cone angle section (only for spotlights)
-			if (lightComp->getType() == LightType::Spot) {
-				ImGui::Spacing();
-				ImGui::Spacing();
+				ImGui::Columns(1);
 
-				ImGuiIO& ioSpot = ImGui::GetIO();
-				ImGui::PushFont(ioSpot.Fonts->Fonts[1]); // Bold font
-				ImGui::TextUnformatted("Spotlight Cone");
-				ImGui::PopFont();
+				// Attenuation section (for point/spot lights)
+				if (lightComp->getType() != LightType::Directional) {
+					ImGui::Spacing();
+					ImGui::Spacing();
 
-				ImGui::Spacing();
+					ImGuiIO& ioAtt = ImGui::GetIO();
+					ImGui::PushFont(ioAtt.Fonts->Fonts[1]); // Bold font
+					ImGui::TextUnformatted("Attenuation");
+					ImGui::PopFont();
 
-				ImGui::Columns(2, "##SpotlightConeColumns", false);
-				ImGui::SetColumnWidth(0, 80.0f);
+					ImGui::Spacing();
 
-				// Inner Cone Angle
-				ImGui::Text("Inner Cone");
-				ImGui::NextColumn();
-				float innerDegrees = glm::degrees(lightComp->innerConeAngle);
-				if (ImGui::SliderFloat("##InnerCone", &innerDegrees, 0.0f, 90.0f, "%.1f°")) {
-					lightComp->innerConeAngle = glm::radians(innerDegrees);
-					// Ensure inner cone is not larger than outer cone
-					if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
-						lightComp->outerConeAngle = lightComp->innerConeAngle;
-					}
-					edited = true;
+					ImGui::Columns(2, "##LightAttenColumns", false);
+					ImGui::SetColumnWidth(0, 80.0f);
+
+					// Constant (Kc)
+					ImGui::Text("Kc (Const)");
+					ImGui::NextColumn();
+					if (ImGui::DragFloat("##LightAttenKc", &lightComp->attenuationKc, 0.01f, 0.0f, 100.0f, "%.3f"))
+						edited = true;
+					ImGui::NextColumn();
+
+					// Linear (Kl)
+					ImGui::Text("Kl (Linear)");
+					ImGui::NextColumn();
+					if (ImGui::DragFloat("##LightAttenKl", &lightComp->attenuationKl, 0.01f, 0.0f, 100.0f, "%.3f"))
+						edited = true;
+					ImGui::NextColumn();
+
+					// Quadratic (Kq)
+					ImGui::Text("Kq (Quad)");
+					ImGui::NextColumn();
+					if (ImGui::DragFloat("##LightAttenKq", &lightComp->attenuationKq, 0.001f, 0.0f, 100.0f, "%.4f"))
+						edited = true;
+					ImGui::NextColumn();
+
+					ImGui::Columns(1);
 				}
-				ImGui::NextColumn();
 
-				// Outer Cone Angle
-				ImGui::Text("Outer Cone");
-				ImGui::NextColumn();
-				float outerDegrees = glm::degrees(lightComp->outerConeAngle);
-				if (ImGui::SliderFloat("##OuterCone", &outerDegrees, 0.0f, 90.0f, "%.1f°")) {
-					lightComp->outerConeAngle = glm::radians(outerDegrees);
-					// Ensure outer cone is not smaller than inner cone
-					if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
-						lightComp->innerConeAngle = lightComp->outerConeAngle;
+				// Spotlight cone angle section (only for spotlights)
+				if (lightComp->getType() == LightType::Spot) {
+					ImGui::Spacing();
+					ImGui::Spacing();
+
+					ImGuiIO& ioSpot = ImGui::GetIO();
+					ImGui::PushFont(ioSpot.Fonts->Fonts[1]); // Bold font
+					ImGui::TextUnformatted("Spotlight Cone");
+					ImGui::PopFont();
+
+					ImGui::Spacing();
+
+					ImGui::Columns(2, "##SpotlightConeColumns", false);
+					ImGui::SetColumnWidth(0, 80.0f);
+
+					// Inner Cone Angle
+					ImGui::Text("Inner Cone");
+					ImGui::NextColumn();
+					float innerDegrees = glm::degrees(lightComp->innerConeAngle);
+					if (ImGui::SliderFloat("##InnerCone", &innerDegrees, 0.0f, 90.0f, "%.1f°")) {
+						lightComp->innerConeAngle = glm::radians(innerDegrees);
+						// Ensure inner cone is not larger than outer cone
+						if (lightComp->innerConeAngle > lightComp->outerConeAngle) {
+							lightComp->outerConeAngle = lightComp->innerConeAngle;
+						}
+						edited = true;
 					}
-					edited = true;
-				}
-				ImGui::NextColumn();
-			}
+					ImGui::NextColumn();
 
-			ImGui::Unindent(kContentIndent);
-			ImGui::PopStyleVar();
+					// Outer Cone Angle
+					ImGui::Text("Outer Cone");
+					ImGui::NextColumn();
+					float outerDegrees = glm::degrees(lightComp->outerConeAngle);
+					if (ImGui::SliderFloat("##OuterCone", &outerDegrees, 0.0f, 90.0f, "%.1f°")) {
+						lightComp->outerConeAngle = glm::radians(outerDegrees);
+						// Ensure outer cone is not smaller than inner cone
+						if (lightComp->outerConeAngle < lightComp->innerConeAngle) {
+							lightComp->innerConeAngle = lightComp->outerConeAngle;
+						}
+						edited = true;
+					}
+					ImGui::NextColumn();
+				}
+
+				ImGui::Unindent(kContentIndent);
+				ImGui::PopStyleVar();
+			}
 		} else {
 			ImGui::PopStyleVar(3);
 		}
 
-		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-		ImGui::Separator();
-		ImGui::PopStyleVar();
+		if (lightComp && (cameraComp || scriptComp)) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
 
 		// Camera component section
-		auto* cameraComp = entity.getComponent<CameraComponent>();
+		bool cameraOpen = false;
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-		if (cameraComp && ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (cameraComp) {
+			cameraOpen =
+				ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 cameraHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 cameraHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("CameraComponentMenu", removeCameraComponent, cameraHeaderMin, cameraHeaderMax);
 			ImGui::PopStyleVar(3);
 
-			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
-			ImGui::Indent(kContentIndent);
+			if (cameraOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+				ImGui::Indent(kContentIndent);
 
-			ImGui::Columns(2, "##CameraColumns", false);
-			ImGui::SetColumnWidth(0, 80.0f);
+				ImGui::Columns(2, "##CameraColumns", false);
+				ImGui::SetColumnWidth(0, 80.0f);
 
-			// FOV
-			ImGui::Text("FOV");
-			ImGui::NextColumn();
-			if (ImGui::SliderFloat("##CameraFOV", &cameraComp->fov, 10.0f, 150.0f, "%.1f"))
-				edited = true;
-			ImGui::NextColumn();
+				// FOV
+				ImGui::Text("FOV");
+				ImGui::NextColumn();
+				if (ImGui::SliderFloat("##CameraFOV", &cameraComp->fov, 10.0f, 150.0f, "%.1f"))
+					edited = true;
+				ImGui::NextColumn();
 
-			// Near Plane
-			ImGui::Text("Near Plane");
-			ImGui::NextColumn();
-			if (ImGui::DragFloat("##CameraNear", &cameraComp->nearPlane, 0.01f, 0.001f, 10.0f, "%.3f"))
-				edited = true;
-			ImGui::NextColumn();
+				// Near Plane
+				ImGui::Text("Near Plane");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat("##CameraNear", &cameraComp->nearPlane, 0.01f, 0.001f, 10.0f, "%.3f"))
+					edited = true;
+				ImGui::NextColumn();
 
-			// Far Plane
-			ImGui::Text("Far Plane");
-			ImGui::NextColumn();
-			if (ImGui::DragFloat("##CameraFar", &cameraComp->farPlane, 1.0f, 10.0f, 10000.0f, "%.1f"))
-				edited = true;
-			ImGui::NextColumn();
+				// Far Plane
+				ImGui::Text("Far Plane");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat("##CameraFar", &cameraComp->farPlane, 1.0f, 10.0f, 10000.0f, "%.1f"))
+					edited = true;
+				ImGui::NextColumn();
 
-			// Is Primary
-			ImGui::Text("Primary");
-			ImGui::NextColumn();
-			if (ImGui::Checkbox("##CameraPrimary", &cameraComp->isPrimary))
-				edited = true;
-			ImGui::NextColumn();
+				// Is Primary
+				ImGui::Text("Primary");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##CameraPrimary", &cameraComp->isPrimary))
+					edited = true;
+				ImGui::NextColumn();
 
-			ImGui::Columns(1);
+				ImGui::Columns(1);
 
-			ImGui::Unindent(kContentIndent);
-			ImGui::PopStyleVar();
+				ImGui::Unindent(kContentIndent);
+				ImGui::PopStyleVar();
+			}
 		} else {
 			ImGui::PopStyleVar(3);
 		}
 
-		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
-		ImGui::Separator();
-		ImGui::PopStyleVar();
+		if (cameraComp && scriptComp) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
 
 		// ----------------------------------------------------------------
 		// Script component section
 		// ----------------------------------------------------------------
-		auto* scriptComp = entity.getComponent<ScriptComponent>();
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-		if (scriptComp && ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+		bool scriptOpen = false;
+		if (scriptComp) {
+			std::string scriptHeaderLabel = scriptComp->scriptName.empty() ? "Script" : (scriptComp->scriptName + " (Script)");
+			scriptOpen =
+				ImGui::CollapsingHeader(scriptHeaderLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 scriptHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 scriptHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("ScriptComponentMenu", removeScriptComponent, scriptHeaderMin, scriptHeaderMax);
 			ImGui::PopStyleVar(3);
 
-			ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
-			ImGui::Indent(kContentIndent);
+			if (scriptOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+				ImGui::Indent(kContentIndent);
 
-			ImGui::Columns(2, "##ScriptColumns", false);
-			ImGui::SetColumnWidth(0, 80.0f);
+				ImGui::Columns(2, "##ScriptColumns", false);
+				ImGui::SetColumnWidth(0, 80.0f);
 
-			// Script name (read-only label — the type is fixed once attached)
-			ImGui::Text("Type");
-			ImGui::NextColumn();
-			ImGui::TextDisabled("%s", scriptComp->scriptName.c_str());
-			ImGui::NextColumn();
-
-			// Enabled toggle
-			ImGui::Text("Enabled");
-			ImGui::NextColumn();
-			if (ImGui::Checkbox("##ScriptEnabled", &scriptComp->enabled))
-				edited = true;
-			ImGui::NextColumn();
-
-			// Inspector properties
-			auto inspectorProps = scriptComp->getInspectorProperties();
-			for (const auto& prop : inspectorProps) {
-				ImGui::Text("%s", prop.name.c_str());
+				// Script name (read-only label — the type is fixed once attached)
+				ImGui::Text("Type");
 				ImGui::NextColumn();
-				bool changed = false;
-				switch (prop.type) {
-				case InspectorPropertyType::Float: {
-					float* val = std::get<float*>(prop.ptr);
-					changed = ImGui::DragFloat(("##" + prop.name).c_str(), val, 0.1f);
-					break;
-				}
-				case InspectorPropertyType::Int: {
-					int* val = std::get<int*>(prop.ptr);
-					changed = ImGui::DragInt(("##" + prop.name).c_str(), val, 1.0f);
-					break;
-				}
-				case InspectorPropertyType::Bool: {
-					bool* val = std::get<bool*>(prop.ptr);
-					changed = ImGui::Checkbox(("##" + prop.name).c_str(), val);
-					break;
-				}
-				case InspectorPropertyType::Vec3: {
-					glm::vec3* val = std::get<glm::vec3*>(prop.ptr);
-					changed = ImGui::DragFloat3(("##" + prop.name).c_str(), &val->x, 0.1f);
-					break;
-				}
-				case InspectorPropertyType::Vec4: {
-					glm::vec4* val = std::get<glm::vec4*>(prop.ptr);
-					changed = ImGui::DragFloat4(("##" + prop.name).c_str(), &val->x, 0.1f);
-					break;
-				}
-				}
-				if (changed)
+				ImGui::TextDisabled("%s", scriptComp->scriptName.c_str());
+				ImGui::NextColumn();
+
+				// Enabled toggle
+				ImGui::Text("Enabled");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##ScriptEnabled", &scriptComp->enabled))
 					edited = true;
 				ImGui::NextColumn();
+
+				// Inspector properties
+				auto inspectorProps = scriptComp->getInspectorProperties();
+				for (const auto& prop : inspectorProps) {
+					ImGui::Text("%s", prop.name.c_str());
+					ImGui::NextColumn();
+					bool changed = false;
+					switch (prop.type) {
+					case InspectorPropertyType::Float: {
+						float* val = std::get<float*>(prop.ptr);
+						changed = ImGui::DragFloat(("##" + prop.name).c_str(), val, 0.1f);
+						break;
+					}
+					case InspectorPropertyType::Int: {
+						int* val = std::get<int*>(prop.ptr);
+						changed = ImGui::DragInt(("##" + prop.name).c_str(), val, 1.0f);
+						break;
+					}
+					case InspectorPropertyType::Bool: {
+						bool* val = std::get<bool*>(prop.ptr);
+						changed = ImGui::Checkbox(("##" + prop.name).c_str(), val);
+						break;
+					}
+					case InspectorPropertyType::Vec3: {
+						glm::vec3* val = std::get<glm::vec3*>(prop.ptr);
+						changed = ImGui::DragFloat3(("##" + prop.name).c_str(), &val->x, 0.1f);
+						break;
+					}
+					case InspectorPropertyType::Vec4: {
+						glm::vec4* val = std::get<glm::vec4*>(prop.ptr);
+						changed = ImGui::DragFloat4(("##" + prop.name).c_str(), &val->x, 0.1f);
+						break;
+					}
+					}
+					if (changed)
+						edited = true;
+					ImGui::NextColumn();
+				}
+
+				ImGui::Columns(1);
+
+				ImGui::Unindent(kContentIndent);
+				ImGui::PopStyleVar();
+			}
+		} else {
+			ImGui::PopStyleVar(3);
+		}
+		const char* compilePopupId = "##ScriptCompilePopup";
+		if (ScriptCompiler::isCompiling()) {
+			ImGui::OpenPopup(compilePopupId);
+		}
+
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Appearing);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
+		if (ImGui::BeginPopupModal(compilePopupId,
+								   nullptr,
+								   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
+			ImGui::TextUnformatted("Compiling script...");
+			const std::string compilingName = ScriptCompiler::compilingScriptName();
+			if (!compilingName.empty()) {
+				ImGui::TextDisabled("%s", compilingName.c_str());
 			}
 
-			ImGui::Columns(1);
-			ImGui::Unindent(kContentIndent);
-			ImGui::PopStyleVar();
-		} else if (!scriptComp) {
-			ImGui::PopStyleVar(3);
-
-			// ── Drop target zone ──────────────────────────────────────────
 			ImGui::Dummy(ImVec2(0.0f, 4.0f));
-			ImGui::Indent(kContentIndent);
-
-			// Draw a styled drop zone rectangle
-			ImVec2 zoneSize(ImGui::GetContentRegionAvail().x - kContentIndent, 32.0f);
-			ImVec2 zonePos = ImGui::GetCursorScreenPos();
+			const ImVec2 barSize(ImGui::GetContentRegionAvail().x, 14.0f);
+			ImGui::InvisibleButton("##CompileActivityBar", barSize);
 			ImDrawList* dl = ImGui::GetWindowDrawList();
+			ImRect barRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+			ImU32 barBg = ImGui::GetColorU32(ImGuiCol_FrameBg);
+			ImU32 barFill = IM_COL32(86, 196, 118, 235);
+			ImU32 barBorder = ImGui::GetColorU32(ImGuiCol_Border);
+			dl->AddRectFilled(barRect.Min, barRect.Max, barBg, 4.0f);
+			const float t = static_cast<float>(ImGui::GetTime());
+			const float phase = fmodf(t * 0.9f, 1.0f);
+			const float segmentWidth = barSize.x * 0.35f;
+			const float segmentStart = barRect.Min.x + phase * (barSize.x + segmentWidth) - segmentWidth;
+			const float segmentEnd = segmentStart + segmentWidth;
+			const float clampedStart = ImMax(segmentStart, barRect.Min.x);
+			const float clampedEnd = ImMin(segmentEnd, barRect.Max.x);
+			if (clampedEnd > clampedStart) {
+				dl->AddRectFilled(ImVec2(clampedStart, barRect.Min.y), ImVec2(clampedEnd, barRect.Max.y), barFill, 4.0f);
+			}
+			dl->AddRect(barRect.Min, barRect.Max, barBorder, 4.0f);
 
-			bool isHovered = ImGui::IsMouseHoveringRect(zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y));
-			ImU32 borderCol = isHovered ? IM_COL32(130, 180, 255, 200) : IM_COL32(120, 120, 120, 120);
-			ImU32 fillCol   = isHovered ? IM_COL32(60,  90,  160, 60)  : IM_COL32(50,  50,  50,  60);
+			if (!ScriptCompiler::isCompiling()) {
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::PopStyleVar(2);
 
-			dl->AddRectFilled(zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y), fillCol, 4.0f);
-			dl->AddRect      (zonePos, ImVec2(zonePos.x + zoneSize.x, zonePos.y + zoneSize.y), borderCol, 4.0f, 0, 1.5f);
+		auto attachScriptByName = [&](const std::string& scriptName, const std::string& headerPath) {
+			if (ScriptComponent* existing = entity.getComponent<ScriptComponent>()) {
+				entity.removeComponent(existing);
+			}
 
-			// Centre the label text
-			const char* label = "Drop script here";
-			ImVec2 textSize = ImGui::CalcTextSize(label);
-			ImVec2 textPos(zonePos.x + (zoneSize.x - textSize.x) * 0.5f,
-			               zonePos.y + (zoneSize.y - textSize.y) * 0.5f);
-			dl->AddText(textPos, IM_COL32(180, 180, 180, 200), label);
+			ScriptComponent* sc = ScriptRegistry::create(scriptName);
+			if (sc) {
+				sc->headerPath = headerPath;
+				entity.addComponent(sc);
+				edited = true;
+				scene->markDirty();
+			}
+		};
 
-			// Invisible button to capture drop
-			ImGui::InvisibleButton("##ScriptDropZone", zoneSize);
+		ImRect dropRect(ImGui::GetWindowPos(),
+						ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x,
+							   ImGui::GetWindowPos().y + ImGui::GetWindowSize().y));
+		if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##InspectorEntityDropTarget"))) {
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+				std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
+				std::filesystem::path p(filePath);
+				std::string ext = p.extension().string();
+				for (auto& c : ext)
+					c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 
-			if (ImGui::BeginDragDropTarget()) {
-				// Accept a script type dragged from the Script Palette
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCRIPT_TYPE")) {
-					std::string scriptName(static_cast<const char*>(payload->Data), payload->DataSize - 1);
-					ScriptComponent* sc = ScriptRegistry::create(scriptName);
-					if (sc) {
-						entity.addComponent(sc);
-						edited = true;
-						scene->markDirty();
+				if (ext == ".dll") {
+					ScriptPluginLoader::loadPlugin(filePath);
+				} else if (ext == ".h") {
+					std::string scriptName = p.stem().string();
+
+					auto registered = ScriptRegistry::getRegisteredNames();
+					bool alreadyRegistered = false;
+					for (const auto& r : registered) {
+						if (r == scriptName) {
+							alreadyRegistered = true;
+							break;
+						}
 					}
-				}
-			// Accept a .dll dragged from the Asset Browser — load it as a plugin
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
-					std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
-					std::filesystem::path p(filePath);
-					std::string ext = p.extension().string();
-					for (auto& c : ext) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 
-					if (ext == ".dll") {
-						ScriptPluginLoader::loadPlugin(filePath);
-					}
-					// Accept a .h header — direct attachment flow
-					else if (ext == ".h") {
-						std::string scriptName = p.stem().string();
+					if (alreadyRegistered) {
+						attachScriptByName(scriptName, filePath);
+					} else {
 						uint32_t targetEntityId = entity.getID();
+						ScriptCompiler::compileAsync(
+							filePath,
+							[this, targetEntityId, scriptName, filePath](bool ok, const std::string& dllPath) {
+								if (!ok) {
+									std::cerr << "[Inspector] Script compile failed. Check build logs.\n";
+									return;
+								}
 
-						auto attachScript = [this, targetEntityId, scriptName, filePath]() {
-							Scene* activeScene = resources.getSceneManager().getActiveScene();
-							if (!activeScene) return;
+								ScriptPluginLoader::loadPlugin(dllPath);
 
-							Entity* target = activeScene->findEntityById(targetEntityId);
-							if (target) {
+								Scene* activeScene = resources.getSceneManager().getActiveScene();
+								if (!activeScene)
+									return;
+
+								Entity* target = activeScene->findEntityById(targetEntityId);
+								if (!target)
+									return;
+
+								if (ScriptComponent* existing = target->getComponent<ScriptComponent>()) {
+									target->removeComponent(existing);
+								}
+
 								ScriptComponent* sc = ScriptRegistry::create(scriptName);
 								if (sc) {
 									sc->headerPath = filePath;
 									target->addComponent(sc);
 									activeScene->markDirty();
 								}
-							}
-						};
-
-						// CASE 1: Script is already registered (loaded in some DLL)
-						auto registered = ScriptRegistry::getRegisteredNames();
-						bool alreadyRegistered = false;
-						for (const auto& r : registered) {
-							if (r == scriptName) { alreadyRegistered = true; break; }
-						}
-
-						if (alreadyRegistered) {
-							attachScript();
-						} else {
-							// CASE 2: Compile it asynchronously, then attach
-							ScriptCompiler::compileAsync(filePath, [attachScript](bool ok, const std::string& dllPath) {
-								if (ok) {
-									ScriptPluginLoader::loadPlugin(dllPath);
-									attachScript();
-								} else {
-									std::cerr << "[Inspector] Script compile failed. Check build logs.\n";
-								}
 							});
-						}
 					}
 				}
-				ImGui::EndDragDropTarget();
 			}
 
-			ImGui::Unindent(kContentIndent);
-		} else {
-			ImGui::PopStyleVar(3);
+			ImGui::EndDragDropTarget();
 		}
 
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+		ImGui::Separator();
+		ImGui::PopStyleVar();
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
-			ImGui::Separator();
+		const char* addComponentLabel = "Add Component";
+		const float addButtonWidth = 200.0f;
+		const float availableWidth = ImGui::GetContentRegionAvail().x;
+		if (availableWidth > addButtonWidth) {
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availableWidth - addButtonWidth) * 0.5f);
+		}
 
-			// ── Compile Spinner ─────────────────────────────────────────────────
-			// Shown while a background script compile is in progress.
-			if (ScriptCompiler::isCompiling()) {
-				ImGui::Dummy(ImVec2(0.0f, 4.0f));
-				ImGui::Indent(kContentIndent);
+		if (ImGui::Button(addComponentLabel, ImVec2(addButtonWidth, 0.0f))) {
+			ImGui::OpenPopup("##AddComponentPopup");
+		}
 
-				// Animate a rotating spinner character
-				const char* spinnerFrames[] = { "|" , "/" , "-" , "\\" };
-				int frame = static_cast<int>(ImGui::GetTime() * 8.0) % 4;
-				ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f),
-								   "%s Compiling %s...",
-								   spinnerFrames[frame],
-								   ScriptCompiler::compilingScriptName().c_str());
+		const ImVec2 addBtnMin = ImGui::GetItemRectMin();
+		const ImVec2 addBtnMax = ImGui::GetItemRectMax();
+		const float popupWidth = addBtnMax.x - addBtnMin.x;
+		ImGui::SetNextWindowPos(ImVec2(addBtnMin.x, addBtnMax.y + 2.0f), ImGuiCond_Appearing);
+		ImGui::SetNextWindowSizeConstraints(ImVec2(popupWidth, 0.0f), ImVec2(popupWidth, 10000.0f));
+		ImGui::SetNextWindowSize(ImVec2(popupWidth, 0.0f), ImGuiCond_Always);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 4.0f));
+		if (ImGui::BeginPopup("##AddComponentPopup")) {
+			if (!entity.hasComponent<MeshComponent>() && ImGui::MenuItem("Mesh")) {
+				MeshComponent* meshComp = new MeshComponent(&entity, "cube", resources.getMeshManager());
+				if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
+					meshComp->SetMaterial(mat);
+				}
+				entity.addComponent(meshComp);
+				edited = true;
+			}
 
-			ImGui::Unindent(kContentIndent);
+			if (!entity.hasComponent<LightComponent>() && ImGui::MenuItem("Light")) {
+				entity.addComponent(new LightComponent(&entity, LightType::Point));
+				edited = true;
+			}
+
+			if (!entity.hasComponent<CameraComponent>() && ImGui::MenuItem("Camera")) {
+				entity.addComponent(new CameraComponent(&entity));
+				edited = true;
+			}
+
+			if (!entity.hasComponent<ScriptComponent>()) {
+				auto registeredScripts = ScriptRegistry::getRegisteredNames();
+				if (registeredScripts.empty()) {
+					ImGui::TextDisabled("Script (none registered)");
+				} else if (ImGui::BeginMenu("Script")) {
+					for (const auto& scriptName : registeredScripts) {
+						if (ImGui::MenuItem(scriptName.c_str())) {
+							if (ScriptComponent* sc = ScriptRegistry::create(scriptName)) {
+								entity.addComponent(sc);
+								edited = true;
+							}
+						}
+					}
+					ImGui::EndMenu();
+				}
+			}
+
+			ImGui::EndPopup();
+		}
+		ImGui::PopStyleVar(2);
+
+		if (removeMeshComponent) {
+			entity.removeComponent<MeshComponent>();
+		}
+		if (removeLightComponent) {
+			entity.removeComponent<LightComponent>();
+		}
+		if (removeCameraComponent) {
+			entity.removeComponent<CameraComponent>();
+		}
+		if (removeScriptComponent) {
+			entity.removeComponent<ScriptComponent>();
 		}
 	} else if ((selection.type == InspectorSelectionType::Asset ||
 				selection.type == InspectorSelectionType::Material) &&

@@ -42,7 +42,21 @@ public:
 		return nullptr;
 	}
 
+	template<typename T> bool hasComponent() const {
+		return getComponent<T>() != nullptr;
+	}
+
 	void addComponent(Component* component);
+	bool removeComponent(Component* component);
+
+	template<typename T> bool removeComponent() {
+		static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+		T* component = getComponent<T>();
+		if (!component) {
+			return false;
+		}
+		return removeComponent(static_cast<Component*>(component));
+	}
 
 	void setName(char* str);
 
