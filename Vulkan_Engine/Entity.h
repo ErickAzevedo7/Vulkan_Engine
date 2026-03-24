@@ -46,6 +46,17 @@ public:
 		return getComponent<T>() != nullptr;
 	}
 
+	template<typename T> std::vector<T*> getComponents() const {
+		static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+		std::vector<T*> matches;
+		for (const auto& component : components) {
+			if (T* casted = dynamic_cast<T*>(component)) {
+				matches.push_back(casted);
+			}
+		}
+		return matches;
+	}
+
 	void addComponent(Component* component);
 	bool removeComponent(Component* component);
 

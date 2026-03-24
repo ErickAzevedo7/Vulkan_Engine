@@ -541,7 +541,7 @@ void InspectorUi::render() {
 		bool removeMeshComponent = false;
 		bool removeLightComponent = false;
 		bool removeCameraComponent = false;
-		bool removeScriptComponent = false;
+		ScriptComponent* scriptToRemove = nullptr;
 
 		auto drawComponentMenu =
 			[&](const char* popupId, bool& removeFlag, const ImVec2& headerMin, const ImVec2& headerMax) {
@@ -605,7 +605,8 @@ void InspectorUi::render() {
 		auto* meshComp = entity.getComponent<MeshComponent>();
 		auto* lightComp = entity.getComponent<LightComponent>();
 		auto* cameraComp = entity.getComponent<CameraComponent>();
-		auto* scriptComp = entity.getComponent<ScriptComponent>();
+		auto scriptComponents = entity.getComponents<ScriptComponent>();
+		const bool hasScripts = !scriptComponents.empty();
 		bool transformOpen = false;
 		// Make collapsing header more compact by reducing FramePadding vertically
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
@@ -652,7 +653,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (meshComp || lightComp || cameraComp || scriptComp) {
+		if (meshComp || lightComp || cameraComp || hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -806,7 +807,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (meshComp && (lightComp || cameraComp || scriptComp)) {
+		if (meshComp && (lightComp || cameraComp || hasScripts)) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -954,7 +955,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (lightComp && (cameraComp || scriptComp)) {
+		if (lightComp && (cameraComp || hasScripts)) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1018,7 +1019,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (cameraComp && scriptComp) {
+		if (cameraComp && hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1030,80 +1031,97 @@ void InspectorUi::render() {
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
 		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-		bool scriptOpen = false;
-		if (scriptComp) {
-			std::string scriptHeaderLabel = scriptComp->scriptName.empty() ? "Script" : (scriptComp->scriptName + " (Script)");
-			scriptOpen =
-				ImGui::CollapsingHeader(scriptHeaderLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
-			const ImVec2 scriptHeaderMin = ImGui::GetItemRectMin();
-			const ImVec2 scriptHeaderMax = ImGui::GetItemRectMax();
-			drawComponentMenu("ScriptComponentMenu", removeScriptComponent, scriptHeaderMin, scriptHeaderMax);
-			ImGui::PopStyleVar(3);
+		if (hasScripts) {
+			for (size_t i = 0; i < scriptComponents.size(); ++i) {
+				ScriptComponent* scriptComp = scriptComponents[i];
+				ImGui::PushID(scriptComp);
 
-			if (scriptOpen) {
-				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
-				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
-				ImGui::Indent(kContentIndent);
+				std::string scriptHeaderLabel =
+					scriptComp->scriptName.empty() ? "Script" : (scriptComp->scriptName + " (Script)");
+				bool scriptOpen =
+					ImGui::CollapsingHeader(scriptHeaderLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+				const ImVec2 scriptHeaderMin = ImGui::GetItemRectMin();
+				const ImVec2 scriptHeaderMax = ImGui::GetItemRectMax();
 
-				ImGui::Columns(2, "##ScriptColumns", false);
-				ImGui::SetColumnWidth(0, 80.0f);
-
-				// Script name (read-only label — the type is fixed once attached)
-				ImGui::Text("Type");
-				ImGui::NextColumn();
-				ImGui::TextDisabled("%s", scriptComp->scriptName.c_str());
-				ImGui::NextColumn();
-
-				// Enabled toggle
-				ImGui::Text("Enabled");
-				ImGui::NextColumn();
-				if (ImGui::Checkbox("##ScriptEnabled", &scriptComp->enabled))
-					edited = true;
-				ImGui::NextColumn();
-
-				// Inspector properties
-				auto inspectorProps = scriptComp->getInspectorProperties();
-				for (const auto& prop : inspectorProps) {
-					ImGui::Text("%s", prop.name.c_str());
-					ImGui::NextColumn();
-					bool changed = false;
-					switch (prop.type) {
-					case InspectorPropertyType::Float: {
-						float* val = std::get<float*>(prop.ptr);
-						changed = ImGui::DragFloat(("##" + prop.name).c_str(), val, 0.1f);
-						break;
-					}
-					case InspectorPropertyType::Int: {
-						int* val = std::get<int*>(prop.ptr);
-						changed = ImGui::DragInt(("##" + prop.name).c_str(), val, 1.0f);
-						break;
-					}
-					case InspectorPropertyType::Bool: {
-						bool* val = std::get<bool*>(prop.ptr);
-						changed = ImGui::Checkbox(("##" + prop.name).c_str(), val);
-						break;
-					}
-					case InspectorPropertyType::Vec3: {
-						glm::vec3* val = std::get<glm::vec3*>(prop.ptr);
-						changed = ImGui::DragFloat3(("##" + prop.name).c_str(), &val->x, 0.1f);
-						break;
-					}
-					case InspectorPropertyType::Vec4: {
-						glm::vec4* val = std::get<glm::vec4*>(prop.ptr);
-						changed = ImGui::DragFloat4(("##" + prop.name).c_str(), &val->x, 0.1f);
-						break;
-					}
-					}
-					if (changed)
-						edited = true;
-					ImGui::NextColumn();
+				bool removeThisScript = false;
+				std::string scriptPopupId = "ScriptComponentMenu_" + std::to_string(i);
+				drawComponentMenu(scriptPopupId.c_str(), removeThisScript, scriptHeaderMin, scriptHeaderMax);
+				if (removeThisScript) {
+					scriptToRemove = scriptComp;
 				}
 
-				ImGui::Columns(1);
+				if (scriptOpen) {
+					ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+					ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+					ImGui::Indent(kContentIndent);
 
-				ImGui::Unindent(kContentIndent);
-				ImGui::PopStyleVar();
+					ImGui::Columns(2, "##ScriptColumns", false);
+					ImGui::SetColumnWidth(0, 80.0f);
+
+					ImGui::Text("Type");
+					ImGui::NextColumn();
+					ImGui::TextDisabled("%s", scriptComp->scriptName.c_str());
+					ImGui::NextColumn();
+
+					ImGui::Text("Enabled");
+					ImGui::NextColumn();
+					if (ImGui::Checkbox("##ScriptEnabled", &scriptComp->enabled))
+						edited = true;
+					ImGui::NextColumn();
+
+					auto inspectorProps = scriptComp->getInspectorProperties();
+					for (const auto& prop : inspectorProps) {
+						ImGui::Text("%s", prop.name.c_str());
+						ImGui::NextColumn();
+						bool changed = false;
+						switch (prop.type) {
+						case InspectorPropertyType::Float: {
+							float* val = std::get<float*>(prop.ptr);
+							changed = ImGui::DragFloat(("##" + prop.name).c_str(), val, 0.1f);
+							break;
+						}
+						case InspectorPropertyType::Int: {
+							int* val = std::get<int*>(prop.ptr);
+							changed = ImGui::DragInt(("##" + prop.name).c_str(), val, 1.0f);
+							break;
+						}
+						case InspectorPropertyType::Bool: {
+							bool* val = std::get<bool*>(prop.ptr);
+							changed = ImGui::Checkbox(("##" + prop.name).c_str(), val);
+							break;
+						}
+						case InspectorPropertyType::Vec3: {
+							glm::vec3* val = std::get<glm::vec3*>(prop.ptr);
+							changed = ImGui::DragFloat3(("##" + prop.name).c_str(), &val->x, 0.1f);
+							break;
+						}
+						case InspectorPropertyType::Vec4: {
+							glm::vec4* val = std::get<glm::vec4*>(prop.ptr);
+							changed = ImGui::DragFloat4(("##" + prop.name).c_str(), &val->x, 0.1f);
+							break;
+						}
+						}
+						if (changed)
+							edited = true;
+						ImGui::NextColumn();
+					}
+
+					ImGui::Columns(1);
+
+					ImGui::Unindent(kContentIndent);
+					ImGui::PopStyleVar();
+				}
+
+				if (i + 1 < scriptComponents.size()) {
+					ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+					ImGui::Separator();
+					ImGui::PopStyleVar();
+				}
+
+				ImGui::PopID();
 			}
+
+			ImGui::PopStyleVar(3);
 		} else {
 			ImGui::PopStyleVar(3);
 		}
@@ -1155,10 +1173,6 @@ void InspectorUi::render() {
 		ImGui::PopStyleVar(2);
 
 		auto attachScriptByName = [&](const std::string& scriptName, const std::string& headerPath) {
-			if (ScriptComponent* existing = entity.getComponent<ScriptComponent>()) {
-				entity.removeComponent(existing);
-			}
-
 			ScriptComponent* sc = ScriptRegistry::create(scriptName);
 			if (sc) {
 				sc->headerPath = headerPath;
@@ -1215,13 +1229,9 @@ void InspectorUi::render() {
 								if (!target)
 									return;
 
-								if (ScriptComponent* existing = target->getComponent<ScriptComponent>()) {
-									target->removeComponent(existing);
-								}
-
-								ScriptComponent* sc = ScriptRegistry::create(scriptName);
-								if (sc) {
-									sc->headerPath = filePath;
+							ScriptComponent* sc = ScriptRegistry::create(scriptName);
+							if (sc) {
+								sc->headerPath = filePath;
 									target->addComponent(sc);
 									activeScene->markDirty();
 								}
@@ -1277,21 +1287,19 @@ void InspectorUi::render() {
 				edited = true;
 			}
 
-			if (!entity.hasComponent<ScriptComponent>()) {
-				auto registeredScripts = ScriptRegistry::getRegisteredNames();
-				if (registeredScripts.empty()) {
-					ImGui::TextDisabled("Script (none registered)");
-				} else if (ImGui::BeginMenu("Script")) {
-					for (const auto& scriptName : registeredScripts) {
-						if (ImGui::MenuItem(scriptName.c_str())) {
-							if (ScriptComponent* sc = ScriptRegistry::create(scriptName)) {
-								entity.addComponent(sc);
-								edited = true;
-							}
+			auto registeredScripts = ScriptRegistry::getRegisteredNames();
+			if (registeredScripts.empty()) {
+				ImGui::TextDisabled("Script (none registered)");
+			} else if (ImGui::BeginMenu("Script")) {
+				for (const auto& scriptName : registeredScripts) {
+					if (ImGui::MenuItem(scriptName.c_str())) {
+						if (ScriptComponent* sc = ScriptRegistry::create(scriptName)) {
+							entity.addComponent(sc);
+							edited = true;
 						}
 					}
-					ImGui::EndMenu();
 				}
+				ImGui::EndMenu();
 			}
 
 			ImGui::EndPopup();
@@ -1307,8 +1315,8 @@ void InspectorUi::render() {
 		if (removeCameraComponent) {
 			entity.removeComponent<CameraComponent>();
 		}
-		if (removeScriptComponent) {
-			entity.removeComponent<ScriptComponent>();
+		if (scriptToRemove) {
+			entity.removeComponent(scriptToRemove);
 		}
 	} else if ((selection.type == InspectorSelectionType::Asset ||
 				selection.type == InspectorSelectionType::Material) &&

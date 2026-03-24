@@ -91,7 +91,8 @@ void Scene::clearDirty() {
 void Scene::onRuntimeStart() {
 	state = SceneState::Play;
 	for (const auto& ePtr : entities) {
-		if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+		auto scripts = ePtr->getComponents<ScriptComponent>();
+		for (auto* sc : scripts) {
 			sc->onStart();
 		}
 	}
@@ -99,7 +100,8 @@ void Scene::onRuntimeStart() {
 
 void Scene::onRuntimeStop() {
 	for (const auto& ePtr : entities) {
-		if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+		auto scripts = ePtr->getComponents<ScriptComponent>();
+		for (auto* sc : scripts) {
 			sc->onStop();
 		}
 	}
@@ -109,7 +111,8 @@ void Scene::onRuntimeStop() {
 void Scene::onUpdate(float deltaTime) {
 	if (state == SceneState::Play) {
 		for (const auto& ePtr : entities) {
-			if (auto* sc = ePtr->getComponent<ScriptComponent>()) {
+			auto scripts = ePtr->getComponents<ScriptComponent>();
+			for (auto* sc : scripts) {
 				sc->onUpdate(deltaTime);
 			}
 		}

@@ -100,14 +100,19 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			ej["camera"] = cj;
 		}
 
-		// --- Script ---
-		if (auto* sc = entity.getComponent<ScriptComponent>()) {
-			json sj;
-			sj["name"] = sc->scriptName;
-			sj["header_path"] = sc->headerPath;
-			sj["enabled"] = sc->enabled;
-			sj["inspector_props"] = sc->getInspectorPropertiesJson();
-			ej["script"] = sj;
+		// --- Script(s) ---
+		auto scriptComponents = entity.getComponents<ScriptComponent>();
+		if (!scriptComponents.empty()) {
+			json scripts = json::array();
+			for (const auto* sc : scriptComponents) {
+				json sj;
+				sj["name"] = sc->scriptName;
+				sj["header_path"] = sc->headerPath;
+				sj["enabled"] = sc->enabled;
+				sj["inspector_props"] = sc->getInspectorPropertiesJson();
+				scripts.push_back(sj);
+			}
+			ej["scripts"] = scripts;
 		}
 
 		root["entities"].push_back(ej);
@@ -245,9 +250,8 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			entity.addComponent(cc);
 		}
 
-		// --- Script ---
-		if (ej.contains("script")) {
-			const auto& sj = ej["script"];
+		// --- Script(s) ---
+		auto loadScriptEntry = [&](const json& sj) {
 			std::string scriptName = sj.value("name", "MyScript");
 			std::string headerPath = sj.value("header_path", "");
 			bool enabled = sj.value("enabled", true);
@@ -264,6 +268,12 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 					sc->setInspectorPropertiesFromJson(sj["inspector_props"]);
 				}
 				entity.addComponent(sc);
+			}
+		};
+
+		if (ej.contains("scripts") && ej["scripts"].is_array()) {
+			for (const auto& sj : ej["scripts"]) {
+				loadScriptEntry(sj);
 			}
 		}
 	}
