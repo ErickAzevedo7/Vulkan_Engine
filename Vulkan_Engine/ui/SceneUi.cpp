@@ -1,14 +1,102 @@
 #include "SceneUi.h"
 
-#include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "context/ResourceContext.h"
 #include "Entity.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "managers/SceneManager.h"
 #include "Scene.h"
 #include "ui/InspectorUi.h"
+
+namespace {
+
+bool drawEntityTreeNode(Entity& entity, Scene& scene, InspectorUi& inspector, bool& droppedOnEntityTarget) {
+	const int selectedId = inspector.getSelectedEntityId();
+	const bool isSelected = (selectedId == static_cast<int>(entity.getID()));
+
+	ImGuiTreeNodeFlags flags =
+		ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+	if (entity.getChildren().empty()) {
+		flags |= ImGuiTreeNodeFlags_Leaf;
+	}
+	if (isSelected) {
+		flags |= ImGuiTreeNodeFlags_Selected;
+	}
+
+	std::string label = entity.getName().empty() ? ("Entity " + std::to_string(entity.getID())) : entity.getName();
+	const bool opened =
+		ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<uintptr_t>(entity.getID())), flags, "%s", label.c_str());
+
+	if (ImGui::IsItemClicked()) {
+		inspector.selectEntity(static_cast<int>(entity.getID()));
+	}
+
+	if (ImGui::BeginDragDropSource()) {
+		const uint32_t sourceId = entity.getID();
+		ImGui::SetDragDropPayload("SCENE_ENTITY_ID", &sourceId, sizeof(sourceId));
+		ImGui::TextUnformatted(label.c_str());
+		ImGui::EndDragDropSource();
+	}
+
+	if (ImGui::BeginDragDropTarget()) {
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID")) {
+			if (payload->Data && payload->DataSize == sizeof(uint32_t)) {
+				const uint32_t sourceId = *static_cast<const uint32_t*>(payload->Data);
+				Entity* sourceEntity = scene.findEntityById(sourceId);
+				if (sourceEntity && sourceEntity != &entity && payload->IsDelivery()) {
+					droppedOnEntityTarget = true;
+					if (sourceEntity->setParent(&entity, true)) {
+						scene.markDirty();
+					}
+				}
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
+
+	bool removed = false;
+	if (ImGui::BeginPopupContextItem()) {
+		if (ImGui::MenuItem("Unparent", nullptr, false, entity.hasParent())) {
+			entity.clearParent(true);
+			scene.markDirty();
+		}
+		if (ImGui::MenuItem("Remove")) {
+			scene.removeEntityById(entity.getID());
+			if (inspector.getSelectedEntityId() == static_cast<int>(entity.getID())) {
+				inspector.clearSelection();
+			}
+			removed = true;
+		}
+		ImGui::EndPopup();
+	}
+
+	if (removed) {
+		if (opened) {
+			ImGui::TreePop();
+		}
+		return true;
+	}
+
+	if (opened) {
+		for (Entity* child : entity.getChildren()) {
+			if (!child) {
+				continue;
+			}
+
+			if (drawEntityTreeNode(*child, scene, inspector, droppedOnEntityTarget)) {
+				break;
+			}
+		}
+		ImGui::TreePop();
+	}
+
+	return false;
+}
+
+} // namespace
 
 SceneUi::SceneUi(ResourceContext& resources, InspectorUi& inspector) : resources(resources), inspector(inspector) {
 	selectedEntity = -1;
@@ -19,31 +107,45 @@ void SceneUi::render() {
 
 	ImGui::Begin("scene");
 	if (scene) {
-		const int selectedId = inspector.getSelectedEntityId();
+		auto* entities = scene->getEntities();
+		if (entities) {
+			bool droppedOnEntityTarget = false;
+			const ImVec2 originalFramePadding = ImGui::GetStyle().FramePadding;
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, originalFramePadding.y));
 
-		for (size_t i = 1; i <= scene->getEntityCount(); ++i) {
-			Entity& entity = scene->getEntity(i);
+			const float treeStartOffset = ImGui::GetStyle().FramePadding.x;
+			ImGui::Unindent(treeStartOffset);
 
-			std::string label = entity.getName().empty() ? ("Entity " + std::to_string(i)) : entity.getName();
+			for (const auto& entityPtr : *entities) {
+				if (!entityPtr || entityPtr->hasParent()) {
+					continue;
+				}
 
-			const int thisId = static_cast<int>(entity.getID());
-			bool isSelected = (selectedId == thisId);
-			if (ImGui::Selectable(label.c_str(), isSelected)) {
-				inspector.selectEntity(thisId);
+				if (drawEntityTreeNode(*entityPtr, *scene, inspector, droppedOnEntityTarget)) {
+					break;
+				}
 			}
 
-			// Right-click context menu for each entity
-			if (ImGui::BeginPopupContextItem()) {
-				if (ImGui::MenuItem("Remove")) {
-					scene->removeEntity(i);
-					ImGui::EndPopup();
-					break; // Entities list changed, break out of loop
+			ImGui::Indent(treeStartOffset);
+			ImGui::PopStyleVar();
+
+			ImGuiWindow* window = ImGui::GetCurrentWindow();
+			if (window && ImGui::BeginDragDropTargetCustom(window->InnerRect, window->ID)) {
+				if (const ImGuiPayload* payload =
+						ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+					if (payload->Data && payload->DataSize == sizeof(uint32_t) && payload->IsDelivery() &&
+						!droppedOnEntityTarget) {
+						const uint32_t sourceId = *static_cast<const uint32_t*>(payload->Data);
+						Entity* sourceEntity = scene->findEntityById(sourceId);
+						if (sourceEntity && sourceEntity->hasParent()) {
+							sourceEntity->clearParent(true);
+							scene->markDirty();
+						}
+					}
 				}
-				ImGui::EndPopup();
+				ImGui::EndDragDropTarget();
 			}
 		}
-
-		// SceneUi no longer owns selection or per-entity editing
 	} else {
 		ImGui::Text("No active scene.");
 	}

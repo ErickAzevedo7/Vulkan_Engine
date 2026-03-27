@@ -29,9 +29,9 @@ LightComponent::LightUniform LightComponent::getLightUniform() const {
 	// try to fetch position from owner's transform if available
 	if (owner) {
 		if (auto tcomp = owner->getComponent<Transform>()) {
-			pos = tcomp->position;
+			pos = tcomp->getWorldPosition();
 			// forward direction by transform rotation
-			dir = tcomp->rotation * direction;
+			dir = tcomp->getWorldRotation() * direction;
 		}
 	}
 

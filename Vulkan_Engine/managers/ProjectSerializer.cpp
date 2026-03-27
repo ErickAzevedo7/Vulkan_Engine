@@ -3,7 +3,9 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <cstdint>
 #include <iostream>
+#include <unordered_map>
 #include <string>
 #include <system_error>
 
@@ -62,6 +64,10 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			tj["rotation"] = {t->rotation.w, t->rotation.x, t->rotation.y, t->rotation.z};
 			tj["scale"] = {t->scale.x, t->scale.y, t->scale.z};
 			ej["transform"] = tj;
+		}
+
+		if (Entity* parent = entity.getParent()) {
+			ej["parent_id"] = parent->getID();
 		}
 
 		// --- Mesh ---
@@ -166,15 +172,23 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 	MeshManager& meshMgr = resources.getMeshManager();
 	MaterialManager& matMgr = resources.getMaterialManager();
 
+	std::unordered_map<uint32_t, uint32_t> pendingParentByChildId;
+
 	for (const auto& ej : root["entities"]) {
 		std::string name = ej.value("name", "Entity");
 		Entity& entity = scene->createEntity(name);
 
+		uint32_t loadedId = entity.getID();
 		if (ej.contains("id")) {
-			uint32_t id = ej["id"];
-			entity.setID(id);
-			Entity::updateNextID(id);
+			loadedId = ej["id"];
+			entity.setID(loadedId);
+			Entity::updateNextID(loadedId);
 		}
+
+		if (ej.contains("parent_id") && ej["parent_id"].is_number_unsigned()) {
+			pendingParentByChildId[loadedId] = ej["parent_id"].get<uint32_t>();
+		}
+
 		// --- Transform ---
 		if (ej.contains("transform")) {
 			const auto& tj = ej["transform"];
@@ -275,6 +289,14 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			for (const auto& sj : ej["scripts"]) {
 				loadScriptEntry(sj);
 			}
+		}
+	}
+
+	for (const auto& [childId, parentId] : pendingParentByChildId) {
+		Entity* child = scene->findEntityById(childId);
+		Entity* parent = scene->findEntityById(parentId);
+		if (child && parent) {
+			child->setParent(parent, false);
 		}
 	}
 

@@ -71,9 +71,27 @@ public:
 
 	void setName(char* str);
 
+	Entity* getParent() const {
+		return parent;
+	}
+
+	const std::vector<Entity*>& getChildren() const {
+		return children;
+	}
+
+	bool hasParent() const {
+		return parent != nullptr;
+	}
+
+	bool setParent(Entity* newParent, bool keepWorld = true);
+	void clearParent(bool keepWorld = true);
+	bool isDescendantOf(const Entity* potentialAncestor) const;
+
 private:
 	static std::atomic<uint32_t> nextID;
 	std::vector<Component*> components;
+	Entity* parent = nullptr;
+	std::vector<Entity*> children;
 	std::string name;
 	uint32_t id;
 };

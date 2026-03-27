@@ -33,33 +33,33 @@ static Transform* getTransform(Entity* owner) {
 
 glm::vec3 Behaviour::getPosition() const {
 	if (auto* t = getTransform(owner))
-		return t->position;
+		return t->getWorldPosition();
 	return glm::vec3(0.0f);
 }
 
 void Behaviour::setPosition(glm::vec3 v) {
 	if (auto* t = getTransform(owner))
-		t->position = v;
+		t->setWorldPosition(v);
 }
 
 glm::quat Behaviour::getRotation() const {
 	if (auto* t = getTransform(owner))
-		return t->rotation;
+		return t->getWorldRotation();
 	return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void Behaviour::setRotation(glm::quat q) {
 	if (auto* t = getTransform(owner))
-		t->rotation = q;
+		t->setWorldRotation(q);
 }
 
 glm::vec3 Behaviour::getScale() const {
 	if (auto* t = getTransform(owner))
-		return t->scale;
+		return t->getWorldScale();
 	return glm::vec3(1.0f);
 }
 
 void Behaviour::setScale(glm::vec3 v) {
 	if (auto* t = getTransform(owner))
-		t->scale = v;
+		t->setWorldScale(v);
 }

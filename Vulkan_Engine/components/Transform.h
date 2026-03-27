@@ -15,5 +15,15 @@ public:
 	Transform();
 	~Transform();
 
+	glm::mat4 getLocalMatrix() const;
 	glm::mat4 getMatrix() const;
+
+	glm::vec3 getWorldPosition() const;
+	glm::quat getWorldRotation() const;
+	glm::vec3 getWorldScale() const;
+	void setWorldPosition(const glm::vec3& worldPosition);
+	void setWorldRotation(const glm::quat& worldRotation);
+	void setWorldScale(const glm::vec3& worldScale);
+
+	void setFromWorldMatrix(const glm::mat4& worldMatrix);
 };

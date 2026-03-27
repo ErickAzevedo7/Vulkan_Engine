@@ -1,6 +1,9 @@
 #include "Scene.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -43,7 +46,52 @@ void Scene::removeEntity(size_t index) {
 	if (index == 0 || index > entities.size()) {
 		throw std::out_of_range("Entity index out of range");
 	}
-	entities.erase(entities.begin() + (index - 1));
+
+	removeEntityById(entities[index - 1]->getID());
+}
+
+void Scene::removeEntityById(uint32_t id) {
+	Entity* root = findEntityById(id);
+	if (!root) {
+		return;
+	}
+
+	// Detach root from its own parent (notify parent it's losing a child)
+	root->clearParent(true);
+
+	std::vector<uint32_t> idsToRemove;
+	idsToRemove.reserve(8);
+
+	// Walk the subtree, severing child->parent links as we go
+	std::function<void(Entity*)> collectSubtree = [&](Entity* current) {
+		if (!current) {
+			return;
+		}
+
+		idsToRemove.push_back(current->getID());
+		for (Entity* child : current->getChildren()) {
+			child->clearParent(false); // don't notify current, it's being deleted
+			collectSubtree(child);
+		}
+	};
+
+	collectSubtree(root);
+
+	entities.erase(std::remove_if(entities.begin(),
+								entities.end(),
+								[&](const std::unique_ptr<Entity>& e) {
+									if (!e) {
+										return false;
+									}
+									for (uint32_t removeId : idsToRemove) {
+										if (e->getID() == removeId) {
+											return true;
+										}
+									}
+									return false;
+								}),
+				 entities.end());
+
 	markDirty();
 }
 

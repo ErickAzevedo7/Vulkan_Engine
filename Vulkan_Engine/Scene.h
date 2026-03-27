@@ -19,6 +19,7 @@ public:
 
 	// Remove an entity by index
 	void removeEntity(size_t index);
+	void removeEntityById(uint32_t id);
 
 	// Get a reference to an entity by index
 	Entity& getEntity(size_t index);

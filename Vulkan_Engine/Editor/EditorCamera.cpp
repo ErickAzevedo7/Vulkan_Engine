@@ -29,7 +29,6 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/matrix_transform.hpp"
-#include "glm/ext/quaternion_float.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 #include "glm/geometric.hpp"
@@ -357,16 +356,7 @@ void EditorCamera::drawGuizmo() {
 							 currentGizmoOperation,
 							 ImGuizmo::LOCAL,
 							 glm::value_ptr(model))) {
-		// If the gizmo is used, decompose the matrix back to
-		// position/rotation/scale
-		glm::vec3 translation, scale, skew;
-		glm::vec4 perspective;
-		glm::quat rotation;
-		glm::decompose(model, scale, rotation, translation, skew, perspective);
-
-		transform->position = translation;
-		transform->rotation = rotation;
-		transform->scale = scale;
+		transform->setFromWorldMatrix(model);
 
 		if (resources) {
 			if (Scene* scene = resources->getSceneManager().getActiveScene()) {
