@@ -382,7 +382,26 @@ public:
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-			ImGui::Begin("Viewport");
+			ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_MenuBar);
+
+			if (ImGui::BeginMenuBar()) {
+				const ImGuiStyle& style = ImGui::GetStyle();
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
+				const bool isLocalMode = (EditorCamera::getGizmoMode() == ImGuizmo::LOCAL);
+				const char* currentModeLabel = isLocalMode ? "Local" : "Global";
+				if (ImGui::BeginMenu(currentModeLabel)) {
+					if (ImGui::MenuItem("Local", nullptr, isLocalMode)) {
+						EditorCamera::setGizmoMode(ImGuizmo::LOCAL);
+					}
+					if (ImGui::MenuItem("Global", nullptr, !isLocalMode)) {
+						EditorCamera::setGizmoMode(ImGuizmo::WORLD);
+					}
+					ImGui::EndMenu();
+				}
+				ImGui::PopStyleVar(2);
+				ImGui::EndMenuBar();
+			}
 
 			ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 

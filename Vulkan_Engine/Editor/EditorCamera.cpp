@@ -68,6 +68,7 @@ VkExtent2D EditorCamera::gameExtent;
 glm::mat4 EditorCamera::viewMatrix;
 glm::mat4 EditorCamera::projMatrix;
 ImGuizmo::OPERATION EditorCamera::currentGizmoOperation = ImGuizmo::TRANSLATE;
+ImGuizmo::MODE EditorCamera::currentGizmoMode = ImGuizmo::LOCAL;
 ResourceContext* EditorCamera::resources = nullptr;
 InspectorUi* EditorCamera::inspector = nullptr;
 
@@ -354,7 +355,7 @@ void EditorCamera::drawGuizmo() {
 	if (ImGuizmo::Manipulate(glm::value_ptr(view),
 							 glm::value_ptr(proj),
 							 currentGizmoOperation,
-							 ImGuizmo::LOCAL,
+							 currentGizmoMode,
 							 glm::value_ptr(model))) {
 		transform->setFromWorldMatrix(model);
 
@@ -372,6 +373,14 @@ glm::mat4 EditorCamera::getViewMatrix() {
 
 glm::mat4 EditorCamera::getProjMatrix() {
 	return projMatrix;
+}
+
+ImGuizmo::MODE EditorCamera::getGizmoMode() {
+	return currentGizmoMode;
+}
+
+void EditorCamera::setGizmoMode(ImGuizmo::MODE mode) {
+	currentGizmoMode = mode;
 }
 
 void EditorCamera::updateCursorLoop() {

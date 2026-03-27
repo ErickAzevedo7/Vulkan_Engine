@@ -48,6 +48,8 @@ public:
 	static void drawGuizmo();
 	static glm::mat4 getViewMatrix();
 	static glm::mat4 getProjMatrix();
+	static ImGuizmo::MODE getGizmoMode();
+	static void setGizmoMode(ImGuizmo::MODE mode);
 
 private:
 	static uint32_t selectedID;
@@ -61,4 +63,5 @@ private:
 	static glm::mat4 viewMatrix;
 	static glm::mat4 projMatrix;
 	static ImGuizmo::OPERATION currentGizmoOperation;
+	static ImGuizmo::MODE currentGizmoMode;
 };
