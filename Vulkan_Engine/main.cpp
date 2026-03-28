@@ -28,6 +28,7 @@
 #include "components/MeshComponent.h"
 #include "context/ResourceContext.h"
 #include "core/events/EventBus.h"
+#include "core/input/Input.h"
 #include "core/vulkancore.h"
 #include "Editor/EditorCamera.h"
 #include "Editor/MousePick.h"
@@ -75,6 +76,7 @@ public:
 
 		// Wire up Event System
 		engineCore.setEventBus(&eventBus);
+		Core::Input::init(eventBus);
 
 		engineCore.initVulkan();
 
@@ -319,6 +321,7 @@ public:
 			double currentFrame = glfwGetTime();
 			deltaTime = currentFrame - lastFrame;
 			lastFrame = currentFrame;
+			Core::Input::beginFrame();
 			glfwPollEvents();
 
 			// Tick scene (scripts, future physics, etc.) every frame
@@ -433,9 +436,7 @@ public:
 
 			EditorCamera::drawGuizmo();
 
-			if (ImGui::IsWindowFocused() || ImGui::IsWindowHovered()) {
-				EditorCamera::useGameCameraView = false;
-			}
+			const bool editorWindowActive = ImGui::IsWindowFocused() || ImGui::IsWindowHovered();
 
 			ImGui::End();
 			ImGui::PopStyleVar(2);
@@ -446,13 +447,43 @@ public:
 
 			// Switch to the Game tab automatically when Play is pressed
 			Scene* activeScene = resourceContext.getSceneManager().getActiveScene();
-			if (activeScene && activeScene->getState() == SceneState::Play) {
+			if (activeScene && activeScene->getState() == SceneState::Play && !wasPlayingLastFrame) {
 				ImGui::SetWindowFocus();
 			}
 
-			if (ImGui::IsWindowFocused() || ImGui::IsWindowHovered()) {
-				EditorCamera::useGameCameraView = true;
+			const bool gameWindowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+			const bool gameWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+			const bool gameWindowActive = gameWindowFocused || gameWindowHovered;
+			EditorCamera::useGameCameraView = gameWindowActive && !editorWindowActive;
+
+			const bool isPlaying = (activeScene && activeScene->getState() == SceneState::Play);
+			const bool enteringPlay = isPlaying && !wasPlayingLastFrame;
+			const bool appFocused = glfwGetWindowAttrib(engineCore.getWindow(), GLFW_FOCUSED) == GLFW_TRUE;
+			const bool escapePressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+			const bool gameCaptureClicked = isPlaying && gameWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+			if (enteringPlay && appFocused) {
+				cursorCaptured = true;
 			}
+
+			if (!isPlaying || !appFocused || escapePressed) {
+				cursorCaptured = false;
+			} else if (gameCaptureClicked) {
+				cursorCaptured = true;
+			}
+
+			if (escapePressed) {
+				Core::Input::clearAll();
+			}
+
+			const bool gameInputEnabled = isPlaying && cursorCaptured && appFocused;
+			Core::Input::setGameplayInputEnabled(gameInputEnabled);
+			if (gameInputEnabled) {
+				glfwSetInputMode(engineCore.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			} else {
+				glfwSetInputMode(engineCore.getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+			}
+			wasPlayingLastFrame = isPlaying;
 
 			ImVec2 gameSize = ImGui::GetContentRegionAvail();
 			uint32_t gameWidth = (gameSize.x > 0.0f) ? static_cast<uint32_t>(gameSize.x) : 0;
@@ -470,6 +501,28 @@ public:
 
 			ImVec2 gamePanelSize = ImGui::GetContentRegionAvail();
 			ImGui::Image((ImTextureID)gameSceneTexture[imageIndex], ImVec2{gamePanelSize.x, gamePanelSize.y});
+
+			if (isPlaying) {
+				ImDrawList* gameDrawList = ImGui::GetWindowDrawList();
+				const ImVec2 imageMin = ImGui::GetItemRectMin();
+				if (!gameInputEnabled) {
+					const ImVec2 pad(10.0f, 10.0f);
+					const ImVec2 textPos = ImVec2(imageMin.x + pad.x, imageMin.y + pad.y);
+					const ImU32 textCol = IM_COL32(230, 230, 230, 255);
+					const ImU32 shadowCol = IM_COL32(0, 0, 0, 180);
+					gameDrawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Click Game view to capture mouse");
+					gameDrawList->AddText(textPos, textCol, "Click Game view to capture mouse");
+					const ImVec2 textPos2 = ImVec2(textPos.x, textPos.y + ImGui::GetTextLineHeightWithSpacing());
+					gameDrawList->AddText(ImVec2(textPos2.x + 1.0f, textPos2.y + 1.0f), shadowCol, "Press Esc to release");
+					gameDrawList->AddText(textPos2, textCol, "Press Esc to release");
+				} else {
+					const ImVec2 textPos = ImVec2(imageMin.x + 10.0f, imageMin.y + 10.0f);
+					const ImU32 textCol = IM_COL32(200, 255, 200, 220);
+					const ImU32 shadowCol = IM_COL32(0, 0, 0, 160);
+					gameDrawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Esc to release mouse");
+					gameDrawList->AddText(textPos, textCol, "Esc to release mouse");
+				}
+			}
 
 			ImGui::End();
 			ImGui::PopStyleVar(2);
@@ -521,6 +574,8 @@ private:
 	Renderer::VulkanShadowMap shadowMap;
 	VulkanIBL ibl;
 	float exposure = 1.0f;
+	bool cursorCaptured = false;
+	bool wasPlayingLastFrame = false;
 
 	static void check_vk_result(VkResult err) {
 		if (err == 0)

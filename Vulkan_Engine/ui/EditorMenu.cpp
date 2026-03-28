@@ -9,6 +9,7 @@
 #include "factory/EntityFactory.h"
 #include "GLFW/glfw3.h"
 #include "imgui.h"
+#include "core/input/Input.h"
 #include "managers/EditorConfig.h"
 #include "managers/ProjectSerializer.h"
 #include "managers/SceneManager.h"
@@ -221,6 +222,7 @@ void EditorMenu::onPlay() {
 		ProjectSerializer::save(editorSceneBackupPath, scene, resourceContext, false);
 
 		scene->onRuntimeStart();
+		Core::Input::clearAll();
 	}
 }
 
@@ -231,6 +233,7 @@ void EditorMenu::onStop() {
 
 	if (scene->getState() == SceneState::Play) {
 		scene->onRuntimeStop();
+		Core::Input::clearAll();
 
 		// Reload the backup
 		if (!editorSceneBackupPath.empty() && std::filesystem::exists(editorSceneBackupPath)) {

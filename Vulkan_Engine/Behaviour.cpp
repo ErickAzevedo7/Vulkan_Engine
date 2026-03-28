@@ -11,6 +11,7 @@
 
 #include "components/ScriptComponent.h"
 #include "components/Transform.h"
+#include "core/input/Input.h"
 #include "Entity.h"
 
 // ---------------------------------------------------------------------------
@@ -62,4 +63,40 @@ glm::vec3 Behaviour::getScale() const {
 void Behaviour::setScale(glm::vec3 v) {
 	if (auto* t = getTransform(owner))
 		t->setWorldScale(v);
+}
+
+bool Behaviour::keyDown(int keycode) const {
+	return Core::Input::isKeyDown(keycode);
+}
+
+bool Behaviour::keyPressed(int keycode) const {
+	return Core::Input::wasKeyPressed(keycode);
+}
+
+bool Behaviour::keyReleased(int keycode) const {
+	return Core::Input::wasKeyReleased(keycode);
+}
+
+bool Behaviour::mouseDown(int button) const {
+	return Core::Input::isMouseDown(button);
+}
+
+bool Behaviour::mousePressed(int button) const {
+	return Core::Input::wasMousePressed(button);
+}
+
+bool Behaviour::mouseReleased(int button) const {
+	return Core::Input::wasMouseReleased(button);
+}
+
+glm::vec2 Behaviour::mousePosition() const {
+	return Core::Input::getMousePosition();
+}
+
+glm::vec2 Behaviour::mouseDelta() const {
+	return Core::Input::getMouseDelta();
+}
+
+glm::vec2 Behaviour::scrollDelta() const {
+	return Core::Input::getScrollDelta();
 }

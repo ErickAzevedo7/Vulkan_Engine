@@ -34,6 +34,18 @@ public:
 
 	glm::vec3 getScale() const;
 	void setScale(glm::vec3 v);
+
+	bool keyDown(int keycode) const;
+	bool keyPressed(int keycode) const;
+	bool keyReleased(int keycode) const;
+
+	bool mouseDown(int button) const;
+	bool mousePressed(int button) const;
+	bool mouseReleased(int button) const;
+
+	glm::vec2 mousePosition() const;
+	glm::vec2 mouseDelta() const;
+	glm::vec2 scrollDelta() const;
 };
 
 #define SCRIPT(ClassName)                                                                                              \

@@ -192,6 +192,7 @@
     <ClCompile Include="Editor\ViewPort.cpp" />
     <ClCompile Include="core\vulkancore.cpp" />
     <ClCompile Include="core\events\EventBus.cpp" />
+    <ClCompile Include="core\input\Input.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanResourceBinder.cpp" />
     <ClCompile Include="renderer\vulkan\VulkanTexture.cpp" />
@@ -254,6 +255,7 @@
     <ClInclude Include="core\events\ApplicationEvents.h" />
     <ClInclude Include="core\events\InputEvents.h" />
     <ClInclude Include="core\events\MouseEvents.h" />
+    <ClInclude Include="core\input\Input.h" />
     <ClInclude Include="renderer\RenderTypes.h" />
     <ClInclude Include="renderer\GraphicsBuffer.h" />
     <ClInclude Include="renderer\GraphicsResourceBinder.h" />
