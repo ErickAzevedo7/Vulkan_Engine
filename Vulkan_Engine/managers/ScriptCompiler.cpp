@@ -285,6 +285,11 @@ bool ScriptCompiler::loadFromHeader(const std::string& headerPath) {
     namespace fs = std::filesystem;
     fs::path header(headerPath);
     std::string scriptName = header.stem().string();
+
+    if (!fs::exists(header)) {
+        std::cerr << "[ScriptCompiler] Header not found: " << headerPath << "\n";
+        return false;
+    }
     
     // If output dir is unknown, we can't load
     if (s_outputDir.empty()) {
@@ -298,9 +303,29 @@ bool ScriptCompiler::loadFromHeader(const std::string& headerPath) {
     }
     
     fs::path dllPath = fs::path(s_outputDir) / (scriptName + ".dll");
-    if (fs::exists(dllPath)) {
-        return ScriptPluginLoader::loadPlugin(dllPath.string());
+
+    bool needsRebuild = !fs::exists(dllPath);
+    if (!needsRebuild) {
+        const auto dllWriteTime = fs::last_write_time(dllPath);
+        if (fs::last_write_time(header) > dllWriteTime) {
+            needsRebuild = true;
+        } else {
+            fs::path peerCpp = header;
+            peerCpp.replace_extension(".cpp");
+            if (fs::exists(peerCpp) && fs::last_write_time(peerCpp) > dllWriteTime) {
+                needsRebuild = true;
+            }
+        }
     }
+
+    if (needsRebuild) {
+        std::string rebuiltDllPath;
+        if (!compileSync(headerPath, rebuiltDllPath)) {
+            return false;
+        }
+        dllPath = rebuiltDllPath;
+    }
+
+    return ScriptPluginLoader::loadPlugin(dllPath.string());
     
-    return false;
 }

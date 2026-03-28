@@ -270,8 +270,10 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			std::string headerPath = sj.value("header_path", "");
 			bool enabled = sj.value("enabled", true);
 
-			if (!headerPath.empty() && !ScriptRegistry::exists(scriptName)) {
-				ScriptCompiler::loadFromHeader(headerPath);
+			if (!headerPath.empty()) {
+				if (!ScriptCompiler::loadFromHeader(headerPath)) {
+					std::cerr << "[ProjectSerializer] Failed to load script from header: " << headerPath << "\n";
+				}
 			}
 
 			ScriptComponent* sc = ScriptRegistry::create(scriptName);
