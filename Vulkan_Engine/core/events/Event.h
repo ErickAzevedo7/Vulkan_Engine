@@ -17,7 +17,10 @@ enum class EventType {
 	MouseScrolled,
 	AppTick,
 	AppUpdate,
-	AppRender
+	AppRender,
+	TriggerEnter,
+	TriggerStay,
+	TriggerExit
 };
 
 // Base class for all events

@@ -7,11 +7,13 @@
 #include <glm/gtx/quaternion.hpp>
 #include <iostream>
 #include <managers/SceneManager.h>
+#include <algorithm>
 #include <string.h>
 #include <string>
 #include <unordered_map>
 
 #include "components/CameraComponent.h"
+#include "components/ColliderComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
@@ -541,6 +543,7 @@ void InspectorUi::render() {
 		bool removeMeshComponent = false;
 		bool removeLightComponent = false;
 		bool removeCameraComponent = false;
+		bool removeColliderComponent = false;
 		ScriptComponent* scriptToRemove = nullptr;
 
 		auto drawComponentMenu =
@@ -605,6 +608,7 @@ void InspectorUi::render() {
 		auto* meshComp = entity.getComponent<MeshComponent>();
 		auto* lightComp = entity.getComponent<LightComponent>();
 		auto* cameraComp = entity.getComponent<CameraComponent>();
+		auto* colliderComp = entity.getComponent<ColliderComponent>();
 		auto scriptComponents = entity.getComponents<ScriptComponent>();
 		const bool hasScripts = !scriptComponents.empty();
 		bool transformOpen = false;
@@ -653,7 +657,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (meshComp || lightComp || cameraComp || hasScripts) {
+		if (meshComp || lightComp || cameraComp || colliderComp || hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1019,7 +1023,76 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (cameraComp && hasScripts) {
+		if (cameraComp && (colliderComp || hasScripts)) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
+
+		bool colliderOpen = false;
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+		if (colliderComp) {
+			colliderOpen =
+				ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 colliderHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 colliderHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("ColliderComponentMenu", removeColliderComponent, colliderHeaderMin, colliderHeaderMax);
+			ImGui::PopStyleVar(3);
+
+			if (colliderOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+				ImGui::Indent(kContentIndent);
+
+				ImGui::Columns(2, "##ColliderColumns", false);
+				ImGui::SetColumnWidth(0, 90.0f);
+
+				ImGui::Text("Enabled");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##ColliderEnabled", &colliderComp->enabled))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Trigger");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##ColliderTrigger", &colliderComp->isTrigger))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Static");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##ColliderStatic", &colliderComp->isStatic))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Center");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat3("##ColliderCenter", &colliderComp->center.x, 0.05f, 0.0f, 0.0f, "%.2f"))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Size");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat3("##ColliderSize", &colliderComp->size.x, 0.05f, 0.01f, 0.0f, "%.2f")) {
+					colliderComp->size.x = (std::max)(colliderComp->size.x, 0.01f);
+					colliderComp->size.y = (std::max)(colliderComp->size.y, 0.01f);
+					colliderComp->size.z = (std::max)(colliderComp->size.z, 0.01f);
+					edited = true;
+				}
+				ImGui::NextColumn();
+
+				ImGui::Columns(1);
+
+				ImGui::Unindent(kContentIndent);
+				ImGui::PopStyleVar();
+			}
+		} else {
+			ImGui::PopStyleVar(3);
+		}
+
+		if (colliderComp && hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1287,6 +1360,11 @@ void InspectorUi::render() {
 				edited = true;
 			}
 
+			if (!entity.hasComponent<ColliderComponent>() && ImGui::MenuItem("Collider")) {
+				entity.addComponent(new ColliderComponent());
+				edited = true;
+			}
+
 			auto registeredScripts = ScriptRegistry::getRegisteredNames();
 			if (registeredScripts.empty()) {
 				ImGui::TextDisabled("Script (none registered)");
@@ -1314,6 +1392,9 @@ void InspectorUi::render() {
 		}
 		if (removeCameraComponent) {
 			entity.removeComponent<CameraComponent>();
+		}
+		if (removeColliderComponent) {
+			entity.removeComponent<ColliderComponent>();
 		}
 		if (scriptToRemove) {
 			entity.removeComponent(scriptToRemove);

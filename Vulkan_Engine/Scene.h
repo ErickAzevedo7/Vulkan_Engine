@@ -6,6 +6,9 @@
 #include <vector>
 
 #include "Entity.h"
+#include "managers/CollisionSystem.h"
+
+namespace Core { class EventBus; }
 
 enum class SceneState { Edit = 0, Play = 1 };
 
@@ -43,7 +46,7 @@ public:
 	// Runtime
 	void onRuntimeStart();
 	void onRuntimeStop();
-	void onUpdate(float deltaTime);
+	void onUpdate(float deltaTime, Core::EventBus* eventBus = nullptr);
 
 	inline SceneState getState() const {
 		return state;
@@ -57,4 +60,5 @@ private:
 	std::string name;
 	bool isDirty = false;
 	SceneState state = SceneState::Edit;
+	CollisionSystem collisionSystem;
 };

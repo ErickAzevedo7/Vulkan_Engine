@@ -157,6 +157,7 @@
     <ClCompile Include="components\MeshComponent.cpp" />
     <ClCompile Include="components\Transform.cpp" />
     <ClCompile Include="components\CameraComponent.cpp" />
+    <ClCompile Include="managers\CollisionSystem.cpp" />
     <ClCompile Include="context\ResourceContext.cpp" />
     <ClCompile Include="core\utils\Utils.cpp" />
     <ClCompile Include="Editor\EditorCamera.cpp" />
@@ -219,6 +220,7 @@
     <ClInclude Include="components\MeshComponent.h" />
     <ClInclude Include="components\Transform.h" />
     <ClInclude Include="components\CameraComponent.h" />
+    <ClInclude Include="components\ColliderComponent.h" />
     <ClInclude Include="components\ScriptComponent.h" />
     <ClInclude Include="ExposedVariable.h" />
     <ClInclude Include="Behaviour.h" />
@@ -247,6 +249,7 @@
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="ui\UIManager.h" />
     <ClInclude Include="managers\SceneManager.h" />
+    <ClInclude Include="managers\CollisionSystem.h" />
     <ClInclude Include="managers\ProjectSerializer.h" />
     <ClInclude Include="Editor\ViewPort.h" />
     <ClInclude Include="core\vulkancore.h" />

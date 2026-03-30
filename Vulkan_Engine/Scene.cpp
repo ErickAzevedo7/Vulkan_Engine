@@ -10,8 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "Entity.h"
 #include "components/ScriptComponent.h"
+#include "core/events/EventBus.h"
+#include "Entity.h"
 
 Scene::Scene(std::string name) {
 	this->name = std::move(name);
@@ -78,19 +79,19 @@ void Scene::removeEntityById(uint32_t id) {
 	collectSubtree(root);
 
 	entities.erase(std::remove_if(entities.begin(),
-								entities.end(),
-								[&](const std::unique_ptr<Entity>& e) {
-									if (!e) {
-										return false;
-									}
-									for (uint32_t removeId : idsToRemove) {
-										if (e->getID() == removeId) {
-											return true;
-										}
-									}
-									return false;
-								}),
-				 entities.end());
+								  entities.end(),
+								  [&](const std::unique_ptr<Entity>& e) {
+									  if (!e) {
+										  return false;
+									  }
+									  for (uint32_t removeId : idsToRemove) {
+										  if (e->getID() == removeId) {
+											  return true;
+										  }
+									  }
+									  return false;
+								  }),
+				   entities.end());
 
 	markDirty();
 }
@@ -116,6 +117,7 @@ Entity* Scene::findEntityById(uint32_t id) const {
 }
 
 void Scene::clear() {
+	collisionSystem.reset();
 	entities.clear();
 	markDirty();
 }
@@ -138,6 +140,7 @@ void Scene::clearDirty() {
 
 void Scene::onRuntimeStart() {
 	state = SceneState::Play;
+	collisionSystem.reset();
 	for (const auto& ePtr : entities) {
 		auto scripts = ePtr->getComponents<ScriptComponent>();
 		for (auto* sc : scripts) {
@@ -147,6 +150,7 @@ void Scene::onRuntimeStart() {
 }
 
 void Scene::onRuntimeStop() {
+	collisionSystem.reset();
 	for (const auto& ePtr : entities) {
 		auto scripts = ePtr->getComponents<ScriptComponent>();
 		for (auto* sc : scripts) {
@@ -156,8 +160,9 @@ void Scene::onRuntimeStop() {
 	state = SceneState::Edit;
 }
 
-void Scene::onUpdate(float deltaTime) {
+void Scene::onUpdate(float deltaTime, Core::EventBus* eventBus) {
 	if (state == SceneState::Play) {
+		collisionSystem.update(*this, eventBus);
 		for (const auto& ePtr : entities) {
 			auto scripts = ePtr->getComponents<ScriptComponent>();
 			for (auto* sc : scripts) {

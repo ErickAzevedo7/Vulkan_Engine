@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "Behaviour.h"
+#include "core/events/CollisionEvents.h"
+#include "Entity.h"
 #include "Scene.h"
 
 
@@ -14,6 +17,42 @@ SceneManager::SceneManager() : activeSceneIndex(0) {
 
 SceneManager::~SceneManager() {
 	scenes.clear();
+}
+
+void SceneManager::init(Core::EventBus& eventBus) {
+	// Wire up Physics Callbacks from EventBus -> Scripts
+	eventBus.subscribe(Core::EventType::TriggerEnter, [this](Core::Event& e) {
+		auto& te = static_cast<Core::TriggerEnterEvent&>(e);
+		if (Scene* activeScene = getActiveScene()) {
+			if (Entity* ent = activeScene->findEntityById(te.getReceiverId())) {
+				for (auto* bh : ent->getComponents<Behaviour>()) {
+					bh->onTriggerEnter(te.getOtherId());
+				}
+			}
+		}
+	});
+
+	eventBus.subscribe(Core::EventType::TriggerStay, [this](Core::Event& e) {
+		auto& te = static_cast<Core::TriggerStayEvent&>(e);
+		if (Scene* activeScene = getActiveScene()) {
+			if (Entity* ent = activeScene->findEntityById(te.getReceiverId())) {
+				for (auto* bh : ent->getComponents<Behaviour>()) {
+					bh->onTriggerStay(te.getOtherId());
+				}
+			}
+		}
+	});
+
+	eventBus.subscribe(Core::EventType::TriggerExit, [this](Core::Event& e) {
+		auto& te = static_cast<Core::TriggerExitEvent&>(e);
+		if (Scene* activeScene = getActiveScene()) {
+			if (Entity* ent = activeScene->findEntityById(te.getReceiverId())) {
+				for (auto* bh : ent->getComponents<Behaviour>()) {
+					bh->onTriggerExit(te.getOtherId());
+				}
+			}
+		}
+	});
 }
 
 void SceneManager::loadDefaults() {

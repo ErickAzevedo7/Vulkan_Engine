@@ -26,6 +26,11 @@ protected:
 public:
 	virtual ~Behaviour() = default;
 
+	// Physics callbacks
+	virtual void onTriggerEnter(uint32_t otherEntityId) { (void)otherEntityId; }
+	virtual void onTriggerStay(uint32_t otherEntityId) { (void)otherEntityId; }
+	virtual void onTriggerExit(uint32_t otherEntityId) { (void)otherEntityId; }
+
 	glm::vec3 getPosition() const;
 	void setPosition(glm::vec3 v);
 

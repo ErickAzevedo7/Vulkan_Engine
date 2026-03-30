@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "core/events/EventBus.h"
 #include "Scene.h"
 
 
@@ -13,6 +14,7 @@ public:
 	~SceneManager();
 
 	void loadDefaults();
+	void init(Core::EventBus& eventBus);
 
 	// Creates a new scene and returns its index
 	size_t createScene(const std::string& name = "New Scene");

@@ -77,6 +77,7 @@ public:
 		// Wire up Event System
 		engineCore.setEventBus(&eventBus);
 		Core::Input::init(eventBus);
+		resourceContext.getSceneManager().init(eventBus);
 
 		engineCore.initVulkan();
 
@@ -326,7 +327,7 @@ public:
 
 			// Tick scene (scripts, future physics, etc.) every frame
 			if (Scene* activeScene = resourceContext.getSceneManager().getActiveScene()) {
-				activeScene->onUpdate(static_cast<float>(deltaTime));
+				activeScene->onUpdate(static_cast<float>(deltaTime), &eventBus);
 			}
 
 			if (engineCore.getSwapChainRecreated()) {
@@ -390,7 +391,8 @@ public:
 			if (ImGui::BeginMenuBar()) {
 				const ImGuiStyle& style = ImGui::GetStyle();
 				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+									ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
 				const bool isLocalMode = (EditorCamera::getGizmoMode() == ImGuizmo::LOCAL);
 				const char* currentModeLabel = isLocalMode ? "Local" : "Global";
 				if (ImGui::BeginMenu(currentModeLabel)) {
@@ -460,7 +462,8 @@ public:
 			const bool enteringPlay = isPlaying && !wasPlayingLastFrame;
 			const bool appFocused = glfwGetWindowAttrib(engineCore.getWindow(), GLFW_FOCUSED) == GLFW_TRUE;
 			const bool escapePressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
-			const bool gameCaptureClicked = isPlaying && gameWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+			const bool gameCaptureClicked =
+				isPlaying && gameWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
 			if (enteringPlay && appFocused) {
 				cursorCaptured = true;
@@ -510,16 +513,19 @@ public:
 					const ImVec2 textPos = ImVec2(imageMin.x + pad.x, imageMin.y + pad.y);
 					const ImU32 textCol = IM_COL32(230, 230, 230, 255);
 					const ImU32 shadowCol = IM_COL32(0, 0, 0, 180);
-					gameDrawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Click Game view to capture mouse");
+					gameDrawList->AddText(
+						ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Click Game view to capture mouse");
 					gameDrawList->AddText(textPos, textCol, "Click Game view to capture mouse");
 					const ImVec2 textPos2 = ImVec2(textPos.x, textPos.y + ImGui::GetTextLineHeightWithSpacing());
-					gameDrawList->AddText(ImVec2(textPos2.x + 1.0f, textPos2.y + 1.0f), shadowCol, "Press Esc to release");
+					gameDrawList->AddText(
+						ImVec2(textPos2.x + 1.0f, textPos2.y + 1.0f), shadowCol, "Press Esc to release");
 					gameDrawList->AddText(textPos2, textCol, "Press Esc to release");
 				} else {
 					const ImVec2 textPos = ImVec2(imageMin.x + 10.0f, imageMin.y + 10.0f);
 					const ImU32 textCol = IM_COL32(200, 255, 200, 220);
 					const ImU32 shadowCol = IM_COL32(0, 0, 0, 160);
-					gameDrawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Esc to release mouse");
+					gameDrawList->AddText(
+						ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), shadowCol, "Esc to release mouse");
 					gameDrawList->AddText(textPos, textCol, "Esc to release mouse");
 				}
 			}
@@ -616,7 +622,9 @@ private:
 			std::filesystem::path projectsDir = solutionRoot / "projects";
 			std::string engineRoot = (solutionRoot / "Vulkan_Engine").string();
 			std::string engineLib = (solutionRoot / "x64" / "Debug" / "Vulkan_Engine.lib").string();
-			std::string glmInclude = (solutionRoot / "Vulkan_Engine" / "vcpkg_installed" / "x64-windows" / "x64-windows" / "include").string();
+			std::string glmInclude =
+				(solutionRoot / "Vulkan_Engine" / "vcpkg_installed" / "x64-windows" / "x64-windows" / "include")
+					.string();
 
 			ScriptCompiler::setupConfig(projectsDir.string(), engineRoot, engineLib, glmInclude);
 		}

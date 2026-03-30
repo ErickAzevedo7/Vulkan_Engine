@@ -7,6 +7,3 @@ Component::~Component() {
 	return;
 }
 
-void Component::update() {
-	return;
-}

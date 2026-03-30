@@ -10,6 +10,7 @@
 #include <system_error>
 
 #include "components/CameraComponent.h"
+#include "components/ColliderComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
@@ -119,6 +120,17 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 				scripts.push_back(sj);
 			}
 			ej["scripts"] = scripts;
+		}
+
+		// --- Collider ---
+		if (auto* collider = entity.getComponent<ColliderComponent>()) {
+			json cj;
+			cj["enabled"] = collider->enabled;
+			cj["isTrigger"] = collider->isTrigger;
+			cj["isStatic"] = collider->isStatic;
+			cj["center"] = {collider->center.x, collider->center.y, collider->center.z};
+			cj["size"] = {collider->size.x, collider->size.y, collider->size.z};
+			ej["collider"] = cj;
 		}
 
 		root["entities"].push_back(ej);
@@ -291,6 +303,22 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			for (const auto& sj : ej["scripts"]) {
 				loadScriptEntry(sj);
 			}
+		}
+
+		// --- Collider ---
+		if (ej.contains("collider")) {
+			const auto& cj = ej["collider"];
+			auto* collider = new ColliderComponent();
+			collider->enabled = cj.value("enabled", true);
+			collider->isTrigger = cj.value("isTrigger", true);
+			collider->isStatic = cj.value("isStatic", false);
+			if (cj.contains("center") && cj["center"].size() == 3) {
+				collider->center = {cj["center"][0], cj["center"][1], cj["center"][2]};
+			}
+			if (cj.contains("size") && cj["size"].size() == 3) {
+				collider->size = {cj["size"][0], cj["size"][1], cj["size"][2]};
+			}
+			entity.addComponent(collider);
 		}
 	}
 
