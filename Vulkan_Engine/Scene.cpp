@@ -39,6 +39,7 @@ Entity& Scene::createEntity(const std::string& name) {
 	}
 
 	entities.push_back(std::make_unique<Entity>(uniqueName));
+	entities.back()->setScene(this);
 	markDirty();
 	return *entities.back();
 }

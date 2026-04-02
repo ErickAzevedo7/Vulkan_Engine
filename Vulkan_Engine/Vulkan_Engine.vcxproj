@@ -184,6 +184,7 @@
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="managers\ProjectSerializer.cpp" />
+    <ClCompile Include="managers\PrefabSerializer.cpp" />
     <ClCompile Include="managers\ScriptRegistry.cpp" />
     <ClCompile Include="managers\ScriptCompiler.cpp" />
     <ClCompile Include="managers\ScriptPluginLoader.cpp" />
@@ -251,6 +252,7 @@
     <ClInclude Include="managers\SceneManager.h" />
     <ClInclude Include="managers\CollisionSystem.h" />
     <ClInclude Include="managers\ProjectSerializer.h" />
+    <ClInclude Include="managers\PrefabSerializer.h" />
     <ClInclude Include="Editor\ViewPort.h" />
     <ClInclude Include="core\vulkancore.h" />
     <ClInclude Include="core\events\Event.h" />

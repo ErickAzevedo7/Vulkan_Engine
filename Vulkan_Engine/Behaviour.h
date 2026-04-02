@@ -7,8 +7,12 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/fwd.hpp"
 
+#include <string>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+class ResourceContext;
+class Entity;
 
 #define CONCAT_IMPL(a, b) a##b
 #define CONCAT(a, b) CONCAT_IMPL(a, b)
@@ -25,6 +29,7 @@ protected:
 
 public:
 	virtual ~Behaviour() = default;
+	static void setResourceContext(ResourceContext* context);
 
 	// Physics callbacks
 	virtual void onTriggerEnter(uint32_t otherEntityId) { (void)otherEntityId; }
@@ -51,6 +56,11 @@ public:
 	glm::vec2 mousePosition() const;
 	glm::vec2 mouseDelta() const;
 	glm::vec2 scrollDelta() const;
+
+	Entity* instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride = "") const;
+	Entity* instantiatePrefab(const std::string& prefabPath,
+							 const glm::vec3& worldPosition,
+							 const std::string& rootNameOverride = "") const;
 };
 
 #define SCRIPT(ClassName)                                                                                              \

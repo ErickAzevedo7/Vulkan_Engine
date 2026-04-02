@@ -11,13 +11,24 @@
 
 #include "components/ScriptComponent.h"
 #include "components/Transform.h"
+#include "context/ResourceContext.h"
 #include "core/input/Input.h"
 #include "Entity.h"
+#include "managers/PrefabSerializer.h"
+#include "Scene.h"
+
+namespace {
+ResourceContext* s_resourceContext = nullptr;
+}
 
 // ---------------------------------------------------------------------------
 // Constructor
 // ---------------------------------------------------------------------------
 Behaviour::Behaviour(const char* name) : ScriptComponent(name) {
+}
+
+void Behaviour::setResourceContext(ResourceContext* context) {
+	s_resourceContext = context;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,4 +110,32 @@ glm::vec2 Behaviour::mouseDelta() const {
 
 glm::vec2 Behaviour::scrollDelta() const {
 	return Core::Input::getScrollDelta();
+}
+
+Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride) const {
+	if (!owner || !s_resourceContext) {
+		return nullptr;
+	}
+
+	Scene* scene = owner->getScene();
+	if (!scene) {
+		return nullptr;
+	}
+
+	return PrefabSerializer::instantiate(prefabPath, scene, *s_resourceContext, rootNameOverride);
+}
+
+Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
+							 const glm::vec3& worldPosition,
+							 const std::string& rootNameOverride) const {
+	Entity* spawned = instantiatePrefab(prefabPath, rootNameOverride);
+	if (!spawned) {
+		return nullptr;
+	}
+
+	if (auto* transform = spawned->getComponent<Transform>()) {
+		transform->setWorldPosition(worldPosition);
+	}
+
+	return spawned;
 }

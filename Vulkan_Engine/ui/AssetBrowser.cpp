@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <managers/MaterialManager.h>
+#include <managers/PrefabSerializer.h>
 #include <string>
 #include <ui/InspectorUi.h>
 #include <unordered_map>
@@ -16,13 +17,15 @@
 #endif
 
 #include "context/ResourceContext.h"
+#include "Entity.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
+#include "managers/SceneManager.h"
 #include "managers/TextureManager.h"
 #include "renderer/vulkan/VulkanTexture.h"
+#include "Scene.h"
 #include "vulkan/vulkan_core.h"
-
 
 AssetBrowser::AssetBrowser(ResourceContext& resources, InspectorUi& inspector)
 	: resources(resources), inspector(inspector) {
@@ -39,8 +42,7 @@ AssetBrowser::AssetBrowser(ResourceContext& resources, InspectorUi& inspector)
 	char exeBuf[MAX_PATH] = {};
 	GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
 	namespace fs = std::filesystem;
-	fs::path projectsDir =
-		fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
+	fs::path projectsDir = fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
 	resolvedRootPath = fs::weakly_canonical(projectsDir).string();
 #else
 	resolvedRootPath = "projects";
@@ -70,6 +72,43 @@ std::string truncateText(const std::string& p_text, float p_truncated_width) {
 	}
 
 	return truncated_text;
+}
+
+bool SaveEntityAsPrefab(ResourceContext& resources, uint32_t entityId, const std::filesystem::path& targetDir) {
+	Scene* scene = resources.getSceneManager().getActiveScene();
+	if (!scene) {
+		return false;
+	}
+
+	Entity* entity = scene->findEntityById(entityId);
+	if (!entity) {
+		return false;
+	}
+
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	fs::create_directories(targetDir, ec);
+	if (ec) {
+		return false;
+	}
+
+	std::string baseName = entity->getName().empty() ? "Entity" : entity->getName();
+	for (char& c : baseName) {
+		if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
+			c = '_';
+		}
+	}
+	if (baseName.empty()) {
+		baseName = "Entity";
+	}
+
+	fs::path prefabPath = targetDir / (baseName + ".prefab");
+	int suffix = 1;
+	while (fs::exists(prefabPath)) {
+		prefabPath = targetDir / (baseName + "_" + std::to_string(suffix++) + ".prefab");
+	}
+
+	return PrefabSerializer::save(prefabPath.string(), *entity);
 }
 
 void AssetBrowser::ScanCurrentFolderContents() {
@@ -183,6 +222,17 @@ bool AssetBrowser::PassesFilter(const char* name, const char* filter) {
 void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 	ImGui::TextUnformatted(selectedFolderPath.c_str());
 	ImGui::Separator();
+
+	if (ImGui::BeginDragDropTarget()) {
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID")) {
+			if (payload->Data && payload->DataSize == sizeof(uint32_t) && payload->IsDelivery()) {
+				const uint32_t sourceId = *static_cast<const uint32_t*>(payload->Data);
+				SaveEntityAsPrefab(resources, sourceId, std::filesystem::path(selectedFolderPath));
+				ScanCurrentFolderContents();
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
 
 	const float iconSize = 48.0f;
 	const float cellPadding = 12.0f;
@@ -358,6 +408,21 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 			ImGui::EndDragDropSource();
 		}
 
+		if (fe.isDirectory) {
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID")) {
+					if (payload->Data && payload->DataSize == sizeof(uint32_t) && payload->IsDelivery()) {
+						const uint32_t sourceId = *static_cast<const uint32_t*>(payload->Data);
+						std::filesystem::path targetDir(fe.fullPath);
+						if (SaveEntityAsPrefab(resources, sourceId, targetDir)) {
+							ScanCurrentFolderContents();
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+		}
+
 		// Restore previous colors
 		ImGui::PopStyleColor(3);
 
@@ -499,6 +564,21 @@ void AssetBrowser::render() {
 
 	ImGui::Columns(1);
 	ImGui::PopStyleVar(2);
+
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window && ImGui::BeginDragDropTargetCustom(window->InnerRect, window->ID)) {
+		if (const ImGuiPayload* payload =
+				ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+			if (payload->Data && payload->DataSize == sizeof(uint32_t) && payload->IsDelivery()) {
+				const uint32_t sourceId = *static_cast<const uint32_t*>(payload->Data);
+				if (!selectedFolderPath.empty() &&
+					SaveEntityAsPrefab(resources, sourceId, std::filesystem::path(selectedFolderPath))) {
+					ScanCurrentFolderContents();
+				}
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
 
 	ImGui::PopStyleVar();
 	ImGui::End();

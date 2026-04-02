@@ -8,6 +8,7 @@
 
 // Forward declaration
 class Component;
+class Scene;
 
 class Entity {
 public:
@@ -75,6 +76,14 @@ public:
 		return parent;
 	}
 
+	Scene* getScene() const {
+		return scene;
+	}
+
+	void setScene(Scene* owningScene) {
+		scene = owningScene;
+	}
+
 	const std::vector<Entity*>& getChildren() const {
 		return children;
 	}
@@ -90,6 +99,7 @@ public:
 private:
 	static std::atomic<uint32_t> nextID;
 	std::vector<Component*> components;
+	Scene* scene = nullptr;
 	Entity* parent = nullptr;
 	std::vector<Entity*> children;
 	std::string name;

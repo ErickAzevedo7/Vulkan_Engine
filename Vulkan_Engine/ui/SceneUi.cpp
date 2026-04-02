@@ -1,17 +1,37 @@
 #include "SceneUi.h"
 
+#include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <string>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#endif
 
 #include "context/ResourceContext.h"
 #include "Entity.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "managers/PrefabSerializer.h"
 #include "managers/SceneManager.h"
 #include "Scene.h"
 #include "ui/InspectorUi.h"
 
 namespace {
+
+std::filesystem::path resolveProjectsRoot() {
+#ifdef _WIN32
+	char exeBuf[MAX_PATH] = {};
+	GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
+	std::filesystem::path projectsDir = std::filesystem::path(exeBuf).parent_path() / ".." / ".." / "projects";
+	std::error_code ec;
+	return std::filesystem::weakly_canonical(projectsDir, ec);
+#else
+	return std::filesystem::path("projects");
+#endif
+}
 
 bool drawEntityTreeNode(Entity& entity, Scene& scene, InspectorUi& inspector, bool& droppedOnEntityTarget) {
 	const int selectedId = inspector.getSelectedEntityId();
@@ -62,6 +82,29 @@ bool drawEntityTreeNode(Entity& entity, Scene& scene, InspectorUi& inspector, bo
 		if (ImGui::MenuItem("Unparent", nullptr, false, entity.hasParent())) {
 			entity.clearParent(true);
 			scene.markDirty();
+		}
+		if (ImGui::MenuItem("Create Prefab")) {
+			namespace fs = std::filesystem;
+			fs::path prefabDir = resolveProjectsRoot() / "prefabs";
+			std::error_code ec;
+			fs::create_directories(prefabDir, ec);
+			std::string baseName = entity.getName().empty() ? "Entity" : entity.getName();
+			for (char& c : baseName) {
+				if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
+					c = '_';
+				}
+			}
+			if (baseName.empty()) {
+				baseName = "Entity";
+			}
+
+			fs::path prefabPath = prefabDir / (baseName + ".prefab");
+			int suffix = 1;
+			while (fs::exists(prefabPath)) {
+				prefabPath = prefabDir / (baseName + "_" + std::to_string(suffix++) + ".prefab");
+			}
+
+			PrefabSerializer::save(prefabPath.string(), entity);
 		}
 		if (ImGui::MenuItem("Remove")) {
 			scene.removeEntityById(entity.getID());
@@ -131,6 +174,23 @@ void SceneUi::render() {
 
 			ImGuiWindow* window = ImGui::GetCurrentWindow();
 			if (window && ImGui::BeginDragDropTargetCustom(window->InnerRect, window->ID)) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+						"ASSET_BROWSER_FILE", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+					std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
+					std::filesystem::path p(filePath);
+					std::string ext = p.extension().string();
+					for (char& c : ext) {
+						c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+					}
+
+					if (ext == ".prefab" && payload->IsDelivery()) {
+						Entity* spawned = PrefabSerializer::instantiate(filePath, scene, resources);
+						if (spawned) {
+							inspector.selectEntity(static_cast<int>(spawned->getID()));
+						}
+					}
+				}
+
 				if (const ImGuiPayload* payload =
 						ImGui::AcceptDragDropPayload("SCENE_ENTITY_ID", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
 					if (payload->Data && payload->DataSize == sizeof(uint32_t) && payload->IsDelivery() &&

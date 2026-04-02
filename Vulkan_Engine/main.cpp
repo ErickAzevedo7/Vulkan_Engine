@@ -26,6 +26,7 @@
 
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "Behaviour.h"
 #include "context/ResourceContext.h"
 #include "core/events/EventBus.h"
 #include "core/input/Input.h"
@@ -83,6 +84,7 @@ public:
 
 		// Initialize ResourceContext managers (create pools/buffers)
 		resourceContext.init(&engineCore);
+		Behaviour::setResourceContext(&resourceContext);
 		resourceContext.getLightManager().initDescriptorResources(engineCore.getDevice(),
 																  engineCore.getGlobalDescriptorPool());
 
