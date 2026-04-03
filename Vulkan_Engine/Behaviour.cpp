@@ -16,6 +16,7 @@
 #include "Entity.h"
 #include "managers/PrefabSerializer.h"
 #include "Scene.h"
+#include "ui/RuntimeHud.h"
 
 namespace {
 ResourceContext* s_resourceContext = nullptr;
@@ -112,6 +113,22 @@ glm::vec2 Behaviour::scrollDelta() const {
 	return Core::Input::getScrollDelta();
 }
 
+void Behaviour::hudText(const std::string& text,
+						const glm::vec2& normalizedPosition,
+						const glm::vec4& color,
+						float scale,
+						bool centered) const {
+	RuntimeHud::addText(text, normalizedPosition, color, scale, centered);
+}
+
+void Behaviour::hudImage(const std::string& texturePath,
+						 const glm::vec2& normalizedPosition,
+						 const glm::vec2& normalizedSize,
+						 const glm::vec4& tint,
+						 bool centered) const {
+	RuntimeHud::addImage(texturePath, normalizedPosition, normalizedSize, tint, centered);
+}
+
 Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride) const {
 	if (!owner || !s_resourceContext) {
 		return nullptr;
@@ -126,8 +143,8 @@ Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::s
 }
 
 Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
-							 const glm::vec3& worldPosition,
-							 const std::string& rootNameOverride) const {
+									 const glm::vec3& worldPosition,
+									 const std::string& rootNameOverride) const {
 	Entity* spawned = instantiatePrefab(prefabPath, rootNameOverride);
 	if (!spawned) {
 		return nullptr;

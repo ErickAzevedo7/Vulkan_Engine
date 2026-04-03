@@ -181,6 +181,7 @@
     <ClCompile Include="ui\EditorMenu.cpp" />
     <ClCompile Include="ui\InspectorUi.cpp" />
     <ClCompile Include="ui\SceneUi.cpp" />
+    <ClCompile Include="ui\RuntimeHud.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="managers\SceneManager.cpp" />
     <ClCompile Include="managers\ProjectSerializer.cpp" />
@@ -247,6 +248,7 @@
     <ClInclude Include="skybox\Skybox.h" />
     <ClInclude Include="gizmos\ImGuizmo.h" />
     <ClInclude Include="ui\InspectorUi.h" />
+    <ClInclude Include="ui\RuntimeHud.h" />
     <ClInclude Include="ui\SceneUi.h" />
     <ClInclude Include="ui\UIManager.h" />
     <ClInclude Include="managers\SceneManager.h" />

@@ -54,6 +54,7 @@
 #include "ui/AssetBrowser.h"
 #include "ui/EditorMenu.h"
 #include "ui/InspectorUi.h"
+#include "ui/RuntimeHud.h"
 #include "ui/SceneUi.h"
 #include "ui/UIManager.h"
 
@@ -85,8 +86,10 @@ public:
 		// Initialize ResourceContext managers (create pools/buffers)
 		resourceContext.init(&engineCore);
 		Behaviour::setResourceContext(&resourceContext);
+		// TEMPORARY HUD API
+		RuntimeHud::initialize(&resourceContext);
 		resourceContext.getLightManager().initDescriptorResources(engineCore.getDevice(),
-																  engineCore.getGlobalDescriptorPool());
+															  engineCore.getGlobalDescriptorPool());
 
 		// IBL must be initialized BEFORE loadDefaults()
 		ibl.init(static_cast<Renderer::VulkanDevice*>(&resourceContext.getDevice()),
@@ -165,6 +168,8 @@ public:
 
 		// ResourceContext cleanup handled by destructor
 		resourceContext.cleanup();
+		// TEMPORARY HUD API
+		RuntimeHud::shutdown();
 
 		// Shutdown script system AFTER scenes/entities are destroyed.
 		// Otherwise ScriptComponent instances may be deleted after plugin unload.
@@ -325,6 +330,8 @@ public:
 			deltaTime = currentFrame - lastFrame;
 			lastFrame = currentFrame;
 			Core::Input::beginFrame();
+			// TEMPORARY HUD API
+			RuntimeHud::beginFrame();
 			glfwPollEvents();
 
 			// Tick scene (scripts, future physics, etc.) every frame
@@ -510,9 +517,13 @@ public:
 			if (isPlaying) {
 				ImDrawList* gameDrawList = ImGui::GetWindowDrawList();
 				const ImVec2 imageMin = ImGui::GetItemRectMin();
+				const ImVec2 imageMax = ImGui::GetItemRectMax();
+				// TEMPORARY HUD API
+				RuntimeHud::draw(gameDrawList, imageMin, imageMax);
+
 				if (!gameInputEnabled) {
 					const ImVec2 pad(10.0f, 10.0f);
-					const ImVec2 textPos = ImVec2(imageMin.x + pad.x, imageMin.y + pad.y);
+					const ImVec2 textPos = ImVec2(imageMin.x + pad.x, imageMax.y - 46.0f);
 					const ImU32 textCol = IM_COL32(230, 230, 230, 255);
 					const ImU32 shadowCol = IM_COL32(0, 0, 0, 180);
 					gameDrawList->AddText(

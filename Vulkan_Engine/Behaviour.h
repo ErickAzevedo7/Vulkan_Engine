@@ -4,7 +4,9 @@
 #include "components/ScriptComponent.h"
 #include "managers/ScriptRegistry.h"
 #include "ExposedVariable.h"
+#include "glm/ext/vector_float2.hpp"
 #include "glm/ext/vector_float3.hpp"
+#include "glm/ext/vector_float4.hpp"
 #include "glm/fwd.hpp"
 
 #include <string>
@@ -56,6 +58,20 @@ public:
 	glm::vec2 mousePosition() const;
 	glm::vec2 mouseDelta() const;
 	glm::vec2 scrollDelta() const;
+
+	// TEMPORARY HUD API
+	void hudText(const std::string& text,
+				 const glm::vec2& normalizedPosition,
+				 const glm::vec4& color = glm::vec4(1.0f),
+				 float scale = 1.0f,
+				 bool centered = false) const;
+
+	// TEMPORARY HUD API
+	void hudImage(const std::string& texturePath,
+				  const glm::vec2& normalizedPosition,
+				  const glm::vec2& normalizedSize,
+				  const glm::vec4& tint = glm::vec4(1.0f),
+				  bool centered = false) const;
 
 	Entity* instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride = "") const;
 	Entity* instantiatePrefab(const std::string& prefabPath,
