@@ -141,6 +141,7 @@ void Scene::clearDirty() {
 
 void Scene::onRuntimeStart() {
 	state = SceneState::Play;
+	runtimePaused = false;
 	collisionSystem.reset();
 	for (const auto& ePtr : entities) {
 		auto scripts = ePtr->getComponents<ScriptComponent>();
@@ -158,11 +159,12 @@ void Scene::onRuntimeStop() {
 			sc->onStop();
 		}
 	}
+	runtimePaused = false;
 	state = SceneState::Edit;
 }
 
 void Scene::onUpdate(float deltaTime, Core::EventBus* eventBus) {
-	if (state == SceneState::Play) {
+	if (state == SceneState::Play && !runtimePaused) {
 		collisionSystem.update(*this, eventBus);
 		for (const auto& ePtr : entities) {
 			auto scripts = ePtr->getComponents<ScriptComponent>();
@@ -171,4 +173,12 @@ void Scene::onUpdate(float deltaTime, Core::EventBus* eventBus) {
 			}
 		}
 	}
+}
+
+void Scene::setRuntimePaused(bool paused) {
+	runtimePaused = paused;
+}
+
+bool Scene::isRuntimePaused() const {
+	return runtimePaused;
 }

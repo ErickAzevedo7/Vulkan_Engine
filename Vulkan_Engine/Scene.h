@@ -47,6 +47,8 @@ public:
 	void onRuntimeStart();
 	void onRuntimeStop();
 	void onUpdate(float deltaTime, Core::EventBus* eventBus = nullptr);
+	void setRuntimePaused(bool paused);
+	bool isRuntimePaused() const;
 
 	inline SceneState getState() const {
 		return state;
@@ -60,5 +62,6 @@ private:
 	std::string name;
 	bool isDirty = false;
 	SceneState state = SceneState::Edit;
+	bool runtimePaused = false;
 	CollisionSystem collisionSystem;
 };

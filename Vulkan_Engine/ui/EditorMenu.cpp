@@ -86,17 +86,35 @@ void EditorMenu::render() {
 
 		Scene* scene = resourceContext.getSceneManager().getActiveScene();
 		bool isPlaying = scene && scene->getState() == SceneState::Play;
+		bool isPaused = isPlaying && scene->isRuntimePaused();
+		const bool hasScene = (scene != nullptr);
 
-		ImGui::SameLine(ImGui::GetWindowWidth() / 2.0f - 20.0f);
-		if (isPlaying) {
-			if (ImGui::MenuItem("Stop")) {
+		const char* playLabel = isPlaying ? "Stop" : "Play";
+		const char* pauseLabel = isPaused ? "Continue" : "Pause";
+
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float playWidth = ImGui::CalcTextSize(playLabel).x + style.FramePadding.x * 2.0f;
+		const float pauseWidth = ImGui::CalcTextSize(pauseLabel).x + style.FramePadding.x * 2.0f;
+		const float controlsWidth = playWidth + style.ItemSpacing.x + pauseWidth;
+		ImGui::SameLine(ImGui::GetWindowWidth() * 0.5f - controlsWidth * 0.5f);
+
+		ImGui::BeginDisabled(!hasScene);
+		if (ImGui::Button(playLabel)) {
+			if (isPlaying) {
 				onStop();
-			}
-		} else {
-			if (ImGui::MenuItem("Play")) {
+			} else {
 				onPlay();
 			}
 		}
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!(hasScene && isPlaying));
+		if (ImGui::Button(pauseLabel)) {
+			scene->setRuntimePaused(!isPaused);
+			Core::Input::clearAll();
+		}
+		ImGui::EndDisabled();
 
 		ImGui::EndMainMenuBar();
 	}
