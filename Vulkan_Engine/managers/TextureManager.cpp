@@ -59,6 +59,23 @@ void TextureManager::loadDefaults() {
 	createTextureSampler(texture);
 	textures[kDefaultTextureKey] = *texture;
 	delete texture;
+
+	Texture whiteTex;
+	whiteTex.width = 1;
+	whiteTex.height = 1;
+	whiteTex.mipLevels = 1;
+	uint8_t whitePixel[4] = {255, 255, 255, 255};
+
+	TextureDesc whiteDesc{};
+	whiteDesc.width = 1;
+	whiteDesc.height = 1;
+	whiteDesc.mipLevels = 1;
+	whiteDesc.format = TextureFormat::R8G8B8A8_UNORM;
+	whiteDesc.usage = BufferUsage::TransferDst | BufferUsage::Uniform;
+
+	whiteTex.handle = graphicsTexture->createTexture(whiteDesc, whitePixel);
+	createTextureSampler(&whiteTex);
+	textures[kDefaultMaskTextureKey] = whiteTex;
 }
 
 void TextureManager::loadAllFromAssets(const std::string& assetsRoot) {
@@ -86,7 +103,7 @@ void TextureManager::loadAllFromAssets(const std::string& assetsRoot) {
 		}
 
 		const std::string fullPath = p.string();
-		const std::string normFullPath = std::filesystem::path(fullPath).generic_string();
+		const std::string normFullPath = p.generic_string();
 		if (textures.find(normFullPath) != textures.end()) {
 			continue;
 		}
@@ -207,11 +224,7 @@ void TextureManager::createThumbnailSampler(ThumbnailTexture* texture) {
 }
 
 Texture* TextureManager::getTexture(const std::string& path) {
-	// Normalize the file path key to a consistent form for storage/lookups.
-	std::string key;
-
-	key = std::filesystem::path(path).generic_string();
-
+	std::string key = std::filesystem::path(path).generic_string();
 	auto it = textures.find(key);
 	if (it != textures.end()) {
 		return &it->second;

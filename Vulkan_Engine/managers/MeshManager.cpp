@@ -180,7 +180,7 @@ Mesh* MeshManager::loadMeshFromFile(const std::string& filePath, VkCommandPool c
 
 			if (srcMesh->HasTextureCoords(0)) {
 				const aiVector3D& uv = srcMesh->mTextureCoords[0][v];
-				vertex.texCoord = {uv.x, 1.0f - uv.y};
+				vertex.texCoord = {uv.x, uv.y};
 			} else {
 				vertex.texCoord = {0.0f, 0.0f};
 			}

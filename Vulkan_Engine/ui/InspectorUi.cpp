@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <iostream>
@@ -147,14 +148,10 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 					std::string stem = p.stem().string();
 					std::string texKey = p.string(); // use full path as texture key
 
-					Texture* tex = nullptr;
-					// Try to get existing texture first using full path key
+					// Ensure texture is loaded/registered.
 					try {
-						tex = resources.getTextureManager().getTexture(texKey);
+						resources.getTextureManager().getTexture(texKey);
 					} catch (...) {
-						// Load new texture and register it under the full path key
-						// Load new texture and register it under the full path key
-						tex = resources.getTextureManager().loadTexture(assetPath);
 					}
 
 					// Create or reuse a material that uses this texture.
@@ -331,99 +328,114 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 	} else {
 		ImGui::Spacing();
 
-		// Albedo texture section
-		const char* albedoLabel = "Albedo";
-		ImVec2 albedoSize = ImGui::CalcTextSize(albedoLabel);
-		ImVec2 squareSize(albedoSize.y, albedoSize.y);
-		ImGui::InvisibleButton("AlbedoTextureDropTarget", squareSize);
-		bool isHoveredTex = ImGui::IsItemHovered();
-		ImDrawList* dl2 = ImGui::GetWindowDrawList();
-		ImVec2 min2 = ImGui::GetItemRectMin();
-		ImVec2 max2 = ImGui::GetItemRectMax();
-		ImU32 col2 = ImGui::GetColorU32(isHoveredTex ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
-		dl2->AddRect(min2, max2, col2, 3.0f);
+		auto isSupportedTextureExt = [](const std::string& ext) {
+			return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" ||
+				   ext == ".hdr";
+		};
 
-		// Preview the material's albedo texture (look up by key)
-		Texture* previewTex = nullptr;
-		try {
-			previewTex = resources.getTextureManager().getTexture(material->albedoTextureKey);
-		} catch (...) {
-			previewTex = nullptr;
-		}
+		auto drawTextureSlot = [&](const char* slotId,
+								 const char* label,
+								 const std::string& textureKey,
+								 const std::function<Material*(const std::string&, const std::string&)>& updateFn) {
+			ImVec2 labelSize = ImGui::CalcTextSize(label);
+			ImVec2 squareSize(labelSize.y, labelSize.y);
+			ImGui::InvisibleButton(slotId, squareSize);
+			bool isHoveredTex = ImGui::IsItemHovered();
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			ImVec2 min = ImGui::GetItemRectMin();
+			ImVec2 max = ImGui::GetItemRectMax();
+			ImU32 borderCol = ImGui::GetColorU32(isHoveredTex ? ImGuiCol_ButtonHovered : ImGuiCol_Border);
+			dl->AddRect(min, max, borderCol, 3.0f);
 
-		if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
-			ImVec2 innerMin2(min2.x + 2.0f, min2.y + 2.0f);
-			ImVec2 innerMax2(max2.x - 2.0f, max2.y - 2.0f);
-			VkDescriptorSet texSet2 = getOrCreateImGuiTextureSet(previewTex);
-			if (texSet2 != VK_NULL_HANDLE) {
-				dl2->AddImage(reinterpret_cast<ImTextureID>(texSet2), innerMin2, innerMax2);
+			Texture* previewTex = nullptr;
+			try {
+				previewTex = resources.getTextureManager().getTexture(textureKey);
+			} catch (...) {
+				previewTex = nullptr;
 			}
-		} else {
-			// Fallback: inner shadow box for albedo drop target
-			float inset2 = 2.0f;
-			ImVec2 innerMin2(min2.x + inset2, min2.y + inset2);
-			ImVec2 innerMax2(max2.x - inset2, max2.y - inset2);
-			ImVec4 shadowBase2 = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-			shadowBase2.w *= 0.9f;
-			ImU32 shadowCol2 = ImGui::ColorConvertFloat4ToU32(shadowBase2);
-			dl2->AddRectFilled(innerMin2, innerMax2, shadowCol2, 2.0f);
-		}
 
-		// Attach drag-drop target to the square
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
-				const char* droppedPath = static_cast<const char*>(payload->Data);
-				if (droppedPath && droppedPath[0] != '\0') {
-					std::filesystem::path texPath(droppedPath);
-					std::string texExt = texPath.extension().string();
-					for (auto& c : texExt)
-						c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+			if (previewTex && previewTex->handle.isValid() && previewTex->sampler.isValid()) {
+				ImVec2 innerMin(min.x + 2.0f, min.y + 2.0f);
+				ImVec2 innerMax(max.x - 2.0f, max.y - 2.0f);
+				VkDescriptorSet texSet = getOrCreateImGuiTextureSet(previewTex);
+				if (texSet != VK_NULL_HANDLE) {
+					dl->AddImage(reinterpret_cast<ImTextureID>(texSet), innerMin, innerMax);
+				}
+			} else {
+				float inset = 2.0f;
+				ImVec2 innerMin(min.x + inset, min.y + inset);
+				ImVec2 innerMax(max.x - inset, max.y - inset);
+				ImVec4 shadowBase = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+				shadowBase.w *= 0.9f;
+				ImU32 shadowCol = ImGui::ColorConvertFloat4ToU32(shadowBase);
+				dl->AddRectFilled(innerMin, innerMax, shadowCol, 2.0f);
+			}
 
-					if (texExt == ".png" || texExt == ".jpg" || texExt == ".jpeg" || texExt == ".tga" ||
-						texExt == ".bmp" || texExt == ".hdr") {
-						// Use full texture path as the key
-						std::string texKey = texPath.string();
-
-						Texture* tex = nullptr;
-						try {
-							tex = resources.getTextureManager().getTexture(texKey);
-						} catch (...) {
-							tex = resources.getTextureManager().loadTexture(droppedPath);
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+					const char* droppedPath = static_cast<const char*>(payload->Data);
+					if (droppedPath && droppedPath[0] != '\0') {
+						std::filesystem::path texPath(droppedPath);
+						std::string texExt = texPath.extension().string();
+						for (auto& c : texExt) {
+							c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
 						}
 
-						// Rebuild or create the material with new albedo texture.
-						std::string matName = getMaterialNameFromPath(fullPath);
-						// Update material texture (create material if missing)
-						std::string normPath;
-						normPath = std::filesystem::path(fullPath).generic_string();
-						Material* mat = resources.getMaterialManager().updateMaterialTexture(normPath, texKey);
-						if (!mat) {
-							std::cerr << "Inspector: failed to create/update material for path '" << normPath << "'"
-									  << std::endl;
-						}
+						if (isSupportedTextureExt(texExt)) {
+							std::string texKey = texPath.generic_string();
 
-						// Persist updated material back to JSON file
-						resources.getMaterialManager().saveMaterialToFile(fullPath,
-																		  matName,
-																		  texKey,
-																		  mat->properties.albedo_pad,
-																		  mat->properties.metallic,
-																		  mat->properties.roughness,
-																		  mat->properties.ao);
-						std::cerr << "Inspector: updated material '" << fullPath << "' with texture '" << texKey << "'"
-								  << std::endl;
+							try {
+								resources.getTextureManager().getTexture(texKey);
+							} catch (...) {
+							}
 
-						if (Scene* scene = resources.getSceneManager().getActiveScene()) {
-							scene->markDirty();
+							std::string normPath = std::filesystem::path(fullPath).generic_string();
+							Material* mat = updateFn(normPath, texKey);
+							if (mat) {
+								std::string matName = getMaterialNameFromPath(fullPath);
+								resources.getMaterialManager().saveMaterialToFile(fullPath,
+																	  matName,
+																	  mat->albedoTextureKey,
+																	  mat->roughnessTextureKey,
+																	  mat->metallicTextureKey,
+																	  mat->properties.albedo_pad,
+																	  mat->properties.metallic,
+																	  mat->properties.roughness,
+																	  mat->properties.ao);
+								if (Scene* scene = resources.getSceneManager().getActiveScene()) {
+									scene->markDirty();
+								}
+							}
 						}
 					}
 				}
+				ImGui::EndDragDropTarget();
 			}
-			ImGui::EndDragDropTarget();
-		}
 
-		ImGui::SameLine();
-		ImGui::TextUnformatted(albedoLabel);
+			ImGui::SameLine();
+			ImGui::TextUnformatted(label);
+		};
+
+		drawTextureSlot("AlbedoTextureDropTarget",
+						"Albedo",
+						material->albedoTextureKey,
+						[&](const std::string& materialPath, const std::string& texturePath) {
+							return resources.getMaterialManager().updateMaterialTexture(materialPath, texturePath);
+						});
+
+		drawTextureSlot("RoughnessTextureDropTarget",
+						"Roughness",
+						material->roughnessTextureKey,
+						[&](const std::string& materialPath, const std::string& texturePath) {
+							return resources.getMaterialManager().updateMaterialRoughnessTexture(materialPath, texturePath);
+						});
+
+		drawTextureSlot("MetallicTextureDropTarget",
+						"Metallic",
+						material->metallicTextureKey,
+						[&](const std::string& materialPath, const std::string& texturePath) {
+							return resources.getMaterialManager().updateMaterialMetallicTexture(materialPath, texturePath);
+						});
 
 		// Material Properties section - keep same indentation as above
 		ImGui::Spacing();
@@ -492,11 +504,13 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			// Save to file
 			std::string matName = getMaterialNameFromPath(fullPath);
 			resources.getMaterialManager().saveMaterialToFile(fullPath,
-															  matName,
-															  material->albedoTextureKey,
-															  material->properties.albedo_pad,
-															  material->properties.metallic,
-															  material->properties.roughness,
+											  matName,
+											  material->albedoTextureKey,
+											  material->roughnessTextureKey,
+											  material->metallicTextureKey,
+											  material->properties.albedo_pad,
+											  material->properties.metallic,
+											  material->properties.roughness,
 															  material->properties.ao);
 
 			if (Scene* scene = resources.getSceneManager().getActiveScene()) {

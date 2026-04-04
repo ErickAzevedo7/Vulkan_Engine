@@ -238,17 +238,11 @@ void ScriptCompiler::compileAsync(const std::string& headerPath, Callback callba
 
     // Try loading config lazily
     if (s_clExe.empty()) {
-        // Attempt to find the config next to the exe
-        char exeBuf[MAX_PATH] = {};
-#ifdef _WIN32
-        GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
-        fs::path projectsDir = fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
-        projectsDir = fs::weakly_canonical(projectsDir);
+        fs::path projectsDir = fs::absolute("projects");
         if (!loadConfig(projectsDir.string())) {
             std::cerr << "[ScriptCompiler] Config not found. Call setupConfig() first.\n";
             return;
         }
-#endif
     }
 
     s_compilingName = fs::path(headerPath).stem().string();
@@ -295,10 +289,7 @@ bool ScriptCompiler::loadFromHeader(const std::string& headerPath) {
     if (s_outputDir.empty()) {
         // Try to load config if we have a projectsDir nearby
         // (This happens on cold start before any compile)
-        char exeBuf[MAX_PATH] = {};
-        GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
-        fs::path projectsDir = fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
-        projectsDir = fs::weakly_canonical(projectsDir);
+        fs::path projectsDir = fs::absolute("projects");
         if (!loadConfig(projectsDir.string())) return false;
     }
     

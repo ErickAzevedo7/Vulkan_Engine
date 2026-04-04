@@ -57,8 +57,20 @@ void MaterialManager::init() {
 		texBinding.stages = Renderer::ShaderStage::Fragment;
 		desc.bindings.push_back(texBinding);
 
+		Renderer::ResourceBinding roughnessBinding;
+		roughnessBinding.binding = 1;
+		roughnessBinding.type = Renderer::ResourceType::CombinedTextureSampler;
+		roughnessBinding.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(roughnessBinding);
+
+		Renderer::ResourceBinding metallicBinding;
+		metallicBinding.binding = 2;
+		metallicBinding.type = Renderer::ResourceType::CombinedTextureSampler;
+		metallicBinding.stages = Renderer::ShaderStage::Fragment;
+		desc.bindings.push_back(metallicBinding);
+
 		Renderer::ResourceBinding propBinding;
-		propBinding.binding = 1;
+		propBinding.binding = 3;
 		propBinding.type = Renderer::ResourceType::UniformBuffer;
 		propBinding.stages = Renderer::ShaderStage::Fragment;
 		desc.bindings.push_back(propBinding);
@@ -117,8 +129,13 @@ void MaterialManager::loadDefault() {
 
 Material* MaterialManager::createMaterial(const std::string& name,
 										  const std::string& albedoTexturePath,
-										  const std::string& path) {
+										  const std::string& path,
+										  const std::string& roughnessTexturePath,
+										  const std::string& metallicTexturePath) {
 	std::string albedoKey = albedoTexturePath.empty() ? textureManager.kDefaultTextureKey : albedoTexturePath;
+	std::string roughnessKey =
+		roughnessTexturePath.empty() ? textureManager.kDefaultMaskTextureKey : roughnessTexturePath;
+	std::string metallicKey = metallicTexturePath.empty() ? textureManager.kDefaultMaskTextureKey : metallicTexturePath;
 	std::string materialPath = path;
 	std::string mapKey = normalizeKey(materialPath);
 
@@ -136,6 +153,8 @@ Material* MaterialManager::createMaterial(const std::string& name,
 	mat->filePath = materialPath;
 	mat->name = name;
 	mat->albedoTextureKey = albedoKey;
+	mat->roughnessTextureKey = roughnessKey;
+	mat->metallicTextureKey = metallicKey;
 
 	// Try to load properties from file if it exists
 	if (std::filesystem::exists(path)) {
@@ -163,6 +182,22 @@ Material* MaterialManager::createMaterial(const std::string& name,
 				if (j.contains("ao") && j["ao"].is_number()) {
 					mat->properties.ao = j["ao"].get<float>();
 				}
+
+				if (j.contains("roughnessTextureKey") && j["roughnessTextureKey"].is_string()) {
+					std::string key =
+						std::filesystem::path(j["roughnessTextureKey"].get<std::string>()).generic_string();
+					if (!key.empty()) {
+						mat->roughnessTextureKey = key;
+					}
+				}
+
+				if (j.contains("metallicTextureKey") && j["metallicTextureKey"].is_string()) {
+					std::string key =
+						std::filesystem::path(j["metallicTextureKey"].get<std::string>()).generic_string();
+					if (!key.empty()) {
+						mat->metallicTextureKey = key;
+					}
+				}
 			} catch (const std::exception& e) {
 				std::cerr << "MaterialManager::createMaterial: failed to load properties from file: " << e.what()
 						  << std::endl;
@@ -174,7 +209,7 @@ Material* MaterialManager::createMaterial(const std::string& name,
 	createMaterialPropertyBuffers(mat);
 
 	// Create descriptor sets
-	createDescriptorSets(albedoKey, materialPath);
+	createDescriptorSets(materialPath);
 
 	std::cerr << "MaterialManager::createMaterial: created '" << materialPath << "'" << std::endl;
 	return mat;
@@ -183,12 +218,45 @@ Material* MaterialManager::createMaterial(const std::string& name,
 Material* MaterialManager::updateMaterialTexture(const std::string& materialPath, const std::string& texturePath) {
 	std::string matKey = normalizeKey(materialPath);
 	Material* mat = getMaterial(matKey);
+	if (!mat) {
+		return nullptr;
+	}
 
 	// update texture key and recreate descriptor sets
 	mat->albedoTextureKey = texturePath.empty() ? textureManager.kDefaultTextureKey : texturePath;
-	createDescriptorSets(mat->albedoTextureKey, materialPath);
+	createDescriptorSets(materialPath);
 	std::cerr << "MaterialManager::updateMaterialTexture: updated material '" << materialPath << "' with texture '"
 			  << mat->albedoTextureKey << "'" << std::endl;
+	return mat;
+}
+
+Material* MaterialManager::updateMaterialRoughnessTexture(const std::string& materialPath,
+														  const std::string& texturePath) {
+	std::string matKey = normalizeKey(materialPath);
+	Material* mat = getMaterial(matKey);
+	if (!mat) {
+		return nullptr;
+	}
+
+	mat->roughnessTextureKey = texturePath.empty() ? textureManager.kDefaultMaskTextureKey : texturePath;
+	createDescriptorSets(materialPath);
+	std::cerr << "MaterialManager::updateMaterialRoughnessTexture: updated material '" << materialPath
+			  << "' with texture '" << mat->roughnessTextureKey << "'" << std::endl;
+	return mat;
+}
+
+Material* MaterialManager::updateMaterialMetallicTexture(const std::string& materialPath,
+														 const std::string& texturePath) {
+	std::string matKey = normalizeKey(materialPath);
+	Material* mat = getMaterial(matKey);
+	if (!mat) {
+		return nullptr;
+	}
+
+	mat->metallicTextureKey = texturePath.empty() ? textureManager.kDefaultMaskTextureKey : texturePath;
+	createDescriptorSets(materialPath);
+	std::cerr << "MaterialManager::updateMaterialMetallicTexture: updated material '" << materialPath
+			  << "' with texture '" << mat->metallicTextureKey << "'" << std::endl;
 	return mat;
 }
 
@@ -208,10 +276,10 @@ const std::unordered_map<std::string, Material*>& MaterialManager::getAllMateria
 
 void MaterialManager::loadAllFromAssets() {
 	namespace fs = std::filesystem;
-	const fs::path materialsRoot = fs::path("assets");
+	const fs::path materialsRoot = fs::path("projects");
 
 	if (!fs::exists(materialsRoot) || !fs::is_directory(materialsRoot)) {
-		std::cerr << "MaterialManager::loadAllFromAssets: assets directory not found or not a directory: "
+		std::cerr << "MaterialManager::loadAllFromAssets: projects directory not found or not a directory: "
 				  << materialsRoot.string() << std::endl;
 		return;
 	}
@@ -263,6 +331,16 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 
 		std::string name = j["name"].get<std::string>();
 		std::string albedoKey = j["albedoTextureKey"].get<std::string>();
+		std::string roughnessKey = textureManager.kDefaultMaskTextureKey;
+		std::string metallicKey = textureManager.kDefaultMaskTextureKey;
+
+		if (j.contains("roughnessTextureKey") && j["roughnessTextureKey"].is_string()) {
+			roughnessKey = j["roughnessTextureKey"].get<std::string>();
+		}
+
+		if (j.contains("metallicTextureKey") && j["metallicTextureKey"].is_string()) {
+			metallicKey = j["metallicTextureKey"].get<std::string>();
+		}
 
 		if (name.empty() || albedoKey.empty()) {
 			std::cerr << "MaterialManager::loadMaterialFromFile: empty name or albedoTextureKey in file: " << path
@@ -270,10 +348,18 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 			return nullptr;
 		}
 
-		albedoKey = std::filesystem::path(albedoKey).generic_string();
+		albedoKey = normalizeKey(albedoKey);
+		roughnessKey = normalizeKey(roughnessKey);
+		metallicKey = normalizeKey(metallicKey);
 
 		if (albedoKey.empty()) {
 			albedoKey = textureManager.kDefaultTextureKey;
+		}
+		if (roughnessKey.empty()) {
+			roughnessKey = textureManager.kDefaultMaskTextureKey;
+		}
+		if (metallicKey.empty()) {
+			metallicKey = textureManager.kDefaultMaskTextureKey;
 		}
 
 		// Check that the texture exists before creating the material
@@ -285,10 +371,28 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 			return nullptr;
 		}
 
-		std::cerr << "MaterialManager::loadMaterialFromFile: creating material with name '" << name
-				  << "' and file path '" << path << "' using albedoTextureKey '" << albedoKey << "'" << std::endl;
+		try {
+			textureManager.getTexture(roughnessKey);
+		} catch (...) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: roughness texture key not found: '" << roughnessKey
+					  << "' for material '" << name << "' in file: " << path << std::endl;
+			return nullptr;
+		}
 
-		Material* created = createMaterial(name, albedoKey, path);
+		try {
+			textureManager.getTexture(metallicKey);
+		} catch (...) {
+			std::cerr << "MaterialManager::loadMaterialFromFile: metallic texture key not found: '" << metallicKey
+					  << "' for material '" << name << "' in file: " << path << std::endl;
+			return nullptr;
+		}
+
+		std::cerr << "MaterialManager::loadMaterialFromFile: creating material with name '" << name
+				  << "' and file path '" << path << "' using albedoTextureKey '" << albedoKey
+				  << "', roughnessTextureKey '" << roughnessKey << "', metallicTextureKey '" << metallicKey << "'"
+				  << std::endl;
+
+		Material* created = createMaterial(name, albedoKey, path, roughnessKey, metallicKey);
 		if (created) {
 			std::cerr << "MaterialManager: created material for path '" << path << "'" << std::endl;
 		} else {
@@ -304,6 +408,8 @@ Material* MaterialManager::loadMaterialFromFile(const std::string& path) {
 void MaterialManager::saveMaterialToFile(const std::string& path,
 										 const std::string& name,
 										 const std::string& albedoTextureKey,
+										 const std::string& roughnessTextureKey,
+										 const std::string& metallicTextureKey,
 										 const glm::vec3& albedo,
 										 float metallic,
 										 float roughness,
@@ -315,7 +421,12 @@ void MaterialManager::saveMaterialToFile(const std::string& path,
 
 	nlohmann::json j;
 	j["name"] = name;
-	j["albedoTextureKey"] = albedoTextureKey.empty() ? textureManager.kDefaultTextureKey : albedoTextureKey;
+	j["albedoTextureKey"] =
+		albedoTextureKey.empty() ? textureManager.kDefaultTextureKey : normalizeKey(albedoTextureKey);
+	j["roughnessTextureKey"] =
+		roughnessTextureKey.empty() ? textureManager.kDefaultMaskTextureKey : normalizeKey(roughnessTextureKey);
+	j["metallicTextureKey"] =
+		metallicTextureKey.empty() ? textureManager.kDefaultMaskTextureKey : normalizeKey(metallicTextureKey);
 
 	// Save PBR material properties
 	j["albedo"] = {albedo.x, albedo.y, albedo.z};
@@ -354,7 +465,7 @@ void MaterialManager::destroyMaterialInternal(const std::string& name) {
 	materials.erase(it);
 }
 
-void MaterialManager::createDescriptorSets(const std::string& texturePath, const std::string& materialPath) {
+void MaterialManager::createDescriptorSets(const std::string& materialPath) {
 	if (!resourceBinder || !bufferManager) {
 		std::cerr << "MaterialManager::createDescriptorSets: dependencies not set" << std::endl;
 		return;
@@ -399,23 +510,51 @@ void MaterialManager::createDescriptorSets(const std::string& texturePath, const
 		std::vector<Renderer::ResourceBufferBinding> bufferBindings;
 		std::vector<Renderer::ResourceImageBinding> imageBindings;
 
-		// Binding 0: Texture
-		Texture* texture = nullptr;
+		// Binding 0: Albedo texture
+		Texture* albedoTexture = nullptr;
 		try {
-			texture = textureManager.getTexture(texturePath);
+			albedoTexture = textureManager.getTexture(material->albedoTextureKey);
 		} catch (...) {
-			texture = textureManager.getTexture(textureManager.kDefaultTextureKey);
+			albedoTexture = textureManager.getTexture(textureManager.kDefaultTextureKey);
 		}
 
-		Renderer::ResourceImageBinding texBinding;
-		texBinding.binding = 0;
-		texBinding.texture = texture->handle;
-		texBinding.sampler = texture->sampler;
-		imageBindings.push_back(texBinding);
+		Renderer::ResourceImageBinding albedoBinding;
+		albedoBinding.binding = 0;
+		albedoBinding.texture = albedoTexture->handle;
+		albedoBinding.sampler = albedoTexture->sampler;
+		imageBindings.push_back(albedoBinding);
 
-		// Binding 1: Material Properties
+		// Binding 1: Roughness texture
+		Texture* roughnessTexture = nullptr;
+		try {
+			roughnessTexture = textureManager.getTexture(material->roughnessTextureKey);
+		} catch (...) {
+			roughnessTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey);
+		}
+
+		Renderer::ResourceImageBinding roughnessBinding;
+		roughnessBinding.binding = 1;
+		roughnessBinding.texture = roughnessTexture->handle;
+		roughnessBinding.sampler = roughnessTexture->sampler;
+		imageBindings.push_back(roughnessBinding);
+
+		// Binding 2: Metallic texture
+		Texture* metallicTexture = nullptr;
+		try {
+			metallicTexture = textureManager.getTexture(material->metallicTextureKey);
+		} catch (...) {
+			metallicTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey);
+		}
+
+		Renderer::ResourceImageBinding metallicBinding;
+		metallicBinding.binding = 2;
+		metallicBinding.texture = metallicTexture->handle;
+		metallicBinding.sampler = metallicTexture->sampler;
+		imageBindings.push_back(metallicBinding);
+
+		// Binding 3: Material Properties
 		Renderer::ResourceBufferBinding matBinding;
-		matBinding.binding = 1;
+		matBinding.binding = 3;
 		matBinding.buffer = material->propertyBuffers[i]; // BufferHandle
 		matBinding.offset = 0;
 		matBinding.range = sizeof(MaterialProperties);

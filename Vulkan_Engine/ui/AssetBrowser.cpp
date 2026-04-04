@@ -35,18 +35,7 @@ AssetBrowser::AssetBrowser(ResourceContext& resources, InspectorUi& inspector)
 	folderTreeInitialized = false;
 	fileFilter[0] = '\0';
 
-	// Resolve the solution-root "projects\" folder from the exe location.
-	// The exe lives at <solution>\x64\<Config>\Vulkan_Engine.exe, so go two
-	// levels up to reach the solution root, then descend into "projects\".
-#ifdef _WIN32
-	char exeBuf[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
-	namespace fs = std::filesystem;
-	fs::path projectsDir = fs::path(exeBuf).parent_path() / ".." / ".." / "projects";
-	resolvedRootPath = fs::weakly_canonical(projectsDir).string();
-#else
 	resolvedRootPath = "projects";
-#endif
 }
 
 std::string truncateText(const std::string& p_text, float p_truncated_width) {

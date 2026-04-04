@@ -678,16 +678,15 @@ private:
 
 		// Setup the per-script compiler (auto-detects cl.exe via vswhere)
 		{
-			char exeBuf[MAX_PATH] = {};
-			GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
-			std::filesystem::path solutionRoot = std::filesystem::path(exeBuf).parent_path() / ".." / "..";
-			solutionRoot = std::filesystem::weakly_canonical(solutionRoot);
+			namespace fs = std::filesystem;
+			fs::path engineDir = fs::absolute(".");     // Vulkan_Engine/Vulkan_Engine/
+			fs::path solutionRoot = fs::absolute(".."); // Vulkan_Engine/
 
-			std::filesystem::path projectsDir = solutionRoot / "projects";
-			std::string engineRoot = (solutionRoot / "Vulkan_Engine").string();
+			fs::path projectsDir = engineDir / "projects";
+			std::string engineRoot = engineDir.string();
 			std::string engineLib = (solutionRoot / "x64" / "Debug" / "Vulkan_Engine.lib").string();
 			std::string glmInclude =
-				(solutionRoot / "Vulkan_Engine" / "vcpkg_installed" / "x64-windows" / "x64-windows" / "include")
+				(engineDir / "vcpkg_installed" / "x64-windows" / "x64-windows" / "include")
 					.string();
 
 			ScriptCompiler::setupConfig(projectsDir.string(), engineRoot, engineLib, glmInclude);
@@ -796,6 +795,18 @@ private:
 VulkanEngine* VulkanEngine::s_instance = nullptr;
 
 int main() {
+	// Ensure the working directory contains engine resources.
+	// In development, Visual Studio already sets it to $(ProjectDir).
+	// In a shipped build (or double-click), fall back to the exe's own directory.
+#ifdef _WIN32
+	if (!std::filesystem::exists("projects")) {
+		char exeBuf[MAX_PATH] = {};
+		GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
+		auto exeDir = std::filesystem::path(exeBuf).parent_path();
+		SetCurrentDirectoryA(exeDir.string().c_str());
+	}
+#endif
+
 	VulkanEngine app;
 
 	try {

@@ -27,7 +27,9 @@ layout(set=1, binding=5) uniform sampler2D   brdfLUT;
 
 // Set 2: Material
 layout(set=2, binding=0) uniform sampler2D texSampler;
-layout(set=2, binding=1) uniform MaterialProps {
+layout(set=2, binding=1) uniform sampler2D roughnessSampler;
+layout(set=2, binding=2) uniform sampler2D metallicSampler;
+layout(set=2, binding=3) uniform MaterialProps {
     vec4 albedo_pad; // xyz = albedo, w is padding
     float metallic;
     float roughness;
@@ -182,8 +184,10 @@ void main() {
 
     vec4 tex = texture(texSampler, fragTexCoord);
     vec3 albedo   = material.albedo_pad.rgb * tex.rgb;
-    float metallic  = material.metallic;
-    float roughness = material.roughness;
+    float roughnessTex = texture(roughnessSampler, fragTexCoord).r;
+    float metallicTex = texture(metallicSampler, fragTexCoord).r;
+    float metallic  = clamp(material.metallic * metallicTex, 0.0, 1.0);
+    float roughness = clamp(material.roughness * roughnessTex, 0.04, 1.0);
     float ao        = material.ao;
 
     vec3 N = normalize(fragNormal);

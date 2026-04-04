@@ -5,10 +5,7 @@
 #include <filesystem>
 #include <string>
 
-#ifdef _WIN32
-#define NOMINMAX
-#include <Windows.h>
-#endif
+
 
 #include "context/ResourceContext.h"
 #include "Entity.h"
@@ -24,15 +21,7 @@
 namespace {
 
 std::filesystem::path resolveProjectsRoot() {
-#ifdef _WIN32
-	char exeBuf[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exeBuf, MAX_PATH);
-	std::filesystem::path projectsDir = std::filesystem::path(exeBuf).parent_path() / ".." / ".." / "projects";
-	std::error_code ec;
-	return std::filesystem::weakly_canonical(projectsDir, ec);
-#else
 	return std::filesystem::path("projects");
-#endif
 }
 
 bool drawEntityTreeNode(Entity& entity, Scene& scene, InspectorUi& inspector, bool& droppedOnEntityTarget) {

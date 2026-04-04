@@ -133,9 +133,9 @@ ResourceContext::~ResourceContext() {
 
 void ResourceContext::loadDefaults() {
 	textureManager->loadDefaults();
-	textureManager->loadAllFromAssets("assets");
+	textureManager->loadAllFromAssets("projects");
 	materialManager->loadDefault();
-	materialManager->loadAllFromAssets(); // Load material assets AFTER textures
+	materialManager->loadAllFromAssets(); // Load project material assets AFTER textures
 	// MeshManager defaults loaded in main.cpp because of command pool dependency
 	sceneManager->loadDefaults();
 }

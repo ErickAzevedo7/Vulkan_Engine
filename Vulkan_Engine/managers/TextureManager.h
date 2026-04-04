@@ -35,8 +35,9 @@ public:
 
 	void loadDefaults();
 	const std::string kDefaultTextureKey = "common/texture/default.png";
+	const std::string kDefaultMaskTextureKey = "common/texture/default_white";
 
-	// Load all textures found under assets directory at startup
+	// Load all textures found under root directory at startup
 	void loadAllFromAssets(const std::string& assetsRoot);
 
 	Texture* loadTexture(const std::string& path, bool flipV = true);

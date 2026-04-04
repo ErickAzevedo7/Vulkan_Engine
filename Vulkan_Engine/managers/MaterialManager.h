@@ -37,6 +37,8 @@ struct Material {
 	std::string name;
 	std::string filePath;
 	std::string albedoTextureKey;
+	std::string roughnessTextureKey;
+	std::string metallicTextureKey;
 	// Refactored to use ResourceSetHandle
 	std::vector<Renderer::ResourceSetHandle> resourceSets;
 	MaterialProperties properties;
@@ -55,7 +57,11 @@ public:
 
 	// ... existing methods ...
 	Material*
-	createMaterial(const std::string& name, const std::string& albedoTexturePath = "", const std::string& path = "");
+	createMaterial(const std::string& name,
+				   const std::string& albedoTexturePath = "",
+				   const std::string& path = "",
+				   const std::string& roughnessTexturePath = "",
+				   const std::string& metallicTexturePath = "");
 	Material* getMaterial(const std::string& filePath);
 	const std::unordered_map<std::string, Material*>& getAllMaterials();
 
@@ -63,11 +69,15 @@ public:
 	void saveMaterialToFile(const std::string& path,
 							const std::string& name,
 							const std::string& albedoTextureKey = "",
+							const std::string& roughnessTextureKey = "",
+							const std::string& metallicTextureKey = "",
 							const glm::vec3& albedo = glm::vec3(1.0f),
 							float metallic = 0.0f,
 							float roughness = 0.5f,
 							float ao = 1.0f);
 	Material* updateMaterialTexture(const std::string& materialPath, const std::string& texturePath);
+	Material* updateMaterialRoughnessTexture(const std::string& materialPath, const std::string& texturePath);
+	Material* updateMaterialMetallicTexture(const std::string& materialPath, const std::string& texturePath);
 	void updateMaterialProperties(Material* material, uint32_t frame);
 
 	// Deferred destruction for descriptor sets
@@ -107,7 +117,7 @@ private:
 	void destroyMaterialInternal(const std::string& name);
 	std::unordered_map<std::string, Material*> materials;
 	// VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Removed
-	void createDescriptorSets(const std::string& texturePath, const std::string& materialPath);
+	void createDescriptorSets(const std::string& materialPath);
 	void createMaterialPropertyBuffers(Material* material);
 	// Deferred destruction queue. Index = frame index.
 	std::vector<std::vector<Renderer::ResourceSetHandle>> pendingKill;
