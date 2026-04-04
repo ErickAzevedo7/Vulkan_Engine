@@ -1,10 +1,13 @@
 #include <array>
+#include <cctype>
+#include <algorithm>
 #include <corecrt_terminate.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <deque>
 #include <stdexcept>
 #include <stdio.h>
 #include <vector>
@@ -42,6 +45,7 @@
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
 #include "managers/ProjectSerializer.h"
+#include "managers/PrefabSerializer.h"
 #include "managers/SceneManager.h"
 #include "managers/ScriptCompiler.h"
 #include "managers/ScriptPluginLoader.h"
@@ -71,9 +75,26 @@ public:
 
 	Core::EventBus eventBus;
 
+	static VulkanEngine* s_instance;
+
+	static void onFileDrop(GLFWwindow* window, int pathCount, const char** paths) {
+		if (!s_instance || pathCount <= 0 || !paths) {
+			return;
+		}
+
+		for (int i = 0; i < pathCount; ++i) {
+			if (!paths[i] || paths[i][0] == '\0') {
+				continue;
+			}
+			s_instance->queuedExternalDrops.emplace_back(paths[i]);
+		}
+	}
+
 	void run() {
 		// Initialize Vulkan
 		engineCore.initWindow();
+		s_instance = this;
+		glfwSetDropCallback(engineCore.getWindow(), &VulkanEngine::onFileDrop);
 		editorMenu.setWindow(engineCore.getWindow());
 
 		// Wire up Event System
@@ -333,6 +354,7 @@ public:
 			// TEMPORARY HUD API
 			RuntimeHud::beginFrame();
 			glfwPollEvents();
+			processExternalFileDrops();
 
 			// Tick scene (scripts, future physics, etc.) every frame
 			if (Scene* activeScene = resourceContext.getSceneManager().getActiveScene()) {
@@ -442,6 +464,34 @@ public:
 			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
 			ImGui::Image((ImTextureID)sceneTexture[imageIndex], ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_BROWSER_FILE")) {
+					if (payload->Data && payload->DataSize > 0 && payload->IsDelivery()) {
+						std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
+						Scene* activeScene = resourceContext.getSceneManager().getActiveScene();
+						if (activeScene) {
+							Entity* spawned = nullptr;
+							std::filesystem::path p(filePath);
+							std::string ext = p.extension().string();
+							for (char& c : ext) {
+								c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+							}
+
+							if (ext == ".prefab") {
+								spawned = PrefabSerializer::instantiate(filePath, activeScene, resourceContext);
+							} else if (MeshManager::isSupportedModelFile(filePath)) {
+								spawned = EntityFactory::createModelFromFile(resourceContext, activeScene, filePath);
+							}
+
+							if (spawned) {
+								inspector.selectEntity(static_cast<int>(spawned->getID()));
+							}
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
 
 			ImGui::SetCursorScreenPos(p);
 
@@ -595,6 +645,7 @@ private:
 	float exposure = 1.0f;
 	bool cursorCaptured = false;
 	bool wasPlayingLastFrame = false;
+	std::deque<std::string> queuedExternalDrops;
 
 	static void check_vk_result(VkResult err) {
 		if (err == 0)
@@ -705,6 +756,35 @@ private:
 		ScriptCompiler::tick(); // Deliver async compile callbacks on the main thread
 	}
 
+	void processExternalFileDrops() {
+		Scene* activeScene = resourceContext.getSceneManager().getActiveScene();
+		if (!activeScene || queuedExternalDrops.empty()) {
+			return;
+		}
+
+		while (!queuedExternalDrops.empty()) {
+			std::string filePath = std::move(queuedExternalDrops.front());
+			queuedExternalDrops.pop_front();
+
+			std::filesystem::path p(filePath);
+			std::string ext = p.extension().string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+				return static_cast<char>(std::tolower(c));
+			});
+
+			Entity* spawned = nullptr;
+			if (ext == ".prefab") {
+				spawned = PrefabSerializer::instantiate(filePath, activeScene, resourceContext);
+			} else if (MeshManager::isSupportedModelFile(filePath)) {
+				spawned = EntityFactory::createModelFromFile(resourceContext, activeScene, filePath);
+			}
+
+			if (spawned) {
+				inspector.selectEntity(static_cast<int>(spawned->getID()));
+			}
+		}
+	}
+
 	void changeImGuizmoStyle() {
 		ImGuizmo::Style& style = ImGuizmo::GetStyle();
 		style.HatchedAxisLineThickness = 0.0f;
@@ -712,6 +792,8 @@ private:
 		ImGuizmo::AllowAxisFlip(false);
 	}
 };
+
+VulkanEngine* VulkanEngine::s_instance = nullptr;
 
 int main() {
 	VulkanEngine app;

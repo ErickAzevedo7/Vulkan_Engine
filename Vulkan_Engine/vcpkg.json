@@ -13,6 +13,7 @@
     "glfw3",
     "stb",
     "tinyobjloader",
+    "assimp",
     "glm",
     "vulkan",
     "nlohmann-json"

@@ -123,6 +123,8 @@ public:
 							   uint32_t Y_SEGMENTS);
 
 	Mesh* getMesh(std::string name);
+	Mesh* loadMeshFromFile(const std::string& filePath, VkCommandPool commandPool);
+	static bool isSupportedModelFile(const std::string& filePath);
 
 	void cleanup();
 
@@ -135,7 +137,7 @@ public:
 
 private:
 	Renderer::GraphicsBuffer* bufferManager = nullptr;
-	std::unordered_map<std::string, Mesh*> meshes; // Keep track of meshes if needed, or just rely on public members
+	std::unordered_map<std::string, Mesh> importedMeshes;
 
 	void
 	createVertexBuffer(std::vector<Vertex> vertices, VkCommandPool commandPool, Renderer::BufferHandle& vertexBuffer);

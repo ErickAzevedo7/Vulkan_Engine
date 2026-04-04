@@ -1,5 +1,6 @@
 #include "EntityFactory.h"
 
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
@@ -10,6 +11,8 @@
 #include "context/ResourceContext.h"
 #include "Entity.h"
 #include "managers/MaterialManager.h"
+#include "managers/MeshManager.h"
+#include "core/vulkancore.h"
 #include "Scene.h"
 
 #include "glm/ext/vector_float3.hpp"
@@ -96,4 +99,29 @@ Entity& EntityFactory::createCamera(Scene* scene, const std::string& name, const
 	entity.addComponent(camera);
 
 	return entity;
+}
+
+Entity* EntityFactory::createModelFromFile(ResourceContext& resources, Scene* scene, const std::string& filePath) {
+	if (!scene) {
+		return nullptr;
+	}
+
+	Mesh* mesh = resources.getMeshManager().loadMeshFromFile(filePath, VulkanCore::getCommandPool());
+	if (!mesh) {
+		return nullptr;
+	}
+
+	std::string entityName = std::filesystem::path(filePath).stem().string();
+	if (entityName.empty()) {
+		entityName = "Model";
+	}
+
+	Entity& entity = scene->createEntity(entityName);
+	auto* meshComp = new MeshComponent(&entity, mesh->name, resources.getMeshManager());
+	if (auto* mat = resources.getMaterialManager().getMaterial("common/material/default.mat")) {
+		meshComp->SetMaterial(mat);
+	}
+	entity.addComponent(meshComp);
+
+	return &entity;
 }

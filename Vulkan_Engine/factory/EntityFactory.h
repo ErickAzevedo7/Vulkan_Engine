@@ -56,4 +56,9 @@ public:
 								const std::string& name,
 								const glm::vec3& position = glm::vec3(0.0f),
 								bool isPrimary = true);
+
+	/// Create an entity from a model file on disk.
+	/// Supports OBJ/FBX/GLTF/GLB (through MeshManager import support).
+	/// @return Pointer to created entity or nullptr on failure.
+	static Entity* createModelFromFile(ResourceContext& resources, Scene* scene, const std::string& filePath);
 };

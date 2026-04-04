@@ -13,6 +13,7 @@
 #include "components/ScriptComponent.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
+#include "core/vulkancore.h"
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
@@ -146,7 +147,11 @@ Entity* readEntityRecursive(const json& entityJson,
 		const std::string meshName = mj.value("mesh_name", "");
 		const std::string matPath = mj.value("material_path", "");
 		if (!meshName.empty()) {
-			if (Mesh* mesh = meshMgr.getMesh(meshName)) {
+			Mesh* mesh = meshMgr.getMesh(meshName);
+			if (!mesh && MeshManager::isSupportedModelFile(meshName)) {
+				mesh = meshMgr.loadMeshFromFile(meshName, VulkanCore::getCommandPool());
+			}
+			if (mesh) {
 				(void)mesh;
 				auto* mc = new MeshComponent(&entity, meshName, meshMgr);
 				Material* mat = matPath.empty() ? nullptr : matMgr.getMaterial(matPath);

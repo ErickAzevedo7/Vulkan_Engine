@@ -18,6 +18,7 @@
 #include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
+#include "core/vulkancore.h"
 #include "Entity.h"
 #include "managers/MaterialManager.h"
 #include "managers/MeshManager.h"
@@ -226,6 +227,9 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 
 			if (!meshName.empty()) {
 				Mesh* mesh = meshMgr.getMesh(meshName);
+				if (!mesh && MeshManager::isSupportedModelFile(meshName)) {
+					mesh = meshMgr.loadMeshFromFile(meshName, VulkanCore::getCommandPool());
+				}
 				if (mesh) {
 					MeshComponent* mc = new MeshComponent(&entity, meshName, meshMgr);
 					// Restore material

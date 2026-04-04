@@ -1,13 +1,20 @@
 #include "MeshManager.h"
 
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <corecrt_math_defines.h>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 #include "core/utils/Utils.h"
 #include "renderer/GraphicsBuffer.h"
@@ -106,7 +113,105 @@ Mesh* MeshManager::getMesh(std::string name) {
 	} else if (name == "sphere") {
 		return &sphere;
 	}
+
+	auto it = importedMeshes.find(name);
+	if (it != importedMeshes.end()) {
+		return &it->second;
+	}
+
 	return nullptr;
+}
+
+bool MeshManager::isSupportedModelFile(const std::string& filePath) {
+	std::string ext = std::filesystem::path(filePath).extension().string();
+	for (char& c : ext) {
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+
+	return ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb";
+}
+
+Mesh* MeshManager::loadMeshFromFile(const std::string& filePath, VkCommandPool commandPool) {
+	if (!bufferManager) {
+		return nullptr;
+	}
+
+	if (!isSupportedModelFile(filePath)) {
+		return nullptr;
+	}
+
+	const std::string meshKey = std::filesystem::path(filePath).generic_string();
+	auto it = importedMeshes.find(meshKey);
+	if (it != importedMeshes.end()) {
+		return &it->second;
+	}
+
+	Assimp::Importer importer;
+	const aiScene* scene = importer.ReadFile(filePath,
+										 aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+										 aiProcess_JoinIdenticalVertices | aiProcess_ImproveCacheLocality |
+										 aiProcess_PreTransformVertices);
+	if (!scene || !scene->HasMeshes()) {
+		return nullptr;
+	}
+
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+
+	for (unsigned int meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+		const aiMesh* srcMesh = scene->mMeshes[meshIndex];
+		if (!srcMesh || srcMesh->mNumVertices == 0) {
+			continue;
+		}
+
+		const uint32_t baseVertex = static_cast<uint32_t>(vertices.size());
+
+		for (unsigned int v = 0; v < srcMesh->mNumVertices; ++v) {
+			Vertex vertex{};
+			const aiVector3D& p = srcMesh->mVertices[v];
+			vertex.pos = {p.x, p.y, p.z};
+
+			if (srcMesh->HasNormals()) {
+				const aiVector3D& n = srcMesh->mNormals[v];
+				vertex.normal = {n.x, n.y, n.z};
+			} else {
+				vertex.normal = {0.0f, 1.0f, 0.0f};
+			}
+
+			if (srcMesh->HasTextureCoords(0)) {
+				const aiVector3D& uv = srcMesh->mTextureCoords[0][v];
+				vertex.texCoord = {uv.x, 1.0f - uv.y};
+			} else {
+				vertex.texCoord = {0.0f, 0.0f};
+			}
+
+			vertices.push_back(vertex);
+		}
+
+		for (unsigned int f = 0; f < srcMesh->mNumFaces; ++f) {
+			const aiFace& face = srcMesh->mFaces[f];
+			if (face.mNumIndices < 3) {
+				continue;
+			}
+
+			for (unsigned int i = 0; i < face.mNumIndices; ++i) {
+				indices.push_back(baseVertex + face.mIndices[i]);
+			}
+		}
+	}
+
+	if (vertices.empty() || indices.empty()) {
+		return nullptr;
+	}
+
+	Mesh mesh = createMesh(std::move(vertices), std::move(indices), commandPool);
+	mesh.name = meshKey;
+	auto [insertedIt, inserted] = importedMeshes.emplace(mesh.name, std::move(mesh));
+	if (!inserted) {
+		return &insertedIt->second;
+	}
+
+	return &insertedIt->second;
 }
 
 void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue) {
@@ -153,6 +258,11 @@ void MeshManager::cleanup() {
 		destroyMesh(quad);
 		destroyMesh(cube);
 		destroyMesh(sphere);
+		for (auto& [name, mesh] : importedMeshes) {
+			(void)name;
+			destroyMesh(mesh);
+		}
+		importedMeshes.clear();
 	}
 }
 

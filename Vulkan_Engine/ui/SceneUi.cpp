@@ -14,6 +14,8 @@
 #include "Entity.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "factory/EntityFactory.h"
+#include "managers/MeshManager.h"
 #include "managers/PrefabSerializer.h"
 #include "managers/SceneManager.h"
 #include "Scene.h"
@@ -177,14 +179,20 @@ void SceneUi::render() {
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
 						"ASSET_BROWSER_FILE", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
 					std::string filePath(static_cast<const char*>(payload->Data), payload->DataSize - 1);
-					std::filesystem::path p(filePath);
-					std::string ext = p.extension().string();
-					for (char& c : ext) {
-						c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-					}
+					if (payload->IsDelivery()) {
+						std::filesystem::path p(filePath);
+						std::string ext = p.extension().string();
+						for (char& c : ext) {
+							c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+						}
 
-					if (ext == ".prefab" && payload->IsDelivery()) {
-						Entity* spawned = PrefabSerializer::instantiate(filePath, scene, resources);
+						Entity* spawned = nullptr;
+						if (ext == ".prefab") {
+							spawned = PrefabSerializer::instantiate(filePath, scene, resources);
+						} else if (MeshManager::isSupportedModelFile(filePath)) {
+							spawned = EntityFactory::createModelFromFile(resources, scene, filePath);
+						}
+
 						if (spawned) {
 							inspector.selectEntity(static_cast<int>(spawned->getID()));
 						}
