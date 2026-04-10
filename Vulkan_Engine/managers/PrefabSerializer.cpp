@@ -11,6 +11,7 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
+#include "components/StaticMeshColliderComponent.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
@@ -95,6 +96,24 @@ void writeEntityRecursive(const Entity& entity, json& outEntityJson) {
 		cj["center"] = {collider->center.x, collider->center.y, collider->center.z};
 		cj["size"] = {collider->size.x, collider->size.y, collider->size.z};
 		outEntityJson["collider"] = cj;
+	}
+
+	if (const auto* staticMeshCollider = entity.getComponent<StaticMeshColliderComponent>()) {
+		json smj;
+		smj["enabled"] = staticMeshCollider->enabled;
+		smj["isTrigger"] = staticMeshCollider->isTrigger;
+		smj["useAttachedMeshBounds"] = staticMeshCollider->useAttachedMeshBounds;
+		smj["localCenter"] = {
+			staticMeshCollider->localCenter.x,
+			staticMeshCollider->localCenter.y,
+			staticMeshCollider->localCenter.z
+		};
+		smj["localSize"] = {
+			staticMeshCollider->localSize.x,
+			staticMeshCollider->localSize.y,
+			staticMeshCollider->localSize.z
+		};
+		outEntityJson["static_mesh_collider"] = smj;
 	}
 
 	outEntityJson["children"] = json::array();
@@ -239,6 +258,21 @@ Entity* readEntityRecursive(const json& entityJson,
 			collider->size = {cj["size"][0], cj["size"][1], cj["size"][2]};
 		}
 		entity.addComponent(collider);
+	}
+
+	if (entityJson.contains("static_mesh_collider")) {
+		const auto& smj = entityJson["static_mesh_collider"];
+		auto* staticMeshCollider = new StaticMeshColliderComponent();
+		staticMeshCollider->enabled = smj.value("enabled", true);
+		staticMeshCollider->isTrigger = smj.value("isTrigger", false);
+		staticMeshCollider->useAttachedMeshBounds = smj.value("useAttachedMeshBounds", true);
+		if (smj.contains("localCenter") && smj["localCenter"].size() == 3) {
+			staticMeshCollider->localCenter = {smj["localCenter"][0], smj["localCenter"][1], smj["localCenter"][2]};
+		}
+		if (smj.contains("localSize") && smj["localSize"].size() == 3) {
+			staticMeshCollider->localSize = {smj["localSize"][0], smj["localSize"][1], smj["localSize"][2]};
+		}
+		entity.addComponent(staticMeshCollider);
 	}
 
 	if (entityJson.contains("children") && entityJson["children"].is_array()) {

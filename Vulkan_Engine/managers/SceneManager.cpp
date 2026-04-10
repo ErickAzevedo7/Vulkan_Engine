@@ -26,7 +26,7 @@ void SceneManager::init(Core::EventBus& eventBus) {
 		if (Scene* activeScene = getActiveScene()) {
 			if (Entity* ent = activeScene->findEntityById(te.getReceiverId())) {
 				for (auto* bh : ent->getComponents<Behaviour>()) {
-					bh->onTriggerEnter(te.getOtherId());
+					bh->onTriggerEnter(te.getOtherId(), te.getContactNormal());
 				}
 			}
 		}
@@ -37,7 +37,7 @@ void SceneManager::init(Core::EventBus& eventBus) {
 		if (Scene* activeScene = getActiveScene()) {
 			if (Entity* ent = activeScene->findEntityById(te.getReceiverId())) {
 				for (auto* bh : ent->getComponents<Behaviour>()) {
-					bh->onTriggerStay(te.getOtherId());
+					bh->onTriggerStay(te.getOtherId(), te.getContactNormal());
 				}
 			}
 		}

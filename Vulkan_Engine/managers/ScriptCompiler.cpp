@@ -180,7 +180,8 @@ bool ScriptCompiler::compileSync(const std::string& headerPath, std::string& out
     std::ostringstream cmd;
     cmd << "cmd /C \"";
     if (!s_vcvarsall.empty()) {
-        cmd << "call \"" << s_vcvarsall << "\" x64 && ";
+        // Clear inherited VS environment variables so vcvarsall.bat doesn't skip SDK initialization
+        cmd << "set \"VSCMD_ARG_APP_PLAT=\" & set \"VSCMD_ARG_TGT_ARCH=\" & set \"INCLUDE=\" & set \"LIB=\" & set \"VSCMD_DEBUG=\" & call \"" << s_vcvarsall << "\" x64 && ";
     }
     cmd << "\"" << s_clExe << "\""
         << " /nologo /LD /EHsc /std:c++17 /MDd"

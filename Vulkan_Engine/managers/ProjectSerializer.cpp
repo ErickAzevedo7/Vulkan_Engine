@@ -14,6 +14,7 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
+#include "components/StaticMeshColliderComponent.h"
 #include "managers/ScriptCompiler.h"
 #include "managers/ScriptRegistry.h"
 #include "components/Transform.h"
@@ -132,6 +133,24 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			cj["center"] = {collider->center.x, collider->center.y, collider->center.z};
 			cj["size"] = {collider->size.x, collider->size.y, collider->size.z};
 			ej["collider"] = cj;
+		}
+
+		if (auto* staticMeshCollider = entity.getComponent<StaticMeshColliderComponent>()) {
+			json smj;
+			smj["enabled"] = staticMeshCollider->enabled;
+			smj["isTrigger"] = staticMeshCollider->isTrigger;
+			smj["useAttachedMeshBounds"] = staticMeshCollider->useAttachedMeshBounds;
+			smj["localCenter"] = {
+				staticMeshCollider->localCenter.x,
+				staticMeshCollider->localCenter.y,
+				staticMeshCollider->localCenter.z
+			};
+			smj["localSize"] = {
+				staticMeshCollider->localSize.x,
+				staticMeshCollider->localSize.y,
+				staticMeshCollider->localSize.z
+			};
+			ej["static_mesh_collider"] = smj;
 		}
 
 		root["entities"].push_back(ej);
@@ -323,6 +342,21 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 				collider->size = {cj["size"][0], cj["size"][1], cj["size"][2]};
 			}
 			entity.addComponent(collider);
+		}
+
+		if (ej.contains("static_mesh_collider")) {
+			const auto& smj = ej["static_mesh_collider"];
+			auto* staticMeshCollider = new StaticMeshColliderComponent();
+			staticMeshCollider->enabled = smj.value("enabled", true);
+			staticMeshCollider->isTrigger = smj.value("isTrigger", false);
+			staticMeshCollider->useAttachedMeshBounds = smj.value("useAttachedMeshBounds", true);
+			if (smj.contains("localCenter") && smj["localCenter"].size() == 3) {
+				staticMeshCollider->localCenter = {smj["localCenter"][0], smj["localCenter"][1], smj["localCenter"][2]};
+			}
+			if (smj.contains("localSize") && smj["localSize"].size() == 3) {
+				staticMeshCollider->localSize = {smj["localSize"][0], smj["localSize"][1], smj["localSize"][2]};
+			}
+			entity.addComponent(staticMeshCollider);
 		}
 	}
 

@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <limits>
+
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
@@ -231,6 +233,28 @@ void MeshManager::loadDefaults(VkCommandPool commandPool, VkQueue graphicsQueue)
 
 Mesh MeshManager::createMesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices, VkCommandPool commandPool) {
 	Mesh mesh;
+	mesh.localBoundsMin = glm::vec3(std::numeric_limits<float>::max());
+	mesh.localBoundsMax = glm::vec3(std::numeric_limits<float>::lowest());
+	mesh.collisionVertices.reserve(vertices.size());
+
+	for (const Vertex& vertex : vertices) {
+		mesh.localBoundsMin.x = std::min(mesh.localBoundsMin.x, vertex.pos.x);
+		mesh.localBoundsMin.y = std::min(mesh.localBoundsMin.y, vertex.pos.y);
+		mesh.localBoundsMin.z = std::min(mesh.localBoundsMin.z, vertex.pos.z);
+
+		mesh.localBoundsMax.x = std::max(mesh.localBoundsMax.x, vertex.pos.x);
+		mesh.localBoundsMax.y = std::max(mesh.localBoundsMax.y, vertex.pos.y);
+		mesh.localBoundsMax.z = std::max(mesh.localBoundsMax.z, vertex.pos.z);
+
+		mesh.collisionVertices.push_back(vertex.pos);
+	}
+
+	if (vertices.empty()) {
+		mesh.localBoundsMin = glm::vec3(-0.5f);
+		mesh.localBoundsMax = glm::vec3(0.5f);
+	}
+
+	mesh.collisionIndices = indices;
 
 	createVertexBuffer(vertices, commandPool, mesh.vertexBuffer);
 	createIndexBuffer(indices, commandPool, mesh.indexBuffer);

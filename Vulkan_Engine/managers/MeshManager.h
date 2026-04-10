@@ -54,6 +54,10 @@ struct Mesh {
 	Renderer::BufferHandle indexBuffer;
 	uint32_t indexCount;
 	std::string name;
+	glm::vec3 localBoundsMin = glm::vec3(0.0f);
+	glm::vec3 localBoundsMax = glm::vec3(0.0f);
+	std::vector<glm::vec3> collisionVertices;
+	std::vector<uint32_t> collisionIndices;
 };
 
 const std::vector<Vertex> quadVertices = {{{-0.5f, -0.5f, 0.0f}, {0, 0, 1}, {0, 0}},

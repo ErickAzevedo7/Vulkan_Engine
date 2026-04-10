@@ -5,12 +5,14 @@
 
 #include "Event.h"
 
+#include "glm/ext/vector_float3.hpp"
+
 namespace Core {
 
 class TriggerEnterEvent : public Event {
 public:
-	TriggerEnterEvent(uint32_t receiver, uint32_t other)
-		: receiverId(receiver), otherId(other) {
+	TriggerEnterEvent(uint32_t receiver, uint32_t other, glm::vec3 normal = glm::vec3(0.0f))
+		: receiverId(receiver), otherId(other), contactNormal(normal) {
 	}
 
 	EventType getEventType() const override {
@@ -33,16 +35,20 @@ public:
 	uint32_t getOtherId() const {
 		return otherId;
 	}
+	glm::vec3 getContactNormal() const {
+		return contactNormal;
+	}
 
 private:
 	uint32_t receiverId;
 	uint32_t otherId;
+	glm::vec3 contactNormal;
 };
 
 class TriggerStayEvent : public Event {
 public:
-	TriggerStayEvent(uint32_t receiver, uint32_t other)
-		: receiverId(receiver), otherId(other) {
+	TriggerStayEvent(uint32_t receiver, uint32_t other, glm::vec3 normal = glm::vec3(0.0f))
+		: receiverId(receiver), otherId(other), contactNormal(normal) {
 	}
 
 	EventType getEventType() const override {
@@ -65,10 +71,14 @@ public:
 	uint32_t getOtherId() const {
 		return otherId;
 	}
+	glm::vec3 getContactNormal() const {
+		return contactNormal;
+	}
 
 private:
 	uint32_t receiverId;
 	uint32_t otherId;
+	glm::vec3 contactNormal;
 };
 
 class TriggerExitEvent : public Event {

@@ -34,9 +34,14 @@ public:
 	static void setResourceContext(ResourceContext* context);
 
 	// Physics callbacks
-	virtual void onTriggerEnter(uint32_t otherEntityId) { (void)otherEntityId; }
-	virtual void onTriggerStay(uint32_t otherEntityId) { (void)otherEntityId; }
+	virtual void onTriggerEnter(uint32_t otherEntityId, glm::vec3 contactNormal = glm::vec3(0.0f)) {
+		(void)otherEntityId; (void)contactNormal;
+	}
+	virtual void onTriggerStay(uint32_t otherEntityId, glm::vec3 contactNormal = glm::vec3(0.0f)) {
+		(void)otherEntityId; (void)contactNormal;
+	}
 	virtual void onTriggerExit(uint32_t otherEntityId) { (void)otherEntityId; }
+	virtual void onCollision(glm::vec3 contactNormal) { (void)contactNormal; }
 
 	glm::vec3 getPosition() const;
 	void setPosition(glm::vec3 v);

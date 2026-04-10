@@ -224,6 +224,7 @@
     <ClInclude Include="components\CameraComponent.h" />
     <ClInclude Include="components\ColliderComponent.h" />
     <ClInclude Include="components\ScriptComponent.h" />
+    <ClInclude Include="components\StaticMeshColliderComponent.h" />
     <ClInclude Include="ExposedVariable.h" />
     <ClInclude Include="Behaviour.h" />
     <ClInclude Include="context\ResourceContext.h" />

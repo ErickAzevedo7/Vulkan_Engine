@@ -165,13 +165,13 @@ void Scene::onRuntimeStop() {
 
 void Scene::onUpdate(float deltaTime, Core::EventBus* eventBus) {
 	if (state == SceneState::Play && !runtimePaused) {
-		collisionSystem.update(*this, eventBus);
 		for (const auto& ePtr : entities) {
 			auto scripts = ePtr->getComponents<ScriptComponent>();
 			for (auto* sc : scripts) {
 				sc->onUpdate(deltaTime);
 			}
 		}
+		collisionSystem.update(*this, eventBus);
 	}
 }
 

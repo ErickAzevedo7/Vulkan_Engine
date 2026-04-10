@@ -7,6 +7,7 @@
 #include "components/CameraComponent.h"
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
+#include "components/StaticMeshColliderComponent.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "Entity.h"
@@ -122,6 +123,11 @@ Entity* EntityFactory::createModelFromFile(ResourceContext& resources, Scene* sc
 		meshComp->SetMaterial(mat);
 	}
 	entity.addComponent(meshComp);
+
+	auto* staticMeshCollider = new StaticMeshColliderComponent();
+	staticMeshCollider->isTrigger = false;
+	staticMeshCollider->useAttachedMeshBounds = true;
+	entity.addComponent(staticMeshCollider);
 
 	return &entity;
 }
