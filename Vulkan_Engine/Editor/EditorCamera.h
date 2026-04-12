@@ -50,6 +50,8 @@ public:
 	static glm::mat4 getProjMatrix();
 	static ImGuizmo::MODE getGizmoMode();
 	static void setGizmoMode(ImGuizmo::MODE mode);
+	static bool getShowColliders();
+	static void setShowColliders(bool show);
 
 private:
 	static uint32_t selectedID;
@@ -64,4 +66,5 @@ private:
 	static glm::mat4 projMatrix;
 	static ImGuizmo::OPERATION currentGizmoOperation;
 	static ImGuizmo::MODE currentGizmoMode;
+	static bool showColliders;
 };

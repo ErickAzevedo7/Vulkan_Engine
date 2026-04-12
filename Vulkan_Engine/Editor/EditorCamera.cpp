@@ -9,10 +9,14 @@
 
 // Project headers - Components
 #include "components/CameraComponent.h"
+#include "components/ColliderComponent.h"
+#include "components/MeshComponent.h"
+#include "components/StaticMeshColliderComponent.h"
 #include "components/Transform.h"
 
 // Project headers - Managers
 #include "managers/SceneManager.h"
+#include "managers/MeshManager.h"
 
 // Project headers - UI and Editor
 #include "Editor/MousePick.h"
@@ -69,8 +73,104 @@ glm::mat4 EditorCamera::viewMatrix;
 glm::mat4 EditorCamera::projMatrix;
 ImGuizmo::OPERATION EditorCamera::currentGizmoOperation = ImGuizmo::TRANSLATE;
 ImGuizmo::MODE EditorCamera::currentGizmoMode = ImGuizmo::LOCAL;
+bool EditorCamera::showColliders = false;
 ResourceContext* EditorCamera::resources = nullptr;
 InspectorUi* EditorCamera::inspector = nullptr;
+
+namespace {
+
+bool projectClipToScreen(const glm::vec4& clip,
+					 const ImVec2& viewportPos,
+					 const ImVec2& viewportSize,
+					 ImVec2& out) {
+	if (clip.w <= 0.0001f) {
+		return false;
+	}
+	const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+	out.x = viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
+	out.y = viewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * viewportSize.y;
+	return true;
+}
+
+void drawLine3D(ImDrawList* drawList,
+				const glm::vec3& a,
+				const glm::vec3& b,
+				const glm::mat4& viewProj,
+				const ImVec2& viewportPos,
+				const ImVec2& viewportSize,
+				ImU32 color) {
+	constexpr float kNearW = 0.0001f;
+	glm::vec4 clipA = viewProj * glm::vec4(a, 1.0f);
+	glm::vec4 clipB = viewProj * glm::vec4(b, 1.0f);
+
+	if (clipA.w <= kNearW && clipB.w <= kNearW) {
+		return;
+	}
+
+	if (clipA.w <= kNearW || clipB.w <= kNearW) {
+		const float wa = clipA.w;
+		const float wb = clipB.w;
+		const float denom = wb - wa;
+		if (std::abs(denom) <= 1e-8f) {
+			return;
+		}
+		float t = (kNearW - wa) / denom;
+		t = glm::clamp(t, 0.0f, 1.0f);
+		const glm::vec4 clipped = clipA + (clipB - clipA) * t;
+		if (clipA.w <= kNearW) {
+			clipA = clipped;
+		} else {
+			clipB = clipped;
+		}
+	}
+
+	ImVec2 a2;
+	ImVec2 b2;
+	if (!projectClipToScreen(clipA, viewportPos, viewportSize, a2)) {
+		return;
+	}
+	if (!projectClipToScreen(clipB, viewportPos, viewportSize, b2)) {
+		return;
+	}
+	drawList->AddLine(a2, b2, color, 1.2f);
+}
+
+void drawAabbWireframe(ImDrawList* drawList,
+					   const glm::vec3& worldMin,
+					   const glm::vec3& worldMax,
+					   const glm::mat4& viewProj,
+					   const ImVec2& viewportPos,
+					   const ImVec2& viewportSize,
+					   ImU32 color) {
+	const glm::vec3 corners[8] = {
+		{worldMin.x, worldMin.y, worldMin.z},
+		{worldMax.x, worldMin.y, worldMin.z},
+		{worldMax.x, worldMax.y, worldMin.z},
+		{worldMin.x, worldMax.y, worldMin.z},
+		{worldMin.x, worldMin.y, worldMax.z},
+		{worldMax.x, worldMin.y, worldMax.z},
+		{worldMax.x, worldMax.y, worldMax.z},
+		{worldMin.x, worldMax.y, worldMax.z}
+	};
+
+	const int edges[12][2] = {
+		{0, 1}, {1, 2}, {2, 3}, {3, 0},
+		{4, 5}, {5, 6}, {6, 7}, {7, 4},
+		{0, 4}, {1, 5}, {2, 6}, {3, 7}
+	};
+
+	for (const auto& edge : edges) {
+		drawLine3D(drawList,
+				   corners[edge[0]],
+				   corners[edge[1]],
+				   viewProj,
+				   viewportPos,
+				   viewportSize,
+				   color);
+	}
+}
+
+} // namespace
 
 void EditorCamera::init(Renderer::VulkanDevice* device, ResourceContext* resources, InspectorUi* inspector) {
 	vulkanDevice = device;
@@ -315,6 +415,101 @@ void EditorCamera::drawGuizmo() {
 	if (!entities || entities->empty())
 		return;
 
+	// Get matrices
+	glm::mat4 view = viewMatrix;
+	glm::mat4 proj = projMatrix;
+
+	proj[1][1] *= -1; // Invert Y for ImGuizmo
+
+	ImVec2 viewportScreenSize = ImGui::GetContentRegionAvail();
+	ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
+	if (viewportScreenSize.x <= 1.0f || viewportScreenSize.y <= 1.0f) {
+		return;
+	}
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const glm::mat4 viewProj = proj * view;
+
+	// Draw all colliders in scene if toggle is on
+	if (showColliders) {
+		for (const auto& ePtr : *entities) {
+			if (!ePtr) continue;
+			Entity* entity = ePtr.get();
+			auto* transform = entity->getComponent<Transform>();
+			if (!transform) continue;
+
+			// ColliderComponent
+			if (auto* collider = entity->getComponent<ColliderComponent>()) {
+				if (collider->enabled) {
+					const glm::vec3 worldCenter = transform->getWorldPosition() + collider->center;
+					const glm::vec3 absScale = glm::abs(transform->getWorldScale());
+					const glm::vec3 halfExtents = glm::max(collider->size * absScale * 0.5f, glm::vec3(0.0001f));
+					const glm::vec3 worldMin = worldCenter - halfExtents;
+					const glm::vec3 worldMax = worldCenter + halfExtents;
+					const ImU32 color = collider->isTrigger ? IM_COL32(255, 179, 0, 255) : IM_COL32(96, 255, 128, 255);
+					drawAabbWireframe(drawList, worldMin, worldMax, viewProj, viewportScreenPos, viewportScreenSize, color);
+				}
+			}
+
+			// StaticMeshColliderComponent
+			if (auto* staticMeshCollider = entity->getComponent<StaticMeshColliderComponent>()) {
+				if (staticMeshCollider->enabled) {
+					const ImU32 color = staticMeshCollider->isTrigger ? IM_COL32(255, 140, 64, 255) : IM_COL32(64, 220, 255, 255);
+					auto* meshComp = entity->getComponent<MeshComponent>();
+					if (staticMeshCollider->useAttachedMeshBounds && meshComp) {
+						if (Mesh* mesh = meshComp->GetMesh()) {
+							if (!mesh->collisionVertices.empty() && mesh->collisionIndices.size() >= 3) {
+								const glm::vec3 worldPos = transform->getWorldPosition();
+								const glm::quat worldRot = transform->getWorldRotation();
+								const glm::vec3 worldScale = transform->getWorldScale();
+								const glm::vec3 localCenter = staticMeshCollider->localCenter;
+								const glm::vec3 localSize = glm::max(staticMeshCollider->localSize, glm::vec3(0.0001f));
+								size_t segmentBudget = 12000;
+
+								auto toWorld = [&](const glm::vec3& localVertex) {
+									const glm::vec3 shapedLocal = localCenter + (localVertex * localSize);
+									const glm::vec3 scaled = shapedLocal * worldScale;
+									return worldPos + (worldRot * scaled);
+								};
+
+								for (size_t i = 0; i + 2 < mesh->collisionIndices.size() && segmentBudget >= 3; i += 3) {
+									const uint32_t i0 = mesh->collisionIndices[i];
+									const uint32_t i1 = mesh->collisionIndices[i + 1];
+									const uint32_t i2 = mesh->collisionIndices[i + 2];
+									if (i0 >= mesh->collisionVertices.size() ||
+										i1 >= mesh->collisionVertices.size() ||
+										i2 >= mesh->collisionVertices.size()) {
+										continue;
+									}
+
+									const glm::vec3 w0 = toWorld(mesh->collisionVertices[i0]);
+									const glm::vec3 w1 = toWorld(mesh->collisionVertices[i1]);
+									const glm::vec3 w2 = toWorld(mesh->collisionVertices[i2]);
+
+									drawLine3D(drawList, w0, w1, viewProj, viewportScreenPos, viewportScreenSize, color);
+									drawLine3D(drawList, w1, w2, viewProj, viewportScreenPos, viewportScreenSize, color);
+									drawLine3D(drawList, w2, w0, viewProj, viewportScreenPos, viewportScreenSize, color);
+									segmentBudget -= 3;
+								}
+							}
+						}
+					}
+
+					if (!meshComp || !staticMeshCollider->useAttachedMeshBounds) {
+						const glm::vec3 worldPos = transform->getWorldPosition();
+						const glm::vec3 worldCenter = worldPos + staticMeshCollider->localCenter;
+						const glm::vec3 absScale = glm::abs(transform->getWorldScale());
+						const glm::vec3 halfExtents = glm::max(staticMeshCollider->localSize * absScale * 0.5f, glm::vec3(0.0001f));
+						const glm::vec3 worldMin = worldCenter - halfExtents;
+						const glm::vec3 worldMax = worldCenter + halfExtents;
+						drawAabbWireframe(drawList, worldMin, worldMax, viewProj, viewportScreenPos, viewportScreenSize, color);
+					}
+				}
+			}
+		}
+	}
+
+	// Original behavior: only draw selected entity collider
 	const int selectedId = inspector ? inspector->getSelectedEntityId() : -1;
 	if (selectedId <= 0)
 		return;
@@ -334,21 +529,86 @@ void EditorCamera::drawGuizmo() {
 	if (!transform)
 		return;
 
-	// Get matrices
-	glm::mat4 view = viewMatrix;
-	glm::mat4 proj = projMatrix;
 	glm::mat4 model = transform->getMatrix();
 
-	proj[1][1] *= -1; // Invert Y for ImGuizmo
+	if (auto* collider = selectedEntity->getComponent<ColliderComponent>()) {
+		if (collider->enabled) {
+			const glm::vec3 worldCenter = transform->getWorldPosition() + collider->center;
+			const glm::vec3 absScale = glm::abs(transform->getWorldScale());
+			const glm::vec3 halfExtents = glm::max(collider->size * absScale * 0.5f, glm::vec3(0.0001f));
+			const glm::vec3 worldMin = worldCenter - halfExtents;
+			const glm::vec3 worldMax = worldCenter + halfExtents;
+			const ImU32 color = collider->isTrigger ? IM_COL32(255, 179, 0, 255) : IM_COL32(96, 255, 128, 255);
+			drawAabbWireframe(drawList, worldMin, worldMax, viewProj, viewportScreenPos, viewportScreenSize, color);
+		}
+	}
 
-	// Set up ImGuizmo
-	ImGuizmo::SetOrthographic(false); // Set true if using orthographic camera
-	ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+	if (auto* staticMeshCollider = selectedEntity->getComponent<StaticMeshColliderComponent>()) {
+		if (staticMeshCollider->enabled) {
+			const ImU32 color = staticMeshCollider->isTrigger ? IM_COL32(255, 140, 64, 255) : IM_COL32(64, 220, 255, 255);
+			auto* meshComp = selectedEntity->getComponent<MeshComponent>();
+			bool drewTriangles = false;
+			if (staticMeshCollider->useAttachedMeshBounds && meshComp) {
+				if (Mesh* mesh = meshComp->GetMesh()) {
+					if (!mesh->collisionVertices.empty() && mesh->collisionIndices.size() >= 3) {
+						const glm::vec3 worldPos = transform->getWorldPosition();
+						const glm::quat worldRot = transform->getWorldRotation();
+						const glm::vec3 worldScale = transform->getWorldScale();
+						const glm::vec3 localCenter = staticMeshCollider->localCenter;
+						const glm::vec3 localSize = glm::max(staticMeshCollider->localSize, glm::vec3(0.0001f));
+						size_t segmentBudget = 12000;
 
-	ImVec2 viewportScreenSize = ImGui::GetWindowSize();
-	ImVec2 viewportScreenPos = ImGui::GetCursorScreenPos();
+						auto toWorld = [&](const glm::vec3& localVertex) {
+							const glm::vec3 shapedLocal = localCenter + (localVertex * localSize);
+							const glm::vec3 scaled = shapedLocal * worldScale;
+							return worldPos + (worldRot * scaled);
+						};
+
+						for (size_t i = 0; i + 2 < mesh->collisionIndices.size() && segmentBudget >= 3; i += 3) {
+							const uint32_t i0 = mesh->collisionIndices[i];
+							const uint32_t i1 = mesh->collisionIndices[i + 1];
+							const uint32_t i2 = mesh->collisionIndices[i + 2];
+							if (i0 >= mesh->collisionVertices.size() ||
+								i1 >= mesh->collisionVertices.size() ||
+								i2 >= mesh->collisionVertices.size()) {
+								continue;
+							}
+
+							const glm::vec3 w0 = toWorld(mesh->collisionVertices[i0]);
+							const glm::vec3 w1 = toWorld(mesh->collisionVertices[i1]);
+							const glm::vec3 w2 = toWorld(mesh->collisionVertices[i2]);
+
+							drawLine3D(drawList, w0, w1, viewProj, viewportScreenPos, viewportScreenSize, color);
+							drawLine3D(drawList, w1, w2, viewProj, viewportScreenPos, viewportScreenSize, color);
+							drawLine3D(drawList, w2, w0, viewProj, viewportScreenPos, viewportScreenSize, color);
+							segmentBudget -= 3;
+							drewTriangles = true;
+						}
+					}
+				}
+			}
+
+			if (!drewTriangles) {
+				const glm::vec3 localCenter = staticMeshCollider->localCenter;
+				const glm::vec3 localSize = glm::max(staticMeshCollider->localSize, glm::vec3(0.0001f));
+				const glm::vec3 worldCenter = transform->getWorldPosition() + localCenter;
+				const glm::vec3 absScale = glm::abs(transform->getWorldScale());
+				const glm::vec3 halfExtents = glm::max(localSize * absScale * 0.5f, glm::vec3(0.0001f));
+				drawAabbWireframe(
+					drawList,
+					worldCenter - halfExtents,
+					worldCenter + halfExtents,
+					viewProj,
+					viewportScreenPos,
+					viewportScreenSize,
+					color);
+			}
+		}
+	}
 
 	// Set the ImGuizmo rect to match your viewport
+	ImGuizmo::SetOrthographic(false);
+	ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 	ImGuizmo::SetRect(viewportScreenPos.x, viewportScreenPos.y, viewportScreenSize.x, viewportScreenSize.y);
 
 	// Manipulate
@@ -381,6 +641,14 @@ ImGuizmo::MODE EditorCamera::getGizmoMode() {
 
 void EditorCamera::setGizmoMode(ImGuizmo::MODE mode) {
 	currentGizmoMode = mode;
+}
+
+bool EditorCamera::getShowColliders() {
+	return showColliders;
+}
+
+void EditorCamera::setShowColliders(bool show) {
+	showColliders = show;
 }
 
 void EditorCamera::updateCursorLoop() {

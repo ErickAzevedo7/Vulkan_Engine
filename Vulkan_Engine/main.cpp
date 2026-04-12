@@ -426,7 +426,8 @@ public:
 									ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
 				const bool isLocalMode = (EditorCamera::getGizmoMode() == ImGuizmo::LOCAL);
 				const char* currentModeLabel = isLocalMode ? "Local" : "Global";
-				if (ImGui::BeginMenu(currentModeLabel)) {
+				const std::string modeButtonLabel = std::string(currentModeLabel) + "  ";
+				if (ImGui::BeginMenu(modeButtonLabel.c_str())) {
 					if (ImGui::MenuItem("Local", nullptr, isLocalMode)) {
 						EditorCamera::setGizmoMode(ImGuizmo::LOCAL);
 					}
@@ -435,6 +436,31 @@ public:
 					}
 					ImGui::EndMenu();
 				}
+
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, style.ItemSpacing.y));
+				ImGui::SameLine(0.0f, 0.0f);
+				ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+				ImGui::SameLine(0.0f, 0.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+				bool showColliders = EditorCamera::getShowColliders();
+				if (showColliders) {
+					const ImVec4 activeButtonColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+					ImGui::PushStyleColor(ImGuiCol_Button, activeButtonColor);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+				} else {
+					const ImVec4 menuBarBg = ImGui::GetStyleColorVec4(ImGuiCol_MenuBarBg);
+					ImGui::PushStyleColor(ImGuiCol_Button, menuBarBg);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+				}
+				if (ImGui::Button("Colliders")) {
+					EditorCamera::setShowColliders(!showColliders);
+				}
+				ImGui::PopStyleColor(3);
+				ImGui::PopStyleVar(3);
+
 				ImGui::PopStyleVar(2);
 				ImGui::EndMenuBar();
 			}
