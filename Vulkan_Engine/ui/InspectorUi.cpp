@@ -18,6 +18,7 @@
 #include "components/LightComponent.h"
 #include "components/MeshComponent.h"
 #include "components/ScriptComponent.h"
+#include "components/StaticMeshColliderComponent.h"
 #include "components/Transform.h"
 #include "context/ResourceContext.h"
 #include "core/vulkancore.h"
@@ -318,6 +319,13 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 	std::string normFullPath;
 	normFullPath = std::filesystem::path(fullPath).generic_string();
+	const std::string defaultMaterialKey = "common/material/default.mat";
+	const bool isDefaultMaterial =
+		normFullPath == defaultMaterialKey ||
+		(normFullPath.size() > defaultMaterialKey.size() &&
+		 normFullPath.compare(normFullPath.size() - defaultMaterialKey.size(),
+						  defaultMaterialKey.size(),
+						  defaultMaterialKey) == 0);
 
 	Material* material = resources.getMaterialManager().getMaterial(normFullPath);
 	if (!material) {
@@ -327,6 +335,10 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Failed to load material.");
 	} else {
 		ImGui::Spacing();
+		if (isDefaultMaterial) {
+			ImGui::TextDisabled("Default material is read-only.");
+			ImGui::Spacing();
+		}
 
 		auto isSupportedTextureExt = [](const std::string& ext) {
 			return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" ||
@@ -415,6 +427,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 			ImGui::SameLine();
 			ImGui::TextUnformatted(label);
 		};
+
+		ImGui::BeginDisabled(isDefaultMaterial);
 
 		drawTextureSlot("AlbedoTextureDropTarget",
 						"Albedo",
@@ -517,6 +531,8 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 				scene->markDirty();
 			}
 		}
+
+		ImGui::EndDisabled();
 	}
 
 	ImGui::Unindent(kContentIndent);
@@ -558,6 +574,7 @@ void InspectorUi::render() {
 		bool removeLightComponent = false;
 		bool removeCameraComponent = false;
 		bool removeColliderComponent = false;
+		bool removeStaticMeshColliderComponent = false;
 		ScriptComponent* scriptToRemove = nullptr;
 
 		auto drawComponentMenu =
@@ -623,6 +640,7 @@ void InspectorUi::render() {
 		auto* lightComp = entity.getComponent<LightComponent>();
 		auto* cameraComp = entity.getComponent<CameraComponent>();
 		auto* colliderComp = entity.getComponent<ColliderComponent>();
+		auto* staticMeshColliderComp = entity.getComponent<StaticMeshColliderComponent>();
 		auto scriptComponents = entity.getComponents<ScriptComponent>();
 		const bool hasScripts = !scriptComponents.empty();
 		bool transformOpen = false;
@@ -671,7 +689,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (meshComp || lightComp || cameraComp || colliderComp || hasScripts) {
+		if (meshComp || lightComp || cameraComp || colliderComp || staticMeshColliderComp || hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1037,7 +1055,7 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (cameraComp && (colliderComp || hasScripts)) {
+		if (cameraComp && (colliderComp || staticMeshColliderComp || hasScripts)) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1106,7 +1124,79 @@ void InspectorUi::render() {
 			ImGui::PopStyleVar(3);
 		}
 
-		if (colliderComp && hasScripts) {
+		if (colliderComp && (staticMeshColliderComp || hasScripts)) {
+			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
+			ImGui::Separator();
+			ImGui::PopStyleVar();
+		}
+
+		bool staticMeshColliderOpen = false;
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+		if (staticMeshColliderComp) {
+			staticMeshColliderOpen = ImGui::CollapsingHeader("Static Mesh Collider",
+				ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+			const ImVec2 staticMeshColliderHeaderMin = ImGui::GetItemRectMin();
+			const ImVec2 staticMeshColliderHeaderMax = ImGui::GetItemRectMax();
+			drawComponentMenu("StaticMeshColliderComponentMenu",
+				removeStaticMeshColliderComponent,
+				staticMeshColliderHeaderMin,
+				staticMeshColliderHeaderMax);
+			ImGui::PopStyleVar(3);
+
+			if (staticMeshColliderOpen) {
+				ImGui::Dummy(ImVec2(0.0f, kHeaderContentTopPadding));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kContentSpacing);
+				ImGui::Indent(kContentIndent);
+
+				ImGui::Columns(2, "##StaticMeshColliderColumns", false);
+				ImGui::SetColumnWidth(0, 120.0f);
+
+				ImGui::Text("Enabled");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##StaticMeshColliderEnabled", &staticMeshColliderComp->enabled))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Trigger");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##StaticMeshColliderTrigger", &staticMeshColliderComp->isTrigger))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Use Mesh Bounds");
+				ImGui::NextColumn();
+				if (ImGui::Checkbox("##StaticMeshColliderUseMeshBounds", &staticMeshColliderComp->useAttachedMeshBounds))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Local Center");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat3("##StaticMeshColliderLocalCenter", &staticMeshColliderComp->localCenter.x, 0.05f, 0.0f, 0.0f, "%.2f"))
+					edited = true;
+				ImGui::NextColumn();
+
+				ImGui::Text("Local Size");
+				ImGui::NextColumn();
+				if (ImGui::DragFloat3("##StaticMeshColliderLocalSize", &staticMeshColliderComp->localSize.x, 0.05f, 0.01f, 0.0f, "%.2f")) {
+					staticMeshColliderComp->localSize.x = (std::max)(staticMeshColliderComp->localSize.x, 0.01f);
+					staticMeshColliderComp->localSize.y = (std::max)(staticMeshColliderComp->localSize.y, 0.01f);
+					staticMeshColliderComp->localSize.z = (std::max)(staticMeshColliderComp->localSize.z, 0.01f);
+					edited = true;
+				}
+				ImGui::NextColumn();
+
+				ImGui::Columns(1);
+
+				ImGui::Unindent(kContentIndent);
+				ImGui::PopStyleVar();
+			}
+		} else {
+			ImGui::PopStyleVar(3);
+		}
+
+		if (staticMeshColliderComp && hasScripts) {
 			ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 1.0f);
 			ImGui::Separator();
 			ImGui::PopStyleVar();
@@ -1379,6 +1469,11 @@ void InspectorUi::render() {
 				edited = true;
 			}
 
+			if (!entity.hasComponent<StaticMeshColliderComponent>() && ImGui::MenuItem("Static Mesh Collider")) {
+				entity.addComponent(new StaticMeshColliderComponent());
+				edited = true;
+			}
+
 			auto registeredScripts = ScriptRegistry::getRegisteredNames();
 			if (registeredScripts.empty()) {
 				ImGui::TextDisabled("Script (none registered)");
@@ -1409,6 +1504,9 @@ void InspectorUi::render() {
 		}
 		if (removeColliderComponent) {
 			entity.removeComponent<ColliderComponent>();
+		}
+		if (removeStaticMeshColliderComponent) {
+			entity.removeComponent<StaticMeshColliderComponent>();
 		}
 		if (scriptToRemove) {
 			entity.removeComponent(scriptToRemove);
