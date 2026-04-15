@@ -253,6 +253,32 @@ float projectionOverlap(float minA, float maxA, float minB, float maxB) {
 	return std::min(maxA, maxB) - std::max(minA, minB);
 }
 
+bool aabbPairSeparation(const RuntimeCollider& a, const RuntimeCollider& b, glm::vec3& outMoveA, glm::vec3& outNormalA) {
+	const glm::vec3 delta = a.worldCenter - b.worldCenter;
+	const glm::vec3 overlap = (a.halfExtents + b.halfExtents) - glm::abs(delta);
+	if (overlap.x <= 0.0f || overlap.y <= 0.0f || overlap.z <= 0.0f) {
+		return false;
+	}
+
+	int axis = 0;
+	float minOverlap = overlap.x;
+	if (overlap.y < minOverlap) {
+		minOverlap = overlap.y;
+		axis = 1;
+	}
+	if (overlap.z < minOverlap) {
+		minOverlap = overlap.z;
+		axis = 2;
+	}
+
+	outMoveA = glm::vec3(0.0f);
+	outMoveA[axis] = (delta[axis] >= 0.0f ? 1.0f : -1.0f) * (minOverlap + kSkinWidth);
+
+	const float moveLen = glm::length(outMoveA);
+	outNormalA = (moveLen > 1e-6f) ? outMoveA / moveLen : glm::vec3(0.0f, 1.0f, 0.0f);
+	return true;
+}
+
 bool triangleFaceMtv(const Triangle& a, const Triangle& b, glm::vec3& outMtv) {
 	constexpr float kEpsilon = 1e-6f;
 
@@ -626,12 +652,17 @@ void CollisionSystem::update(Scene& scene, Core::EventBus* eventBus) {
 				continue;
 			}
 
+			const bool isBoxVsBox = a.isBoxCollider && b.isBoxCollider;
+
 			// ── Determine if this is a box-vs-mesh pair ──────────────
 			const bool isBoxVsMesh = (a.isBoxCollider && !b.isBoxCollider) || (!a.isBoxCollider && b.isBoxCollider);
 
 			// ── Narrow-phase overlap test ─────────────────────────────
 			bool overlapping = false;
-			if (isBoxVsMesh) {
+			if (isBoxVsBox) {
+				// Broad-phase is exact for AABB-vs-AABB.
+				overlapping = true;
+			} else if (isBoxVsMesh) {
 				// Use the new AABB-vs-mesh overlap test.
 				const RuntimeCollider& box = a.isBoxCollider ? a : b;
 				const RuntimeCollider& mesh = a.isBoxCollider ? b : a;
@@ -657,7 +688,11 @@ void CollisionSystem::update(Scene& scene, Core::EventBus* eventBus) {
 				glm::vec3 pushOut(0.0f);
 				glm::vec3 contactNormal(0.0f, 1.0f, 0.0f);
 
-				if (isBoxVsMesh) {
+				if (isBoxVsBox) {
+					if (!aabbPairSeparation(a, b, pushOut, contactNormal)) {
+						continue;
+					}
+				} else if (isBoxVsMesh) {
 					// Use the new AABB-vs-mesh MTV (no triangle seam jitter).
 					const RuntimeCollider& box = a.isBoxCollider ? a : b;
 					const RuntimeCollider& mesh = a.isBoxCollider ? b : a;
@@ -709,13 +744,24 @@ void CollisionSystem::update(Scene& scene, Core::EventBus* eventBus) {
 				glm::vec3 moveA(0.0f);
 				glm::vec3 moveB(0.0f);
 
-				if (a.isStatic) {
-					moveB = pushOut;
-				} else if (b.isStatic) {
-					moveA = -pushOut;
+				if (isBoxVsBox) {
+					if (a.isStatic) {
+						moveB = -pushOut;
+					} else if (b.isStatic) {
+						moveA = pushOut;
+					} else {
+						moveA = pushOut * 0.5f;
+						moveB = -pushOut * 0.5f;
+					}
 				} else {
-					moveA = pushOut * 0.5f;
-					moveB = -pushOut * 0.5f;
+					if (a.isStatic) {
+						moveB = pushOut;
+					} else if (b.isStatic) {
+						moveA = -pushOut;
+					} else {
+						moveA = pushOut * 0.5f;
+						moveB = -pushOut * 0.5f;
+					}
 				}
 
 				translateRuntimeCollider(colliders[i], moveA);
