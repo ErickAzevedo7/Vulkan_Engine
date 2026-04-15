@@ -82,6 +82,9 @@ public:
 	Entity* instantiatePrefab(const std::string& prefabPath,
 							 const glm::vec3& worldPosition,
 							 const std::string& rootNameOverride = "") const;
+
+	void destroyOwner() const;
+ 	void destroyEntity(uint32_t entityId) const;
 };
 
 #define SCRIPT(ClassName)                                                                                              \

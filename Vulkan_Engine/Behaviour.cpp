@@ -143,8 +143,8 @@ Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::s
 }
 
 Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
-									 const glm::vec3& worldPosition,
-									 const std::string& rootNameOverride) const {
+							 const glm::vec3& worldPosition,
+							 const std::string& rootNameOverride) const {
 	Entity* spawned = instantiatePrefab(prefabPath, rootNameOverride);
 	if (!spawned) {
 		return nullptr;
@@ -155,4 +155,30 @@ Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
 	}
 
 	return spawned;
+}
+
+void Behaviour::destroyOwner() const {
+	if (!owner) {
+		return;
+	}
+
+	Scene* scene = owner->getScene();
+	if (!scene) {
+		return;
+	}
+
+	scene->removeEntityById(owner->getID());
+}
+
+void Behaviour::destroyEntity(uint32_t entityId) const {
+	if (!owner) {
+		return;
+	}
+
+	Scene* scene = owner->getScene();
+	if (!scene) {
+		return;
+	}
+
+	scene->removeEntityById(entityId);
 }
