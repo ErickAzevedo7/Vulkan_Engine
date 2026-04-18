@@ -129,7 +129,12 @@ void Behaviour::hudImage(const std::string& texturePath,
 	RuntimeHud::addImage(texturePath, normalizedPosition, normalizedSize, tint, centered);
 }
 
-Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride) const {
+Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
+							 const std::string& rootNameOverride,
+							 const glm::vec3& worldPosition,
+							 const glm::quat& worldRotation,
+							 bool applyWorldPosition,
+							 bool applyWorldRotation) const {
 	if (!owner || !s_resourceContext) {
 		return nullptr;
 	}
@@ -139,19 +144,18 @@ Entity* Behaviour::instantiatePrefab(const std::string& prefabPath, const std::s
 		return nullptr;
 	}
 
-	return PrefabSerializer::instantiate(prefabPath, scene, *s_resourceContext, rootNameOverride);
-}
-
-Entity* Behaviour::instantiatePrefab(const std::string& prefabPath,
-							 const glm::vec3& worldPosition,
-							 const std::string& rootNameOverride) const {
-	Entity* spawned = instantiatePrefab(prefabPath, rootNameOverride);
+	Entity* spawned = PrefabSerializer::instantiate(prefabPath, scene, *s_resourceContext, rootNameOverride);
 	if (!spawned) {
 		return nullptr;
 	}
 
 	if (auto* transform = spawned->getComponent<Transform>()) {
-		transform->setWorldPosition(worldPosition);
+		if (applyWorldPosition) {
+			transform->setWorldPosition(worldPosition);
+		}
+		if (applyWorldRotation) {
+			transform->setWorldRotation(worldRotation);
+		}
 	}
 
 	return spawned;

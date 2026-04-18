@@ -78,10 +78,12 @@ public:
 				  const glm::vec4& tint = glm::vec4(1.0f),
 				  bool centered = false) const;
 
-	Entity* instantiatePrefab(const std::string& prefabPath, const std::string& rootNameOverride = "") const;
 	Entity* instantiatePrefab(const std::string& prefabPath,
-							 const glm::vec3& worldPosition,
-							 const std::string& rootNameOverride = "") const;
+							 const std::string& rootNameOverride = "",
+							 const glm::vec3& worldPosition = glm::vec3(0.0f),
+							 const glm::quat& worldRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+							 bool applyWorldPosition = false,
+							 bool applyWorldRotation = false) const;
 
 	void destroyOwner() const;
  	void destroyEntity(uint32_t entityId) const;

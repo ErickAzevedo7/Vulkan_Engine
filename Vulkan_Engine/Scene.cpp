@@ -165,10 +165,25 @@ void Scene::onRuntimeStop() {
 
 void Scene::onUpdate(float deltaTime, Core::EventBus* eventBus) {
 	if (state == SceneState::Play && !runtimePaused) {
+		std::vector<uint32_t> entityIds;
+		entityIds.reserve(entities.size());
 		for (const auto& ePtr : entities) {
-			auto scripts = ePtr->getComponents<ScriptComponent>();
+			if (ePtr) {
+				entityIds.push_back(ePtr->getID());
+			}
+		}
+
+		for (uint32_t id : entityIds) {
+			Entity* entity = findEntityById(id);
+			if (!entity) {
+				continue;
+			}
+
+			auto scripts = entity->getComponents<ScriptComponent>();
 			for (auto* sc : scripts) {
-				sc->onUpdate(deltaTime);
+				if (sc) {
+					sc->onUpdate(deltaTime);
+				}
 			}
 		}
 		collisionSystem.update(*this, eventBus);
