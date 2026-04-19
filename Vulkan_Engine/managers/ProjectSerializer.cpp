@@ -78,6 +78,15 @@ bool ProjectSerializer::save(const std::string& filePath, Scene* scene, Resource
 			json mj;
 			Mesh* mesh = m->GetMesh();
 			mj["mesh_name"] = mesh ? mesh->name : "";
+			if (mesh) {
+				const std::string& meshName = mesh->name;
+				const size_t partSeparator = meshName.find("::");
+				const std::string sourcePath =
+					(partSeparator != std::string::npos) ? meshName.substr(0, partSeparator) : meshName;
+				if (MeshManager::isSupportedModelFile(sourcePath)) {
+					mj["mesh_source_path"] = sourcePath;
+				}
+			}
 			Material* mat = m->GetMaterial();
 			mj["material_path"] = mat ? mat->filePath : "";
 			ej["mesh"] = mj;
@@ -242,15 +251,33 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 		if (ej.contains("mesh")) {
 			const auto& mj = ej["mesh"];
 			std::string meshName = mj.value("mesh_name", "");
+			std::string meshSourcePath = mj.value("mesh_source_path", "");
 			std::string matPath = mj.value("material_path", "");
 
 			if (!meshName.empty()) {
 				Mesh* mesh = meshMgr.getMesh(meshName);
+
+				if (!mesh && meshSourcePath.empty()) {
+					const size_t partSeparator = meshName.find("::");
+					if (partSeparator != std::string::npos) {
+						meshSourcePath = meshName.substr(0, partSeparator);
+					}
+				}
+
+				if (!mesh && MeshManager::isSupportedModelFile(meshSourcePath)) {
+					meshMgr.loadMeshPartsFromFile(meshSourcePath, VulkanCore::getCommandPool());
+					mesh = meshMgr.getMesh(meshName);
+					if (!mesh) {
+						mesh = meshMgr.getMesh(meshSourcePath);
+					}
+				}
+
 				if (!mesh && MeshManager::isSupportedModelFile(meshName)) {
 					mesh = meshMgr.loadMeshFromFile(meshName, VulkanCore::getCommandPool());
 				}
+
 				if (mesh) {
-					MeshComponent* mc = new MeshComponent(&entity, meshName, meshMgr);
+					MeshComponent* mc = new MeshComponent(&entity, mesh->name, meshMgr);
 					// Restore material
 					Material* mat = matPath.empty() ? nullptr : matMgr.getMaterial(matPath);
 					if (!mat) {
@@ -356,6 +383,17 @@ bool ProjectSerializer::load(const std::string& filePath, Scene* scene, Resource
 			if (smj.contains("localSize") && smj["localSize"].size() == 3) {
 				staticMeshCollider->localSize = {smj["localSize"][0], smj["localSize"][1], smj["localSize"][2]};
 			}
+
+			if (staticMeshCollider->useAttachedMeshBounds) {
+				auto* meshComp = entity.getComponent<MeshComponent>();
+				if (!meshComp || !meshComp->GetMesh()) {
+					std::cerr << "[ProjectSerializer] Warning: StaticMeshCollider on entity '" << entity.getName()
+							  << "' (ID " << entity.getID()
+							  << ") uses attached mesh bounds, but no valid mesh is loaded."
+							  << " Falling back to local collider bounds.\n";
+				}
+			}
+
 			entity.addComponent(staticMeshCollider);
 		}
 	}
