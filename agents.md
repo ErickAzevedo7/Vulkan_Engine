@@ -6,7 +6,6 @@ This file gives coding agents a fast, project-specific playbook for making safe,
 
 - Language/toolchain: C++17, Visual Studio solution/projects (`.sln`/`.vcxproj`), Vulkan.
 - Main app project: `Vulkan_Engine/Vulkan_Engine.vcxproj`.
-- Script/plugin project: `GameScripts/GameScripts.vcxproj` (builds `GameScripts.dll`).
 - Dependency manager: vcpkg manifest mode (`Vulkan_Engine/vcpkg.json`).
 - Typical platform/config: `x64` + `Debug` or `Release`.
 
@@ -14,7 +13,7 @@ This file gives coding agents a fast, project-specific playbook for making safe,
 
 - `Vulkan_Engine/` - main engine/editor source (rendering, ECS-style components, managers, UI).
 - `GameScripts/` - gameplay script DLL project loaded by engine.
-- `projects/` - output location for script DLLs (engine scans this folder).
+- `projects/` - output location for scripts, assets, and other project files.
 - `Vulkan_Engine/shaders/` - GLSL shaders and `compile.bat` for SPIR-V generation.
 - `README.md` - local setup/prerequisites overview.
 
