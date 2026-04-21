@@ -97,7 +97,7 @@ void SceneRenderer::createUniformBuffers(VkPhysicalDevice physicalDevice) {
 		dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
 	}
 
-	size_t bufferSize = MAX_OBJECTS * dynamicAlignment;
+	size_t bufferSize = kMaxPerObjectUbos * dynamicAlignment;
 	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 	uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
@@ -153,6 +153,8 @@ void SceneRenderer::renderScene(Renderer::RenderCommandList& commandList,
 								uint32_t currentFrame,
 								VkDescriptorSet globalSet) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
+	if (!scene)
+		return;
 
 	// Bind GlobalUBO (set=0) and Lighting/Environment (set=1) once at the top of every scene pass.
 	// We retrieve the lighting descriptor set for the current frame
@@ -170,11 +172,22 @@ void SceneRenderer::renderScene(Renderer::RenderCommandList& commandList,
 								nullptr);
 	}
 
-	size_t entities = scene->getEntityCount();
-	for (int i = 1; i <= entities; ++i) {
-		Entity* entity = &scene->getEntity(i);
+	auto* entities = scene->getEntities();
+	if (!entities)
+		return;
 
-		renderEntity(entity, commandList, pipeline, pipelineLayout, currentFrame, 0);
+	for (size_t perObjectIndex = 0; perObjectIndex < entities->size(); ++perObjectIndex) {
+		Entity* entity = (*entities)[perObjectIndex].get();
+		if (!entity)
+			continue;
+
+		renderEntity(entity,
+					 commandList,
+					 pipeline,
+					 pipelineLayout,
+					 currentFrame,
+					 0,
+					 static_cast<uint32_t>(perObjectIndex));
 	}
 }
 
@@ -183,7 +196,8 @@ void SceneRenderer::renderEntity(const Entity* entity,
 								 VkPipeline pipeline,
 								 VkPipelineLayout pipelineLayout,
 								 uint32_t currentFrame,
-								 int useMousePick) {
+								 int useMousePick,
+								 uint32_t perObjectIndex) {
 	const MeshComponent* meshComp = entity->getComponent<MeshComponent>();
 
 	if (!meshComp) {
@@ -195,6 +209,7 @@ void SceneRenderer::renderEntity(const Entity* entity,
 					 pipelineLayout,
 					 currentFrame,
 					 useMousePick,
+					 perObjectIndex,
 					 resources->getMeshManager(),
 					 resources->getResourceBinder());
 }
@@ -229,6 +244,8 @@ void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 									uint32_t currentFrame,
 									VkDescriptorSet globalSet) {
 	Scene* scene = resources->getSceneManager().getActiveScene();
+	if (!scene)
+		return;
 
 	// Bind GlobalUBO (set=0) and Lighting/Environment (set=1)
 	VkDescriptorSet lightingSet = resources->getLightManager().getDescriptorSets()[currentFrame];
@@ -245,11 +262,22 @@ void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 								nullptr);
 	}
 
-	size_t entities = scene->getEntityCount();
-	for (int i = 1; i <= entities; ++i) {
-		Entity* entity = &scene->getEntity(i);
+	auto* entities = scene->getEntities();
+	if (!entities)
+		return;
 
-		renderEntity(entity, commandList, pipeline, pipelineLayout, currentFrame, 1);
+	for (size_t perObjectIndex = 0; perObjectIndex < entities->size(); ++perObjectIndex) {
+		Entity* entity = (*entities)[perObjectIndex].get();
+		if (!entity)
+			continue;
+
+		renderEntity(entity,
+					 commandList,
+					 pipeline,
+					 pipelineLayout,
+					 currentFrame,
+					 1,
+					 static_cast<uint32_t>(perObjectIndex));
 	}
 }
 

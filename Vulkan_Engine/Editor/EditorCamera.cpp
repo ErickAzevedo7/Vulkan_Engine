@@ -14,6 +14,8 @@
 #include "components/StaticMeshColliderComponent.h"
 #include "components/Transform.h"
 
+#include "SceneRenderer.h"
+
 // Project headers - Managers
 #include "managers/SceneManager.h"
 #include "managers/MeshManager.h"
@@ -54,6 +56,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -266,7 +269,20 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 	memcpy(gameGlobalBufferMapped, &gameGlobal, sizeof(GlobalUBO));
 
 	// --- Write PerObjectUBO for each entity into the dynamic UBO ---
-	for (const auto& entityPtr : *entities) {
+	const size_t maxObjects = static_cast<size_t>(SceneRenderer::getMaxObjects());
+	size_t entityCountForUbo = entities->size();
+	if (entityCountForUbo > maxObjects) {
+		static bool capacityWarningLogged = false;
+		if (!capacityWarningLogged) {
+			std::cerr << "[EditorCamera] Per-object uniform buffer capacity exceeded; extra entities won't be rendered."
+					  << std::endl;
+			capacityWarningLogged = true;
+		}
+		entityCountForUbo = maxObjects;
+	}
+
+	for (size_t perObjectIndex = 0; perObjectIndex < entityCountForUbo; ++perObjectIndex) {
+		const auto& entityPtr = (*entities)[perObjectIndex];
 		const Entity& entity = *entityPtr;
 		auto* t = entity.getComponent<Transform>();
 		if (!t)
@@ -278,7 +294,7 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 		perObj.model = model;
 		perObj.normal = glm::transpose(glm::inverse(model));
 
-		size_t offset = entity.getID() * vulkanDevice->getDynamicAlignment();
+		size_t offset = perObjectIndex * vulkanDevice->getDynamicAlignment();
 		char* base = static_cast<char*>(uniformBufferMapped);
 		memcpy(base + offset, &perObj, sizeof(PerObjectUBO));
 	}

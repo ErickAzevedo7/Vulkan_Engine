@@ -27,6 +27,7 @@ public:
 				VkPipelineLayout pipelineLayout,
 				uint32_t currentFrame,
 				int useMousePick,
+				uint32_t perObjectIndex,
 				MeshManager& meshManager,
 				Renderer::GraphicsResourceBinder& binder) const;
 

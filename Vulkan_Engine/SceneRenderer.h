@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
-#define MAX_OBJECTS 1000
+inline constexpr uint32_t kMaxPerObjectUbos = 10000;
 
 // Forward declarations
 class ResourceContext; // Forward declaration
@@ -37,7 +37,8 @@ public:
 							 VkPipeline pipeline,
 							 VkPipelineLayout pipelineLayout,
 							 uint32_t currentFrame,
-							 int useMousePick);
+							 int useMousePick,
+							 uint32_t perObjectIndex);
 	static void renderOutlineSelected(Renderer::RenderCommandList& commandList,
 									  VkPipeline outlinePipeline,
 									  VkPipelineLayout outlinePipelineLayout,
@@ -56,6 +57,9 @@ public:
 	}
 	static VkDescriptorSetLayout getPerObjectDescriptorSetLayout() {
 		return perObjectDescriptorSetLayout;
+	}
+	static uint32_t getMaxObjects() {
+		return kMaxPerObjectUbos;
 	}
 	static std::vector<void*>& getUniformBuffersMapped() {
 		return uniformBuffersMapped;

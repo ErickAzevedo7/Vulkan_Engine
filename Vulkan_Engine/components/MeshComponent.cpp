@@ -39,6 +39,7 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 						   VkPipelineLayout pipelineLayout,
 						   uint32_t currentFrame,
 						   int useMousePick,
+						   uint32_t perObjectIndex,
 						   MeshManager& meshManager,
 						   Renderer::GraphicsResourceBinder& binder) const {
 	if (!visible || !mesh)
@@ -76,11 +77,17 @@ void MeshComponent::render(Renderer::RenderCommandList& commandList,
 
 	commandList.bindIndexBuffer(meshManager.getIndexBuffer(*mesh));
 
-	uint32_t maxEntities = 1000;
-	if (id >= maxEntities) {
-		throw std::runtime_error("Entity ID exceeds uniform buffer capacity!");
+	const uint32_t maxEntities = SceneRenderer::getMaxObjects();
+	if (perObjectIndex >= maxEntities) {
+		static bool capacityWarningLogged = false;
+		if (!capacityWarningLogged) {
+			std::cerr << "[MeshComponent] Per-object uniform buffer capacity exceeded; skipping extra draws."
+					  << std::endl;
+			capacityWarningLogged = true;
+		}
+		return;
 	}
-	uint32_t dynamicOffset = static_cast<uint32_t>(id * SceneRenderer::getDynamicAlignment());
+	uint32_t dynamicOffset = static_cast<uint32_t>(perObjectIndex * SceneRenderer::getDynamicAlignment());
 
 	// Retrieve native handle for Material (Set 2) from binder
 	Renderer::ResourceSetHandle frameSet = material->resourceSets[currentFrame];

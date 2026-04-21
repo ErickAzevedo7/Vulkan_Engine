@@ -507,6 +507,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 
 		// Important: End columns before continuing
 		ImGui::Columns(1);
+		ImGui::PopStyleVar();
 
 		// If properties changed, update GPU buffers and save to file
 		if (propertiesChanged) {
@@ -536,7 +537,6 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 	}
 
 	ImGui::Unindent(kContentIndent);
-	ImGui::PopStyleVar();
 }
 
 void InspectorUi::render() {
