@@ -10,6 +10,7 @@ class ResourceContext; // Forward declaration
 class VulkanCore;
 class Entity;
 class ViewPort;
+class Scene;
 
 namespace Renderer {
 class RenderCommandList;
@@ -20,6 +21,8 @@ public:
 	static void init(ResourceContext* resources);
 	static void initDescriptorResources(VkDevice device, VkDescriptorPool pool, VkPhysicalDevice physicalDevice);
 	static void cleanup();
+	static void setSceneOverride(Scene* sceneOverride);
+	static Scene* getSceneForRendering();
 
 	static void renderScene(Renderer::RenderCommandList& commandList,
 							VkPipeline pipeline,
@@ -67,6 +70,7 @@ public:
 
 private:
 	static ResourceContext* resources;
+	static Scene* sceneOverride;
 
 	static VkDevice device;
 	static VkDescriptorPool descriptorPool;
@@ -78,6 +82,8 @@ private:
 	static std::vector<VkDeviceMemory> uniformBuffersMemory;
 	static std::vector<void*> uniformBuffersMapped;
 	static VkDeviceSize dynamicAlignment;
+
+	static Scene* resolveScene();
 
 	static void createPerObjectDescriptorSetLayout();
 	static void createUniformBuffers(VkPhysicalDevice physicalDevice);

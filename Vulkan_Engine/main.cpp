@@ -201,6 +201,15 @@ public:
 	}
 
 	void drawFrame(uint32_t imageIndex) {
+		Scene* sceneOverride = inspector.getSceneOverrideForViewport();
+		if (sceneOverride) {
+			Scene* activeScene = resourceContext.getSceneManager().getActiveScene();
+			if (activeScene && activeScene->getState() == SceneState::Play) {
+				sceneOverride = nullptr;
+			}
+		}
+		SceneRenderer::setSceneOverride(sceneOverride);
+
 		// (TEMPORARY)
 		// Update simple single light (for now static directional light)
 		glm::mat4 lightSpaceMatrices[6] = {
@@ -328,6 +337,8 @@ public:
 		} else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");
 		}
+
+		SceneRenderer::setSceneOverride(nullptr);
 
 		engineCore.setCurrentFrame((VulkanCore::getCurrentFrame() + 1) % MAX_FRAMES_IN_FLIGHT);
 	}

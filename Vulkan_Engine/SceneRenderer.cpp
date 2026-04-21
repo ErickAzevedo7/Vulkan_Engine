@@ -24,6 +24,7 @@
 
 // Initialize static members
 ResourceContext* SceneRenderer::resources = nullptr;
+Scene* SceneRenderer::sceneOverride = nullptr;
 
 VkDevice SceneRenderer::device = VK_NULL_HANDLE;
 VkDescriptorPool SceneRenderer::descriptorPool = VK_NULL_HANDLE;
@@ -36,6 +37,24 @@ VkDeviceSize SceneRenderer::dynamicAlignment = 0;
 
 void SceneRenderer::init(ResourceContext* resContext) {
 	SceneRenderer::resources = resContext;
+}
+
+void SceneRenderer::setSceneOverride(Scene* overrideScene) {
+	sceneOverride = overrideScene;
+}
+
+Scene* SceneRenderer::resolveScene() {
+	if (sceneOverride) {
+		return sceneOverride;
+	}
+	if (!resources) {
+		return nullptr;
+	}
+	return resources->getSceneManager().getActiveScene();
+}
+
+Scene* SceneRenderer::getSceneForRendering() {
+	return resolveScene();
 }
 
 void SceneRenderer::initDescriptorResources(VkDevice dev, VkDescriptorPool pool, VkPhysicalDevice physicalDevice) {
@@ -64,6 +83,7 @@ void SceneRenderer::cleanup() {
 	}
 
 	device = VK_NULL_HANDLE;
+	sceneOverride = nullptr;
 }
 
 void SceneRenderer::createPerObjectDescriptorSetLayout() {
@@ -152,7 +172,7 @@ void SceneRenderer::renderScene(Renderer::RenderCommandList& commandList,
 								VkPipelineLayout pipelineLayout,
 								uint32_t currentFrame,
 								VkDescriptorSet globalSet) {
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = resolveScene();
 	if (!scene)
 		return;
 
@@ -218,7 +238,9 @@ void SceneRenderer::renderOutlineSelected(Renderer::RenderCommandList& commandLi
 										  VkPipeline outlinePipeline,
 										  VkPipelineLayout outlinePipelineLayout,
 										  VkDescriptorSet outlineDescriptorSet) {
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = resolveScene();
+	if (!scene)
+		return;
 	size_t entities = scene->getEntityCount();
 	for (int i = 1; i <= entities; ++i) {
 		Entity* entity = &scene->getEntity(i);
@@ -243,7 +265,7 @@ void SceneRenderer::renderMousePick(Renderer::RenderCommandList& commandList,
 									VkPipelineLayout pipelineLayout,
 									uint32_t currentFrame,
 									VkDescriptorSet globalSet) {
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = resolveScene();
 	if (!scene)
 		return;
 
@@ -285,7 +307,7 @@ void SceneRenderer::renderShadows(Renderer::RenderCommandList& commandList,
 								  VkPipeline shadowPipeline,
 								  VkPipelineLayout shadowPipelineLayout,
 								  VkDescriptorSet shadowDescriptorSet) {
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = resolveScene();
 	if (!scene)
 		return;
 

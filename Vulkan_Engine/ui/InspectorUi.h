@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -9,9 +10,11 @@
 #include "vulkan/vulkan_core.h"
 
 class AssetBrowser;
+class Scene;
+class Entity;
 
 // What the inspector is currently inspecting.
-enum class InspectorSelectionType { None, Entity, Asset, Material };
+enum class InspectorSelectionType { None, Entity, Asset, Material, Prefab };
 
 struct InspectorSelection {
 	InspectorSelectionType type = InspectorSelectionType::None;
@@ -40,6 +43,8 @@ public:
 	// Query helpers
 	int getSelectedEntityId(); // returns -1 if no entity selected
 	const std::string& getSelectedAssetPath();
+	bool isEditingPrefab() const;
+	Scene* getSceneOverrideForViewport();
 
 	void setAssetBrowser(AssetBrowser* browser) {
 		assetBrowser = browser;
@@ -53,8 +58,14 @@ private:
 
 	InspectorSelection selection;
 	InspectorPickTarget pickTarget;
+	std::unique_ptr<Scene> prefabEditScene;
+	Entity* prefabEditRoot = nullptr;
+	std::string loadedPrefabPath;
 	const float kContentIndent;
 	const ImVec2 kContentSpacing;
+
+	void resetPrefabEditingState();
+	bool ensurePrefabEditingLoaded(const std::string& prefabPath);
 
 	// Helper to derive a logical material name from a .mat asset path
 	std::string getMaterialNameFromPath(const std::string& fullPath);

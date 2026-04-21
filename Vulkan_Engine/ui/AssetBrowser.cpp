@@ -359,8 +359,10 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 		const ImGuiSelectableFlags flags = ImGuiSelectableFlags_AllowDoubleClick;
 
 		if (ImGui::Selectable("##AssetTile", selected, flags, size)) {
-			// Let inspector know this asset is now the active selection
-			inspector.selectAsset(fe.fullPath);
+			// Let inspector know this asset is now the active selection (files only)
+			if (!fe.isDirectory) {
+				inspector.selectAsset(fe.fullPath);
+			}
 
 			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 				if (fe.isDirectory) {
@@ -377,11 +379,11 @@ void AssetBrowser::DrawFolderContents(const char* fileFilter) {
 						}
 					}
 
-					if (ext == "mat") {
+					if (ext == "prefab") {
+						inspector.selectAsset(fe.fullPath);
+					} else if (ext == "mat") {
 						Material* material = resources.getMaterialManager().loadMaterialFromFile(fe.fullPath);
 						if (material) {
-							// Here you can add a dedicated Inspector selection for materials
-							// For now we just select the asset path so user sees it in Inspector
 							inspector.selectAsset(fe.fullPath);
 						}
 					}

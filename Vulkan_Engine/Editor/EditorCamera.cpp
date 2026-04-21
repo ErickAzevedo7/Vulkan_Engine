@@ -203,7 +203,12 @@ void EditorCamera::updateUniformBuffer(uint32_t currentImage,
 									   const glm::vec4& lightPos_farPlane) {
 	if (!resources)
 		return;
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = SceneRenderer::getSceneForRendering();
+	if (!scene) {
+		scene = resources->getSceneManager().getActiveScene();
+	}
+	if (!scene)
+		return;
 
 	std::vector<std::unique_ptr<Entity>>* entities = scene->getEntities();
 
@@ -358,6 +363,10 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 	}
 
 	if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0)) {
+		if (inspector && inspector->isEditingPrefab()) {
+			return;
+		}
+
 		// If gizmo is hovered or being used, do not change selection
 		if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) {
 			return;
@@ -423,7 +432,10 @@ void EditorCamera::inputProcess(MousePick& mousePick) {
 void EditorCamera::drawGuizmo() {
 	if (!resources)
 		return;
-	Scene* scene = resources->getSceneManager().getActiveScene();
+	Scene* scene = SceneRenderer::getSceneForRendering();
+	if (!scene) {
+		scene = resources->getSceneManager().getActiveScene();
+	}
 	if (!scene)
 		return;
 

@@ -7,6 +7,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <iostream>
+#include <memory>
 #include <managers/SceneManager.h>
 #include <algorithm>
 #include <string.h>
@@ -27,6 +28,7 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_internal.h"
 #include "managers/MaterialManager.h"
+#include "managers/PrefabSerializer.h"
 #include "managers/ScriptCompiler.h"
 #include "managers/ScriptPluginLoader.h"
 #include "managers/ScriptRegistry.h"
@@ -74,7 +76,39 @@ std::string InspectorUi::getMaterialNameFromPath(const std::string& fullPath) {
 	return p.stem().string();
 }
 
+void InspectorUi::resetPrefabEditingState() {
+	prefabEditRoot = nullptr;
+	prefabEditScene.reset();
+	loadedPrefabPath.clear();
+}
+
+bool InspectorUi::ensurePrefabEditingLoaded(const std::string& prefabPath) {
+	if (prefabEditScene && prefabEditRoot && loadedPrefabPath == prefabPath) {
+		return true;
+	}
+
+	resetPrefabEditingState();
+	prefabEditScene = std::make_unique<Scene>("PrefabInspector");
+	prefabEditRoot = PrefabSerializer::instantiate(prefabPath, prefabEditScene.get(), resources);
+	if (!prefabEditRoot) {
+		resetPrefabEditingState();
+		return false;
+	}
+
+	auto* entities = prefabEditScene->getEntities();
+	if (entities) {
+		for (const auto& ePtr : *entities) {
+			ePtr->isSelected = false;
+		}
+	}
+	prefabEditRoot->isSelected = true;
+
+	loadedPrefabPath = prefabPath;
+	return true;
+}
+
 void InspectorUi::selectEntity(int entityId) {
+	resetPrefabEditingState();
 	selection.type = InspectorSelectionType::Entity;
 	selection.entityId = entityId;
 	// Clear any asset selection state when an entity is picked
@@ -105,8 +139,12 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 
 	if (ext == ".mat") {
 		selection.type = InspectorSelectionType::Material;
+		resetPrefabEditingState();
+	} else if (ext == ".prefab") {
+		selection.type = InspectorSelectionType::Prefab;
 	} else {
 		selection.type = InspectorSelectionType::Asset;
+		resetPrefabEditingState();
 	}
 
 	selection.entityId = 0;
@@ -174,6 +212,7 @@ void InspectorUi::selectAsset(const std::string& assetPath) {
 }
 
 void InspectorUi::clearSelection() {
+	resetPrefabEditingState();
 	selection.type = InspectorSelectionType::None;
 	selection.entityId = 0;
 	selection.assetPath.clear();
@@ -196,11 +235,30 @@ int InspectorUi::getSelectedEntityId() {
 	if (selection.type == InspectorSelectionType::Entity) {
 		return selection.entityId;
 	}
+	if (selection.type == InspectorSelectionType::Prefab && prefabEditRoot) {
+		return static_cast<int>(prefabEditRoot->getID());
+	}
 	return -1;
 }
 
 const std::string& InspectorUi::getSelectedAssetPath() {
 	return selection.assetPath;
+}
+
+bool InspectorUi::isEditingPrefab() const {
+	return selection.type == InspectorSelectionType::Prefab &&
+		!selection.assetPath.empty() &&
+		prefabEditScene != nullptr &&
+		prefabEditRoot != nullptr;
+}
+
+Scene* InspectorUi::getSceneOverrideForViewport() {
+	if (selection.type == InspectorSelectionType::Prefab && !selection.assetPath.empty()) {
+		if (ensurePrefabEditingLoaded(selection.assetPath)) {
+			return prefabEditScene.get();
+		}
+	}
+	return nullptr;
 }
 
 VkDescriptorSet InspectorUi::getOrCreateImGuiTextureSet(Texture* texture) {
@@ -540,7 +598,7 @@ void InspectorUi::renderMaterialTab(std::string fullPath) {
 }
 
 void InspectorUi::render() {
-	Scene* scene = resources.getSceneManager().getActiveScene();
+	Scene* activeScene = resources.getSceneManager().getActiveScene();
 	bool edited = false;
 
 	ImGui::PushStyleVarX(ImGuiStyleVar_WindowPadding, 0.0f);
@@ -548,10 +606,14 @@ void InspectorUi::render() {
 	ImGui::Begin("Inspector");
 
 	const float kHeaderContentTopPadding = 6.0f;
+	Scene* inspectorScene = nullptr;
+	Entity* entityPtr = nullptr;
+	const bool isPrefabSelection =
+		(selection.type == InspectorSelectionType::Prefab && !selection.assetPath.empty());
 
-	if (selection.type == InspectorSelectionType::Entity && scene && selection.entityId > 0) {
-		Entity* entityPtr = nullptr;
-		auto* entities = scene->getEntities();
+	if (selection.type == InspectorSelectionType::Entity && activeScene && selection.entityId > 0) {
+		inspectorScene = activeScene;
+		auto* entities = activeScene->getEntities();
 		if (entities) {
 			for (const auto& ePtr : *entities) {
 				if (static_cast<int>(ePtr->getID()) == selection.entityId) {
@@ -568,6 +630,14 @@ void InspectorUi::render() {
 			ImGui::End();
 			return;
 		}
+	} else if (isPrefabSelection) {
+		if (ensurePrefabEditingLoaded(selection.assetPath)) {
+			inspectorScene = prefabEditScene.get();
+			entityPtr = prefabEditRoot;
+		}
+	}
+
+	if (entityPtr) {
 
 		Entity& entity = *entityPtr;
 		bool removeMeshComponent = false;
@@ -1355,7 +1425,9 @@ void InspectorUi::render() {
 				sc->headerPath = headerPath;
 				entity.addComponent(sc);
 				edited = true;
-				scene->markDirty();
+				if (inspectorScene) {
+					inspectorScene->markDirty();
+				}
 			}
 		};
 
@@ -1388,9 +1460,12 @@ void InspectorUi::render() {
 						attachScriptByName(scriptName, filePath);
 					} else {
 						uint32_t targetEntityId = entity.getID();
+						const bool targetIsPrefab = (selection.type == InspectorSelectionType::Prefab);
+						const std::string targetPrefabPath = loadedPrefabPath;
 						ScriptCompiler::compileAsync(
 							filePath,
-							[this, targetEntityId, scriptName, filePath](bool ok, const std::string& dllPath) {
+							[this, targetEntityId, scriptName, filePath, targetIsPrefab, targetPrefabPath](bool ok,
+																								 const std::string& dllPath) {
 								if (!ok) {
 									std::cerr << "[Inspector] Script compile failed. Check build logs.\n";
 									return;
@@ -1398,11 +1473,20 @@ void InspectorUi::render() {
 
 								ScriptPluginLoader::loadPlugin(dllPath);
 
-								Scene* activeScene = resources.getSceneManager().getActiveScene();
-								if (!activeScene)
+								Scene* targetScene = nullptr;
+								if (targetIsPrefab) {
+									if (!(prefabEditScene && loadedPrefabPath == targetPrefabPath)) {
+										return;
+									}
+									targetScene = prefabEditScene.get();
+								} else {
+									targetScene = resources.getSceneManager().getActiveScene();
+								}
+
+								if (!targetScene)
 									return;
 
-								Entity* target = activeScene->findEntityById(targetEntityId);
+								Entity* target = targetScene->findEntityById(targetEntityId);
 								if (!target)
 									return;
 
@@ -1410,7 +1494,7 @@ void InspectorUi::render() {
 							if (sc) {
 								sc->headerPath = filePath;
 									target->addComponent(sc);
-									activeScene->markDirty();
+									targetScene->markDirty();
 								}
 							});
 					}
@@ -1538,10 +1622,18 @@ void InspectorUi::render() {
 		if (selection.type == InspectorSelectionType::Material) {
 			InspectorUi::renderMaterialTab(fullPath);
 		}
+	} else if (selection.type == InspectorSelectionType::Prefab && !selection.assetPath.empty()) {
+		std::filesystem::path p(selection.assetPath);
+		ImGui::TextUnformatted(p.filename().string().c_str());
+		ImGui::TextDisabled("Failed to load prefab.");
 	}
 
-	if (edited && scene) {
-		scene->markDirty();
+	if (edited) {
+		if (selection.type == InspectorSelectionType::Prefab && prefabEditRoot && !selection.assetPath.empty()) {
+			PrefabSerializer::save(selection.assetPath, *prefabEditRoot);
+		} else if (inspectorScene) {
+			inspectorScene->markDirty();
+		}
 	}
 
 	ImGui::PopStyleVar();
