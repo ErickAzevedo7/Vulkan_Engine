@@ -116,6 +116,7 @@ public:
 	// Global pipeline cache shared by all engine subsystems to reduce cold
 	// shader compilation cost across vkCreateGraphicsPipelines calls.
 	static VkPipelineCache getPipelineCache();
+	static void savePipelineCacheToDisk();
 
 	VkInstance getInstance();
 

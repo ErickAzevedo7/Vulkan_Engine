@@ -12,6 +12,7 @@
 #include <string>
 
 #include "core/utils/Utils.h"
+#include "core/vulkancore.h"
 #include "renderer/vulkan/VulkanDevice.h"
 #include "vulkan/vulkan_core.h"
 
@@ -54,13 +55,9 @@ void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, 
 	std::cout.flush();
 	vulkanDevice = device;
 
-	// Create a pipeline cache so the driver can reuse compiled shaders across
-	// the multiple IBL offline render passes (and across engine restarts if
-	// you later persist it to disk).
-	VkPipelineCacheCreateInfo pcCI{};
-	pcCI.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-	if (vkCreatePipelineCache(vulkanDevice->getDevice(), &pcCI, nullptr, &iblPipelineCache) != VK_SUCCESS)
-		iblPipelineCache = VK_NULL_HANDLE; // non-fatal – falls back to uncached
+	// IBL pipelines now use the global VulkanCore pipeline cache which is
+	// persisted to disk. On the second run all IBL shaders load from the
+	// cached binary — no cold-compilation stall.
 
 	std::cout << "[IBL] createCubemapSampler()..." << std::endl;
 	std::cout.flush();
@@ -103,14 +100,14 @@ void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, 
 	vkFreeMemory(vulkanDevice->getDevice(), hdrMemory, nullptr);
 	hdrMemory = VK_NULL_HANDLE;
 
-	// Pipeline cache no longer needed once all offline passes are done.
-	if (iblPipelineCache != VK_NULL_HANDLE) {
-		vkDestroyPipelineCache(vulkanDevice->getDevice(), iblPipelineCache, nullptr);
-		iblPipelineCache = VK_NULL_HANDLE;
-	}
 
 	// Env cubemap view is still kept for possible future specular IBL reuse
 	// but we no longer need to render it each frame.
+
+	// Save the pipeline cache immediately so it's not lost if the application
+	// is forcefully closed during development.
+	VulkanCore::savePipelineCacheToDisk();
+
 	std::cout << "[IBL] init complete" << std::endl;
 	std::cout.flush();
 }
@@ -567,7 +564,7 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 	std::cout << "[IBL] renderCubemapFaces: creating pipeline (" << fragSpv << ")..." << std::endl;
 	std::cout.flush();
 	VkPipeline pipeline;
-	if (vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &pipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(dev, VulkanCore::getPipelineCache(), 1, &gpCI, nullptr, &pipeline) != VK_SUCCESS)
 		throw std::runtime_error("VulkanIBL: failed to create capture pipeline");
 	std::cout << "[IBL] renderCubemapFaces: pipeline created" << std::endl;
 	std::cout.flush();
@@ -1024,7 +1021,7 @@ void VulkanIBL::buildPrefilterMap(VkCommandPool commandPool) {
 	std::cout << "[IBL] buildPrefilterMap: creating pipeline (prefilter_frag.spv)..." << std::endl;
 	std::cout.flush();
 	VkPipeline prefilterPipeline;
-	if (vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &prefilterPipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(dev, VulkanCore::getPipelineCache(), 1, &gpCI, nullptr, &prefilterPipeline) != VK_SUCCESS)
 		throw std::runtime_error("VulkanIBL: failed to create prefilter pipeline");
 	std::cout << "[IBL] buildPrefilterMap: pipeline created" << std::endl;
 	std::cout.flush();
@@ -1228,7 +1225,7 @@ void VulkanIBL::buildBrdfLut(VkCommandPool commandPool) {
 	VkPipeline pipeline;
 	std::cout << "[IBL] buildBrdfLut: creating pipeline (brdf_lut_frag.spv)..." << std::endl;
 	std::cout.flush();
-	vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &pipeline);
+	vkCreateGraphicsPipelines(dev, VulkanCore::getPipelineCache(), 1, &gpCI, nullptr, &pipeline);
 	std::cout << "[IBL] buildBrdfLut: pipeline created" << std::endl;
 	std::cout.flush();
 

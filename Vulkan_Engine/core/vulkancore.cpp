@@ -21,8 +21,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <direct.h>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -149,9 +151,58 @@ void VulkanCore::initVulkan() {
 
 	// Create the global pipeline cache — shared by all engine systems so the
 	// driver can reuse compiled shaders across vkCreateGraphicsPipelines calls.
-	VkPipelineCacheCreateInfo pcCI{};
-	pcCI.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-	vkCreatePipelineCache(device, &pcCI, nullptr, &pipelineCache);
+	// On cold start the cache is empty (first run compiles everything once).
+	// On warm start we pre-populate it from the file saved at last shutdown,
+	// which eliminates all shader compilation stalls completely.
+	{
+		const char* cachePath = "projects/cache/pipeline.cache";
+		std::vector<char> cacheData;
+
+		FILE* f = nullptr;
+		fopen_s(&f, cachePath, "rb");
+		if (f) {
+			fseek(f, 0, SEEK_END);
+			long sz = ftell(f);
+			rewind(f);
+			if (sz > 0) {
+				cacheData.resize(static_cast<size_t>(sz));
+				fread(cacheData.data(), 1, cacheData.size(), f);
+			}
+			fclose(f);
+			if (!cacheData.empty())
+				std::cout << "[PIPELINE CACHE] Loaded " << cacheData.size() << " bytes from " << cachePath << std::endl;
+		}
+
+		VkPipelineCacheCreateInfo pcCI{};
+		pcCI.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		if (!cacheData.empty()) {
+			pcCI.initialDataSize = cacheData.size();
+			pcCI.pInitialData    = cacheData.data();
+		}
+		vkCreatePipelineCache(device, &pcCI, nullptr, &pipelineCache);
+	}
+}
+
+void VulkanCore::savePipelineCacheToDisk() {
+	if (pipelineCache == VK_NULL_HANDLE)
+		return;
+		
+	const char* cachePath = "projects/cache/pipeline.cache";
+	size_t dataSize = 0;
+	if (vkGetPipelineCacheData(device, pipelineCache, &dataSize, nullptr) == VK_SUCCESS && dataSize > 0) {
+		std::vector<char> data(dataSize);
+		if (vkGetPipelineCacheData(device, pipelineCache, &dataSize, data.data()) == VK_SUCCESS) {
+			_mkdir("projects");
+			_mkdir("projects/cache");
+			FILE* f = nullptr;
+			fopen_s(&f, cachePath, "wb");
+			if (f) {
+				fwrite(data.data(), 1, data.size(), f);
+				fclose(f);
+				std::cout << "[PIPELINE CACHE] Saved " << data.size() << " bytes to " << cachePath << std::endl;
+			}
+		}
+	}
 }
 
 SwapChainSupportDetails VulkanCore::querySwapChainSupport(VkPhysicalDevice device) {
@@ -1206,6 +1257,8 @@ void VulkanCore::cleanup() {
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
 	if (pipelineCache != VK_NULL_HANDLE) {
+		// Serialize the pipeline cache to disk so the next run skips compilation.
+		savePipelineCacheToDisk();
 		vkDestroyPipelineCache(device, pipelineCache, nullptr);
 		pipelineCache = VK_NULL_HANDLE;
 	}

@@ -93,7 +93,7 @@ private:
 
 	// Pipeline cache shared across all IBL offline render passes (alive for the
 	// duration of init() and destroyed at the end of it).
-	VkPipelineCache iblPipelineCache = VK_NULL_HANDLE;
+
 
 	// -----------------------------------------------------------------------
 	void createCubemapSampler();
