@@ -113,6 +113,10 @@ public:
 
 	VkPipeline getPipeline();
 
+	// Global pipeline cache shared by all engine subsystems to reduce cold
+	// shader compilation cost across vkCreateGraphicsPipelines calls.
+	static VkPipelineCache getPipelineCache();
+
 	VkInstance getInstance();
 
 	static VkPhysicalDevice getPhysicalDevice();
@@ -195,6 +199,7 @@ private:
 	VkRenderPass renderPass;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+	static VkPipelineCache pipelineCache;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	static VkCommandPool commandPool;
 	std::vector<VkCommandBuffer> commandBuffers;

@@ -61,6 +61,7 @@ std::vector<void*> VulkanCore::gameGlobalBuffersMapped;
 
 std::vector<VkDescriptorSet> VulkanCore::editorGlobalDescriptorSets;
 std::vector<VkDescriptorSet> VulkanCore::gameGlobalDescriptorSets;
+VkPipelineCache VulkanCore::pipelineCache = VK_NULL_HANDLE;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -145,6 +146,12 @@ void VulkanCore::initVulkan() {
 	createGlobalDescriptorSets(); // depends on uniform buffers
 	createCommandBuffers();
 	createSyncObjects();
+
+	// Create the global pipeline cache — shared by all engine systems so the
+	// driver can reuse compiled shaders across vkCreateGraphicsPipelines calls.
+	VkPipelineCacheCreateInfo pcCI{};
+	pcCI.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	vkCreatePipelineCache(device, &pcCI, nullptr, &pipelineCache);
 }
 
 SwapChainSupportDetails VulkanCore::querySwapChainSupport(VkPhysicalDevice device) {
@@ -195,6 +202,10 @@ VkPipelineLayout VulkanCore::getPipelineLayout() {
 
 VkPipeline VulkanCore::getPipeline() {
 	return graphicsPipeline;
+}
+
+VkPipelineCache VulkanCore::getPipelineCache() {
+	return pipelineCache;
 }
 
 VkInstance VulkanCore::getInstance() {
@@ -903,7 +914,7 @@ void VulkanCore::createGraphicsPipeline(VkDescriptorSetLayout lightLayout,
 	pipelineInfo.subpass = 0;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
@@ -1194,6 +1205,10 @@ void VulkanCore::cleanup() {
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
+	if (pipelineCache != VK_NULL_HANDLE) {
+		vkDestroyPipelineCache(device, pipelineCache, nullptr);
+		pipelineCache = VK_NULL_HANDLE;
+	}
 	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 

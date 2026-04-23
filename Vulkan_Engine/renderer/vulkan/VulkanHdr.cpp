@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -13,18 +14,54 @@
 namespace Renderer {
 
 void VulkanHdr::init(void* device, void* hdrResolveImageView, uint32_t width, uint32_t height) {
+	std::cout << "[HDR] init starting, w=" << width << " h=" << height << std::endl;
+	std::cout.flush();
 	this->vulkanDevice = static_cast<Renderer::VulkanDevice*>(device);
 	this->hdrResolveImageView = static_cast<VkImageView>(hdrResolveImageView);
 	this->viewportExtent = {width, height};
 
+	std::cout << "[HDR] createHdrRenderPass()..." << std::endl;
+	std::cout.flush();
 	createHdrRenderPass();
+	std::cout << "[HDR] createHdrRenderPass() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createLdrImages()..." << std::endl;
+	std::cout.flush();
 	createLdrImages();
+	std::cout << "[HDR] createLdrImages() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createHdrFramebuffers()..." << std::endl;
+	std::cout.flush();
 	createHdrFramebuffers();
+	std::cout << "[HDR] createHdrFramebuffers() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createHdrSampler()..." << std::endl;
+	std::cout.flush();
 	createHdrSampler();
+	std::cout << "[HDR] createHdrSampler() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createDescriptorPool()..." << std::endl;
+	std::cout.flush();
 	createDescriptorPool();
+	std::cout << "[HDR] createDescriptorPool() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createHdrDescriptorSets()..." << std::endl;
+	std::cout.flush();
 	createHdrDescriptorSets();
+	std::cout << "[HDR] createHdrDescriptorSets() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createGraphicsPipeline()..." << std::endl;
+	std::cout.flush();
 	createGraphicsPipeline();
+	std::cout << "[HDR] createGraphicsPipeline() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] createCommandBuffers()..." << std::endl;
+	std::cout.flush();
 	createCommandBuffers();
+	std::cout << "[HDR] createCommandBuffers() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[HDR] init complete" << std::endl;
+	std::cout.flush();
 }
 
 void VulkanHdr::recordHdrCommandBuffer(uint32_t currentFrame, uint32_t imageIndex, float exposure) {
@@ -450,7 +487,7 @@ void VulkanHdr::createGraphicsPipeline() {
 	pipelineInfo.renderPass = hdrRenderPass;
 	pipelineInfo.subpass = 0;
 
-	if (vkCreateGraphicsPipelines(vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &hdrPipeline) !=
+	if (vkCreateGraphicsPipelines(vulkanDevice->getDevice(), VulkanCore::getPipelineCache(), 1, &pipelineInfo, nullptr, &hdrPipeline) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create HDR graphics pipeline!");
 	}

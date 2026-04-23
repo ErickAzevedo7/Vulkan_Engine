@@ -224,7 +224,7 @@ void GridPlane::createGridPlanePipeline(VkRenderPass renderPass) {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &gridPLanePipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VulkanCore::getPipelineCache(), 1, &pipelineInfo, nullptr, &gridPLanePipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create grid graphics pipeline!");
 	}
 

@@ -508,7 +508,7 @@ void VulkanShadowMap::createPipeline() {
 	pipelineInfo.renderPass = renderPass;
 	pipelineInfo.subpass = 0;
 
-	if (vkCreateGraphicsPipelines(vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) !=
+	if (vkCreateGraphicsPipelines(vulkanDevice->getDevice(), VulkanCore::getPipelineCache(), 1, &pipelineInfo, nullptr, &pipeline) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("failed to create shadow graphics pipeline!");
 	}

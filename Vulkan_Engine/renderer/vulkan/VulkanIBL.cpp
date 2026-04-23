@@ -6,6 +6,7 @@
 #include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 #include <stb_image.h>
 #include <stdexcept>
 #include <string>
@@ -49,14 +50,48 @@ struct PrefilterPushConstants {
 
 // ============================================================================
 void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, const char* hdrPath) {
+	std::cout << "[IBL] init starting with HDR: " << hdrPath << std::endl;
+	std::cout.flush();
 	vulkanDevice = device;
 
+	// Create a pipeline cache so the driver can reuse compiled shaders across
+	// the multiple IBL offline render passes (and across engine restarts if
+	// you later persist it to disk).
+	VkPipelineCacheCreateInfo pcCI{};
+	pcCI.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	if (vkCreatePipelineCache(vulkanDevice->getDevice(), &pcCI, nullptr, &iblPipelineCache) != VK_SUCCESS)
+		iblPipelineCache = VK_NULL_HANDLE; // non-fatal – falls back to uncached
+
+	std::cout << "[IBL] createCubemapSampler()..." << std::endl;
+	std::cout.flush();
 	createCubemapSampler();
+	std::cout << "[IBL] createCubemapSampler() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[IBL] loadEquirect()..." << std::endl;
+	std::cout.flush();
 	loadEquirect(commandPool, hdrPath);
+	std::cout << "[IBL] loadEquirect() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[IBL] buildEnvCubemap()..." << std::endl;
+	std::cout.flush();
 	buildEnvCubemap(commandPool);
+	std::cout << "[IBL] buildEnvCubemap() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[IBL] buildIrradianceMap()..." << std::endl;
+	std::cout.flush();
 	buildIrradianceMap(commandPool);
+	std::cout << "[IBL] buildIrradianceMap() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[IBL] buildPrefilterMap()..." << std::endl;
+	std::cout.flush();
 	buildPrefilterMap(commandPool);
+	std::cout << "[IBL] buildPrefilterMap() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[IBL] buildBrdfLut()..." << std::endl;
+	std::cout.flush();
 	buildBrdfLut(commandPool);
+	std::cout << "[IBL] buildBrdfLut() done" << std::endl;
+	std::cout.flush();
 
 	// Temp HDR 2-D image is no longer needed after buildEnvCubemap
 	vkDestroySampler(vulkanDevice->getDevice(), hdrSampler, nullptr);
@@ -68,8 +103,16 @@ void VulkanIBL::init(Renderer::VulkanDevice* device, VkCommandPool commandPool, 
 	vkFreeMemory(vulkanDevice->getDevice(), hdrMemory, nullptr);
 	hdrMemory = VK_NULL_HANDLE;
 
+	// Pipeline cache no longer needed once all offline passes are done.
+	if (iblPipelineCache != VK_NULL_HANDLE) {
+		vkDestroyPipelineCache(vulkanDevice->getDevice(), iblPipelineCache, nullptr);
+		iblPipelineCache = VK_NULL_HANDLE;
+	}
+
 	// Env cubemap view is still kept for possible future specular IBL reuse
 	// but we no longer need to render it each frame.
+	std::cout << "[IBL] init complete" << std::endl;
+	std::cout.flush();
 }
 
 void VulkanIBL::cleanup() {
@@ -119,9 +162,15 @@ void VulkanIBL::createCubemapSampler() {
 // Load the equirectangular HDR into a 2-D VkImage (RGBA32F)
 // ----------------------------------------------------------------------------
 void VulkanIBL::loadEquirect(VkCommandPool commandPool, const char* hdrPath) {
+	std::cout << "[IBL] Loading HDR file: " << hdrPath << std::endl;
+	std::cout.flush();
 	int w, h, channels;
 	stbi_set_flip_vertically_on_load(true);
+	std::cout << "[IBL] stbi_loadf() called..." << std::endl;
+	std::cout.flush();
 	float* pixels = stbi_loadf(hdrPath, &w, &h, &channels, STBI_rgb_alpha);
+	std::cout << "[IBL] stbi_loadf() returned, w=" << w << " h=" << h << " channels=" << channels << std::endl;
+	std::cout.flush();
 	if (!pixels)
 		throw std::runtime_error(std::string("VulkanIBL: failed to load HDR map: ") + hdrPath);
 
@@ -365,6 +414,13 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 								   float roughness) {
 	VkDevice dev = vulkanDevice->getDevice();
 
+	std::cout << "[IBL] renderCubemapFaces: face=0 size=" << size << " mip=" << mipLevel << std::endl;
+	std::cout.flush();
+
+	// ---------- Render pass ----------
+	std::cout << "[IBL] renderCubemapFaces: creating render pass..." << std::endl;
+	std::cout.flush();
+
 	// ---------- Render pass ----------
 	VkAttachmentDescription colorAtt{};
 	colorAtt.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -427,11 +483,17 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 		throw std::runtime_error("VulkanIBL: failed to create capture pipeline layout");
 
 	// ---------- Shaders ----------
+	std::cout << "[IBL] renderCubemapFaces: reading shaders..." << std::endl;
+	std::cout.flush();
 	auto vertCode = Utils::readFile(vertSpv);
 	auto fragCode = Utils::readFile(fragSpv);
+	std::cout << "[IBL] renderCubemapFaces: shaders loaded, vert=" << vertCode.size() << " bytes, frag=" << fragCode.size() << " bytes" << std::endl;
+	std::cout.flush();
 	VkShaderModule vertModule, fragModule;
 	Utils::createShaderModule(vertCode, vertModule);
 	Utils::createShaderModule(fragCode, fragModule);
+	std::cout << "[IBL] renderCubemapFaces: shader modules created" << std::endl;
+	std::cout.flush();
 
 	VkPipelineShaderStageCreateInfo stages[2]{};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -451,19 +513,25 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 	iaCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	iaCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-	VkViewport viewport{0, 0, (float)size, (float)size, 0, 1};
-	VkRect2D scissor{{0, 0}, {size, size}};
-
+	// Viewport and scissor are dynamic so the same pipeline object can be
+	// reused across mip levels with different sizes (used by buildPrefilterMap).
 	VkPipelineViewportStateCreateInfo vpsCI{};
 	vpsCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	vpsCI.viewportCount = 1;
-	vpsCI.pViewports = &viewport;
 	vpsCI.scissorCount = 1;
-	vpsCI.pScissors = &scissor;
+
+	VkDynamicState dynStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	VkPipelineDynamicStateCreateInfo dynCI{};
+	dynCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynCI.dynamicStateCount = 2;
+	dynCI.pDynamicStates = dynStates;
 
 	VkPipelineRasterizationStateCreateInfo rastCI{};
 	rastCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rastCI.polygonMode = VK_POLYGON_MODE_FILL;
+	rastCI.depthClampEnable = VK_FALSE;
+	rastCI.rasterizerDiscardEnable = VK_FALSE;
+	// Camera is at the origin looking outward – disable culling so the inner
+	// faces of the unit cube are always rasterized regardless of winding order.
 	rastCI.cullMode = VK_CULL_MODE_NONE;
 	rastCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rastCI.lineWidth = 1.0f;
@@ -491,24 +559,48 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 	gpCI.pRasterizationState = &rastCI;
 	gpCI.pMultisampleState = &msCI;
 	gpCI.pColorBlendState = &cbCI;
+	gpCI.pDynamicState = &dynCI;
 	gpCI.layout = pipelineLayout;
 	gpCI.renderPass = renderPass;
 	gpCI.subpass = 0;
 
+	std::cout << "[IBL] renderCubemapFaces: creating pipeline (" << fragSpv << ")..." << std::endl;
+	std::cout.flush();
 	VkPipeline pipeline;
-	if (vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpCI, nullptr, &pipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &pipeline) != VK_SUCCESS)
 		throw std::runtime_error("VulkanIBL: failed to create capture pipeline");
+	std::cout << "[IBL] renderCubemapFaces: pipeline created" << std::endl;
+	std::cout.flush();
 
 	vkDestroyShaderModule(dev, fragModule, nullptr);
 	vkDestroyShaderModule(dev, vertModule, nullptr);
 
-	// ---------- Capture: render each of the 6 faces ----------
+	// Render all 6 faces using the shared pipeline.
+	renderCubemapFacesWith(commandPool, size, renderPass, pipelineLayout, pipeline, descSet, dstImage, mipLevel, roughness);
+
+	vkDestroyPipeline(dev, pipeline, nullptr);
+	vkDestroyPipelineLayout(dev, pipelineLayout, nullptr);
+	vkDestroyRenderPass(dev, renderPass, nullptr);
+}
+
+// ----------------------------------------------------------------------------
+// Render 6 cube faces with a pre-built pipeline (viewport/scissor are set
+// dynamically so the caller can reuse the same pipeline across mip sizes).
+// ----------------------------------------------------------------------------
+void VulkanIBL::renderCubemapFacesWith(VkCommandPool commandPool,
+										uint32_t size,
+										VkRenderPass renderPass,
+										VkPipelineLayout pipelineLayout,
+										VkPipeline pipeline,
+										VkDescriptorSet descSet,
+										VkImage dstImage,
+										uint32_t mipLevel,
+										float roughness) {
+	VkDevice dev = vulkanDevice->getDevice();
 	auto captureViews = makeCaptureViews();
 	glm::mat4 captureProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 
-	// We need per-face image views to use as framebuffer attachments
 	for (uint32_t face = 0; face < 6; ++face) {
-		// --- Per-face 2-D image view ---
 		VkImageViewCreateInfo faceViewCI{};
 		faceViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		faceViewCI.image = dstImage;
@@ -519,11 +611,9 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 		faceViewCI.subresourceRange.levelCount = 1;
 		faceViewCI.subresourceRange.baseArrayLayer = face;
 		faceViewCI.subresourceRange.layerCount = 1;
-
 		VkImageView faceView;
 		vkCreateImageView(dev, &faceViewCI, nullptr, &faceView);
 
-		// --- Framebuffer ---
 		VkFramebufferCreateInfo fbCI{};
 		fbCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		fbCI.renderPass = renderPass;
@@ -532,11 +622,9 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 		fbCI.width = size;
 		fbCI.height = size;
 		fbCI.layers = 1;
-
 		VkFramebuffer fb;
 		vkCreateFramebuffer(dev, &fbCI, nullptr, &fb);
 
-		// --- Record single-shot command buffer ---
 		VkCommandBuffer cmd = Utils::beginSingleTimeCommands(commandPool);
 
 		VkRenderPassBeginInfo rpBegin{};
@@ -551,28 +639,28 @@ void VulkanIBL::renderCubemapFaces(VkCommandPool commandPool,
 
 		vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		// Set dynamic viewport and scissor for this mip size.
+		VkViewport vp{0.0f, 0.0f, (float)size, (float)size, 0.0f, 1.0f};
+		VkRect2D sc{{0, 0}, {size, size}};
+		vkCmdSetViewport(cmd, 0, 1, &vp);
+		vkCmdSetScissor(cmd, 0, 1, &sc);
+
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descSet, 0, nullptr);
 
 		PrefilterPushConstants pc{};
 		pc.view = captureViews[face];
 		pc.proj = captureProj;
 		pc.roughness = roughness;
-		vkCmdPushConstants(
-			cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+		vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
 
-		vkCmdDraw(cmd, 36, 1, 0, 0); // 6 faces × 6 verts, all provided in shader
+		vkCmdDraw(cmd, 36, 1, 0, 0);
 		vkCmdEndRenderPass(cmd);
 		Utils::endSingleTimeCommands(commandPool, cmd);
 
-		// Clean up per-face resources
 		vkDestroyFramebuffer(dev, fb, nullptr);
 		vkDestroyImageView(dev, faceView, nullptr);
 	}
-
-	// Clean up pipeline resources (images/views/sampler live on)
-	vkDestroyPipeline(dev, pipeline, nullptr);
-	vkDestroyPipelineLayout(dev, pipelineLayout, nullptr);
-	vkDestroyRenderPass(dev, renderPass, nullptr);
 }
 
 // ----------------------------------------------------------------------------
@@ -747,8 +835,12 @@ void VulkanIBL::buildPrefilterMap(VkCommandPool commandPool) {
 
 	VkDevice dev = vulkanDevice->getDevice();
 
+	std::cout << "[IBL] buildPrefilterMap: createCubemapImage..." << std::endl;
+	std::cout.flush();
 	createCubemapImage(PREFILTER_SIZE, prefilterImage, prefilterMemory, prefilterImageView, MAX_MIP_LEVELS);
 
+	std::cout << "[IBL] buildPrefilterMap: transitionImageLayout..." << std::endl;
+	std::cout.flush();
 	Utils::transitionImageLayout(prefilterImage,
 								 VK_FORMAT_R16G16B16A16_SFLOAT,
 								 VK_IMAGE_LAYOUT_UNDEFINED,
@@ -813,22 +905,153 @@ void VulkanIBL::buildPrefilterMap(VkCommandPool commandPool) {
 	write.pImageInfo = &imgInfo;
 	vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
 
-	// Render each roughness mip level (size halves each level)
-	// Roughness maps linearly across mip levels: mip 0 = 0.0, mip 4 = 1.0
+	// Build the prefilter render-pass and pipeline ONCE, then reuse them for
+	// every mip level. Only roughness and viewport size differ per mip, both of
+	// which are set via push constants / dynamic state — no pipeline rebuild needed.
+	VkAttachmentDescription prefilterAtt{};
+	prefilterAtt.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	prefilterAtt.samples = VK_SAMPLE_COUNT_1_BIT;
+	prefilterAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	prefilterAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	prefilterAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	prefilterAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	prefilterAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	prefilterAtt.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference prefilterRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkSubpassDescription prefilterSubpass{};
+	prefilterSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	prefilterSubpass.colorAttachmentCount = 1;
+	prefilterSubpass.pColorAttachments = &prefilterRef;
+
+	VkSubpassDependency prefilterDep{};
+	prefilterDep.srcSubpass = VK_SUBPASS_EXTERNAL;
+	prefilterDep.dstSubpass = 0;
+	prefilterDep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	prefilterDep.srcAccessMask = 0;
+	prefilterDep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	prefilterDep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	VkRenderPassCreateInfo prefilterRpCI{};
+	prefilterRpCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	prefilterRpCI.attachmentCount = 1;
+	prefilterRpCI.pAttachments = &prefilterAtt;
+	prefilterRpCI.subpassCount = 1;
+	prefilterRpCI.pSubpasses = &prefilterSubpass;
+	prefilterRpCI.dependencyCount = 1;
+	prefilterRpCI.pDependencies = &prefilterDep;
+	VkRenderPass prefilterRenderPass;
+	vkCreateRenderPass(dev, &prefilterRpCI, nullptr, &prefilterRenderPass);
+
+	VkPushConstantRange pcRange{};
+	pcRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pcRange.offset = 0;
+	pcRange.size = sizeof(PrefilterPushConstants);
+	VkPipelineLayoutCreateInfo prefilterPlCI{};
+	prefilterPlCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	prefilterPlCI.setLayoutCount = 1;
+	prefilterPlCI.pSetLayouts = &descLayout;
+	prefilterPlCI.pushConstantRangeCount = 1;
+	prefilterPlCI.pPushConstantRanges = &pcRange;
+	VkPipelineLayout prefilterLayout;
+	vkCreatePipelineLayout(dev, &prefilterPlCI, nullptr, &prefilterLayout);
+
+	auto vertCode = Utils::readFile("shaders/ibl/cubemap_vert.spv");
+	auto fragCode = Utils::readFile("shaders/ibl/prefilter_frag.spv");
+	VkShaderModule vertMod, fragMod;
+	Utils::createShaderModule(vertCode, vertMod);
+	Utils::createShaderModule(fragCode, fragMod);
+
+	VkPipelineShaderStageCreateInfo stages[2]{};
+	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	stages[0].module = vertMod;
+	stages[0].pName = "main";
+	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	stages[1].module = fragMod;
+	stages[1].pName = "main";
+
+	VkPipelineVertexInputStateCreateInfo viCI{};
+	viCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	VkPipelineInputAssemblyStateCreateInfo iaCI{};
+	iaCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	iaCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+	VkPipelineViewportStateCreateInfo vpsCI{};
+	vpsCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	vpsCI.viewportCount = 1;
+	vpsCI.scissorCount = 1;
+	VkDynamicState dynStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	VkPipelineDynamicStateCreateInfo dynCI{};
+	dynCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynCI.dynamicStateCount = 2;
+	dynCI.pDynamicStates = dynStates;
+
+	VkPipelineRasterizationStateCreateInfo rastCI{};
+	rastCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	// Camera is at the origin looking outward – disable culling so the inner
+	// faces of the unit cube are always rasterized regardless of winding order.
+	rastCI.cullMode = VK_CULL_MODE_NONE;
+	rastCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rastCI.lineWidth = 1.0f;
+	VkPipelineMultisampleStateCreateInfo msCI{};
+	msCI.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	msCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkPipelineColorBlendAttachmentState cba{};
+	cba.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	VkPipelineColorBlendStateCreateInfo cbCI{};
+	cbCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	cbCI.attachmentCount = 1;
+	cbCI.pAttachments = &cba;
+
+	VkGraphicsPipelineCreateInfo gpCI{};
+	gpCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	gpCI.stageCount = 2;
+	gpCI.pStages = stages;
+	gpCI.pVertexInputState = &viCI;
+	gpCI.pInputAssemblyState = &iaCI;
+	gpCI.pViewportState = &vpsCI;
+	gpCI.pRasterizationState = &rastCI;
+	gpCI.pMultisampleState = &msCI;
+	gpCI.pColorBlendState = &cbCI;
+	gpCI.pDynamicState = &dynCI;
+	gpCI.layout = prefilterLayout;
+	gpCI.renderPass = prefilterRenderPass;
+	gpCI.subpass = 0;
+
+	std::cout << "[IBL] buildPrefilterMap: creating pipeline (prefilter_frag.spv)..." << std::endl;
+	std::cout.flush();
+	VkPipeline prefilterPipeline;
+	if (vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &prefilterPipeline) != VK_SUCCESS)
+		throw std::runtime_error("VulkanIBL: failed to create prefilter pipeline");
+	std::cout << "[IBL] buildPrefilterMap: pipeline created" << std::endl;
+	std::cout.flush();
+
+	vkDestroyShaderModule(dev, fragMod, nullptr);
+	vkDestroyShaderModule(dev, vertMod, nullptr);
+
+	// Render each roughness mip level (size halves each level).
+	// One pipeline object is reused for all 5 mips; viewport is set dynamically.
+	std::cout << "[IBL] buildPrefilterMap: rendering " << MAX_MIP_LEVELS << " mip levels..." << std::endl;
+	std::cout.flush();
 	for (uint32_t mip = 0; mip < MAX_MIP_LEVELS; mip++) {
 		float mipRoughness = (float)mip / (float)(MAX_MIP_LEVELS - 1);
 		uint32_t mipSize = static_cast<uint32_t>(PREFILTER_SIZE * std::pow(0.5f, (float)mip));
-		renderCubemapFaces(commandPool,
-						   mipSize,
-						   "shaders/ibl/cubemap_vert.spv",
-						   "shaders/ibl/prefilter_frag.spv",
-						   descLayout,
-						   descSet,
-						   prefilterImage,
-						   mip,
-						   mipRoughness);
+		std::cout << "[IBL] buildPrefilterMap: rendering mip " << mip << " (size=" << mipSize << ", roughness=" << mipRoughness << ")..." << std::endl;
+		std::cout.flush();
+		renderCubemapFacesWith(commandPool, mipSize, prefilterRenderPass, prefilterLayout, prefilterPipeline, descSet, prefilterImage, mip, mipRoughness);
+		std::cout << "[IBL] buildPrefilterMap: mip " << mip << " done" << std::endl;
+		std::cout.flush();
 	}
 
+	vkDestroyPipeline(dev, prefilterPipeline, nullptr);
+	vkDestroyPipelineLayout(dev, prefilterLayout, nullptr);
+	vkDestroyRenderPass(dev, prefilterRenderPass, nullptr);
+
+	std::cout << "[IBL] buildPrefilterMap: final transition..." << std::endl;
+	std::cout.flush();
 	Utils::transitionImageLayout(prefilterImage,
 								 VK_FORMAT_R16G16B16A16_SFLOAT,
 								 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -839,7 +1062,10 @@ void VulkanIBL::buildPrefilterMap(VkCommandPool commandPool) {
 
 	vkDestroyDescriptorSetLayout(dev, descLayout, nullptr);
 	vkDestroyDescriptorPool(dev, pool, nullptr);
+	std::cout << "[IBL] buildPrefilterMap: complete" << std::endl;
+	std::cout.flush();
 }
+
 
 // ----------------------------------------------------------------------------
 // Pass 4: Bake the BRDF integration LUT (512x512 RG16F 2D texture)
@@ -936,6 +1162,8 @@ void VulkanIBL::buildBrdfLut(VkCommandPool commandPool) {
 
 	auto vertCode = Utils::readFile("shaders/ibl/brdf_lut_vert.spv");
 	auto fragCode = Utils::readFile("shaders/ibl/brdf_lut_frag.spv");
+	std::cout << "[IBL] buildBrdfLut: shaders loaded, vert=" << vertCode.size() << " bytes, frag=" << fragCode.size() << " bytes" << std::endl;
+	std::cout.flush();
 	VkShaderModule vertModule, fragModule;
 	Utils::createShaderModule(vertCode, vertModule);
 	Utils::createShaderModule(fragCode, fragModule);
@@ -998,7 +1226,11 @@ void VulkanIBL::buildBrdfLut(VkCommandPool commandPool) {
 	gpCI.renderPass = renderPass;
 	gpCI.subpass = 0;
 	VkPipeline pipeline;
-	vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpCI, nullptr, &pipeline);
+	std::cout << "[IBL] buildBrdfLut: creating pipeline (brdf_lut_frag.spv)..." << std::endl;
+	std::cout.flush();
+	vkCreateGraphicsPipelines(dev, iblPipelineCache, 1, &gpCI, nullptr, &pipeline);
+	std::cout << "[IBL] buildBrdfLut: pipeline created" << std::endl;
+	std::cout.flush();
 
 	vkDestroyShaderModule(dev, fragModule, nullptr);
 	vkDestroyShaderModule(dev, vertModule, nullptr);

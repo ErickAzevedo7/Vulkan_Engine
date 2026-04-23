@@ -1,6 +1,7 @@
 #include "ResourceContext.h"
 
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -132,11 +133,29 @@ ResourceContext::~ResourceContext() {
 }
 
 void ResourceContext::loadDefaults() {
+	std::cout << "[INIT] loadDefaults: textureManager->loadDefaults()..." << std::endl;
+	std::cout.flush();
 	textureManager->loadDefaults();
+	std::cout << "[INIT] loadDefaults: textureManager->loadDefaults() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[INIT] loadDefaults: textureManager->loadAllFromAssets()..." << std::endl;
+	std::cout.flush();
 	textureManager->loadAllFromAssets("projects");
+	std::cout << "[INIT] loadDefaults: textureManager->loadAllFromAssets() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[INIT] loadDefaults: materialManager->loadDefault()..." << std::endl;
+	std::cout.flush();
 	materialManager->loadDefault();
+	std::cout << "[INIT] loadDefaults: materialManager->loadDefault() done" << std::endl;
+	std::cout.flush();
+	std::cout << "[INIT] loadDefaults: materialManager->loadAllFromAssets()..." << std::endl;
+	std::cout.flush();
 	materialManager->loadAllFromAssets(); // Load project material assets AFTER textures
+	std::cout << "[INIT] loadDefaults: materialManager->loadAllFromAssets() done" << std::endl;
+	std::cout.flush();
 	// MeshManager defaults loaded in main.cpp because of command pool dependency
+	// Create the default scene so getActiveScene() returns a valid pointer for
+	// loadLastScene() and all early-frame queries (EditorCamera, SceneUi, etc.)
 	sceneManager->loadDefaults();
 }
 

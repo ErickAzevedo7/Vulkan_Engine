@@ -188,7 +188,8 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.flags = VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
-	pipelineInfo.basePipelineIndex = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
 	pipelineInfo.stageCount = 2;
 	pipelineInfo.pStages = shaderStages;
 	pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -204,7 +205,8 @@ void Skybox::createSkyboxPipeline(VkRenderPass renderPass) {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skyboxPipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VulkanCore::getPipelineCache(), 1, &pipelineInfo, nullptr, &skyboxPipeline) !=
+		VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 

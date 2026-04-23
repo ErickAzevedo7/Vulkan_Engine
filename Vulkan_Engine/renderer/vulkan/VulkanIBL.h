@@ -91,6 +91,10 @@ private:
 	VkImageView hdrImageView = VK_NULL_HANDLE;
 	VkSampler hdrSampler = VK_NULL_HANDLE;
 
+	// Pipeline cache shared across all IBL offline render passes (alive for the
+	// duration of init() and destroyed at the end of it).
+	VkPipelineCache iblPipelineCache = VK_NULL_HANDLE;
+
 	// -----------------------------------------------------------------------
 	void createCubemapSampler();
 	void loadEquirect(VkCommandPool commandPool, const char* hdrPath);
@@ -99,7 +103,9 @@ private:
 	void buildPrefilterMap(VkCommandPool commandPool);
 	void buildBrdfLut(VkCommandPool commandPool);
 
-	// Core helper that runs one of the two offline cube-capture render passes.
+	// Builds pipeline resources (renderpass + layout + pipeline) for a cubemap
+	// capture pass. Viewport/scissor are dynamic so the pipeline can be reused
+	// across mip levels with different sizes.
 	void renderCubemapFaces(VkCommandPool commandPool,
 							uint32_t size,
 							const char* vertSpv,
@@ -109,6 +115,19 @@ private:
 							VkImage dstImage,
 							uint32_t mipLevel,
 							float roughness = 0.0f);
+
+	// Renders the 6 cube faces using a pre-built pipeline. Called by
+	// renderCubemapFaces() and directly by buildPrefilterMap() to avoid
+	// rebuilding the pipeline for every mip level.
+	void renderCubemapFacesWith(VkCommandPool commandPool,
+								uint32_t size,
+								VkRenderPass renderPass,
+								VkPipelineLayout pipelineLayout,
+								VkPipeline pipeline,
+								VkDescriptorSet descSet,
+								VkImage dstImage,
+								uint32_t mipLevel,
+								float roughness);
 
 	// Helpers to create staging texture + image
 	void createCubemapImage(uint32_t size, VkImage& img, VkDeviceMemory& mem, VkImageView& view, uint32_t mipLevels);

@@ -344,7 +344,7 @@ void Outline::createGraphicsPipeline() {
 	pipelineInfo.subpass = 0;
 
 	if (vkCreateGraphicsPipelines(
-			vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outlinePipeline) != VK_SUCCESS) {
+			vulkanDevice->getDevice(), VulkanCore::getPipelineCache(), 1, &pipelineInfo, nullptr, &outlinePipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 

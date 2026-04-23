@@ -347,8 +347,11 @@ void EditorCamera::mousePosHandler() {
 }
 
 void EditorCamera::inputProcess(MousePick& mousePick) {
-	if (resources && resources->getSceneManager().getActiveScene()->getState() == SceneState::Play) {
-		return;
+	if (resources) {
+		Scene* scene = resources->getSceneManager().getActiveScene();
+		if (scene && scene->getState() == SceneState::Play) {
+			return;
+		}
 	}
 
 	ImGuiIO& io = ImGui::GetIO();
