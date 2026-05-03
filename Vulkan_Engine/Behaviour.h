@@ -85,8 +85,12 @@ public:
 							 bool applyWorldPosition = false,
 							 bool applyWorldRotation = false) const;
 
+	// Returns the name of any entity in the same scene by its ID.
+	// Returns an empty string if the entity does not exist.
+	std::string getEntityName(uint32_t entityId) const;
+
 	void destroyOwner() const;
- 	void destroyEntity(uint32_t entityId) const;
+	void destroyEntity(uint32_t entityId) const;
 };
 
 #define SCRIPT(ClassName)                                                                                              \

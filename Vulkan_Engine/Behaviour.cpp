@@ -186,3 +186,21 @@ void Behaviour::destroyEntity(uint32_t entityId) const {
 
 	scene->removeEntityById(entityId);
 }
+
+std::string Behaviour::getEntityName(uint32_t entityId) const {
+	if (!owner) {
+		return {};
+	}
+
+	Scene* scene = owner->getScene();
+	if (!scene) {
+		return {};
+	}
+
+	Entity* entity = scene->findEntityById(entityId);
+	if (!entity) {
+		return {};
+	}
+
+	return entity->getName();
+}
