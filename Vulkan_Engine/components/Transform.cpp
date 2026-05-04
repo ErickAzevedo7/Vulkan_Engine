@@ -64,31 +64,64 @@ glm::vec3 Transform::getWorldScale() const {
 }
 
 void Transform::setWorldPosition(const glm::vec3& worldPosition) {
-	glm::mat4 world = getMatrix();
-	world[3] = glm::vec4(worldPosition, 1.0f);
-	setFromWorldMatrix(world);
+	if (!owner) {
+		position = worldPosition;
+		return;
+	}
+	Entity* parent = owner->getParent();
+	if (!parent) {
+		position = worldPosition;
+		return;
+	}
+	Transform* parentTransform = parent->getComponent<Transform>();
+	if (!parentTransform) {
+		position = worldPosition;
+		return;
+	}
+	
+	glm::mat4 parentInv = glm::inverse(parentTransform->getMatrix());
+	glm::vec4 localPos = parentInv * glm::vec4(worldPosition, 1.0f);
+	position = glm::vec3(localPos) / localPos.w;
 }
 
 void Transform::setWorldRotation(const glm::quat& worldRotation) {
-	glm::vec3 worldScale = getWorldScale();
-	glm::vec3 worldPosition = getWorldPosition();
-
-	glm::mat4 world = glm::translate(glm::mat4(1.0f), worldPosition);
-	world *= glm::mat4_cast(glm::normalize(worldRotation));
-	world = glm::scale(world, worldScale);
-
-	setFromWorldMatrix(world);
+	if (!owner) {
+		rotation = worldRotation;
+		return;
+	}
+	Entity* parent = owner->getParent();
+	if (!parent) {
+		rotation = worldRotation;
+		return;
+	}
+	Transform* parentTransform = parent->getComponent<Transform>();
+	if (!parentTransform) {
+		rotation = worldRotation;
+		return;
+	}
+	
+	glm::quat parentRotInv = glm::inverse(parentTransform->getWorldRotation());
+	rotation = parentRotInv * worldRotation;
 }
 
 void Transform::setWorldScale(const glm::vec3& worldScale) {
-	glm::quat worldRotation = getWorldRotation();
-	glm::vec3 worldPosition = getWorldPosition();
-
-	glm::mat4 world = glm::translate(glm::mat4(1.0f), worldPosition);
-	world *= glm::mat4_cast(worldRotation);
-	world = glm::scale(world, worldScale);
-
-	setFromWorldMatrix(world);
+	if (!owner) {
+		scale = worldScale;
+		return;
+	}
+	Entity* parent = owner->getParent();
+	if (!parent) {
+		scale = worldScale;
+		return;
+	}
+	Transform* parentTransform = parent->getComponent<Transform>();
+	if (!parentTransform) {
+		scale = worldScale;
+		return;
+	}
+	
+	glm::vec3 parentScale = parentTransform->getWorldScale();
+	scale = worldScale / glm::max(parentScale, glm::vec3(0.0001f));
 }
 
 void Transform::setFromWorldMatrix(const glm::mat4& worldMatrix) {
