@@ -40,14 +40,14 @@ public:
 	// Load all textures found under root directory at startup
 	void loadAllFromAssets(const std::string& assetsRoot);
 
-	Texture* loadTexture(const std::string& path, bool flipV = true);
+	Texture* loadTexture(const std::string& path, bool flipV = true, bool isSRGB = true);
 
 	// Samplers are now created via GraphicsTexture, so these might be helpers or wrapped
 	void createTextureSampler(Texture* texture);
 	void createThumbnailSampler(ThumbnailTexture* texture);
 	// createTextureImageView is INTERNAL to GraphicsTexture now
 
-	Texture* getTexture(const std::string& path);
+	Texture* getTexture(const std::string& path, bool isSRGB = true);
 	const ThumbnailTexture* getThumbnail(const std::string& key);
 
 	const std::unordered_map<std::string, Texture>& getAllTextures();

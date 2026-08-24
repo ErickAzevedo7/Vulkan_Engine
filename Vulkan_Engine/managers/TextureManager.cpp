@@ -159,7 +159,7 @@ ThumbnailTexture& TextureManager::createThumbnail(const std::string& key, const 
 	return thumbnails[k];
 }
 
-Texture* TextureManager::loadTexture(const std::string& path, bool flipV) {
+Texture* TextureManager::loadTexture(const std::string& path, bool flipV, bool isSRGB) {
 	int texWidth, texHeight, texChannels;
 
 	stbi_set_flip_vertically_on_load(flipV);
@@ -181,7 +181,7 @@ Texture* TextureManager::loadTexture(const std::string& path, bool flipV) {
 	desc.width = texture->width;
 	desc.height = texture->height;
 	desc.mipLevels = texture->mipLevels;
-	desc.format = TextureFormat::R8G8B8A8_SRGB; // Assuming SRGB for standard textures
+	desc.format = isSRGB ? TextureFormat::R8G8B8A8_SRGB : TextureFormat::R8G8B8A8_UNORM;
 	desc.usage = BufferUsage::TransferDst | BufferUsage::Uniform; // Mapping to Vulkan usages in backend
 
 	texture->handle = graphicsTexture->createTexture(desc, pixels);
@@ -223,7 +223,7 @@ void TextureManager::createThumbnailSampler(ThumbnailTexture* texture) {
 	texture->sampler = graphicsTexture->createSampler(desc);
 }
 
-Texture* TextureManager::getTexture(const std::string& path) {
+Texture* TextureManager::getTexture(const std::string& path, bool isSRGB) {
 	std::string key = std::filesystem::path(path).generic_string();
 	auto it = textures.find(key);
 	if (it != textures.end()) {

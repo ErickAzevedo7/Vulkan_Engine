@@ -184,8 +184,10 @@ void main() {
 
     vec4 tex = texture(texSampler, fragTexCoord);
     vec3 albedo   = material.albedo_pad.rgb * tex.rgb;
-    float roughnessTex = texture(roughnessSampler, fragTexCoord).r;
-    float metallicTex = texture(metallicSampler, fragTexCoord).r;
+    // glTF packs Roughness in the Green channel and Metallic in the Blue channel.
+    // By reading .g and .b, we support both packed glTF maps AND standalone grayscale maps (where R=G=B).
+    float roughnessTex = texture(roughnessSampler, fragTexCoord).g;
+    float metallicTex = texture(metallicSampler, fragTexCoord).b;
     float metallic  = clamp(material.metallic * metallicTex, 0.0, 1.0);
     float roughness = clamp(material.roughness * roughnessTex, 0.04, 1.0);
     float ao        = material.ao;

@@ -510,12 +510,12 @@ void MaterialManager::createDescriptorSets(const std::string& materialPath) {
 		std::vector<Renderer::ResourceBufferBinding> bufferBindings;
 		std::vector<Renderer::ResourceImageBinding> imageBindings;
 
-		// Binding 0: Albedo texture
+		// Binding 0: Albedo texture (sRGB - color data)
 		Texture* albedoTexture = nullptr;
 		try {
-			albedoTexture = textureManager.getTexture(material->albedoTextureKey);
+			albedoTexture = textureManager.getTexture(material->albedoTextureKey, true);
 		} catch (...) {
-			albedoTexture = textureManager.getTexture(textureManager.kDefaultTextureKey);
+			albedoTexture = textureManager.getTexture(textureManager.kDefaultTextureKey, true);
 		}
 
 		Renderer::ResourceImageBinding albedoBinding;
@@ -524,12 +524,12 @@ void MaterialManager::createDescriptorSets(const std::string& materialPath) {
 		albedoBinding.sampler = albedoTexture->sampler;
 		imageBindings.push_back(albedoBinding);
 
-		// Binding 1: Roughness texture
+		// Binding 1: Roughness texture (linear - not color data)
 		Texture* roughnessTexture = nullptr;
 		try {
-			roughnessTexture = textureManager.getTexture(material->roughnessTextureKey);
+			roughnessTexture = textureManager.getTexture(material->roughnessTextureKey, false);
 		} catch (...) {
-			roughnessTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey);
+			roughnessTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey, false);
 		}
 
 		Renderer::ResourceImageBinding roughnessBinding;
@@ -538,12 +538,12 @@ void MaterialManager::createDescriptorSets(const std::string& materialPath) {
 		roughnessBinding.sampler = roughnessTexture->sampler;
 		imageBindings.push_back(roughnessBinding);
 
-		// Binding 2: Metallic texture
+		// Binding 2: Metallic texture (linear - not color data)
 		Texture* metallicTexture = nullptr;
 		try {
-			metallicTexture = textureManager.getTexture(material->metallicTextureKey);
+			metallicTexture = textureManager.getTexture(material->metallicTextureKey, false);
 		} catch (...) {
-			metallicTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey);
+			metallicTexture = textureManager.getTexture(textureManager.kDefaultMaskTextureKey, false);
 		}
 
 		Renderer::ResourceImageBinding metallicBinding;
