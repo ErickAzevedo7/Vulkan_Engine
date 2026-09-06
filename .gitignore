@@ -373,3 +373,4 @@ editor_config.json
 *.iscene
 projects
 *.mat
+build/

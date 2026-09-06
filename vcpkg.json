@@ -16,6 +16,7 @@
     "assimp",
     "glm",
     "vulkan",
-    "nlohmann-json"
+    "nlohmann-json",
+    "spdlog"
   ]
 }

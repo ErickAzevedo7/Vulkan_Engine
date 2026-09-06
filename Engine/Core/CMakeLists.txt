@@ -4,10 +4,8 @@ find_package(spdlog CONFIG REQUIRED)
 
 target_sources(VKE_Core PRIVATE
     private/Application.cpp
-    private/Layer.cpp
-    private/LayerStack.cpp
     private/Log.cpp
-    private/UUID.cpp
+    private/ObjectID.cpp
 )
 
 target_include_directories(VKE_Core
