@@ -1,16 +1,6 @@
 #pragma once
 
-// Engine-wide global pointers — non-owning access shortcuts.
-// Application owns the actual instances via Iunique<System>.
-// Each system sets its global in OnInitialize() and clears it in OnShutdown().
-//
-// Convention: direct namespace access (e.g., VKE::Renderer, VKE::Input).
-//
-// Globals are populated per phase:
-//   Phase 2: Window, Input
-//   Phase 3: Renderer
-//   Phase 4: Physics
-//   Phase 5: Scripting
+// Core-owned engine globals only — types with zero outside dependencies.
 
 namespace VKE {
 

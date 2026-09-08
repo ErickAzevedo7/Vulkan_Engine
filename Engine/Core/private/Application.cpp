@@ -4,6 +4,8 @@
 #include <core/Assert.h>
 #include <core/FrameTime.h>
 
+#include <chrono>
+
 namespace VKE {
 
     Application* Application::s_Instance = nullptr;
@@ -28,20 +30,21 @@ namespace VKE {
 
     void Application::Run()
     {
+        // Per-frame delta time, via std::chrono directly (no dependency
+        // on Platform::Timer or any other module).
+        auto lastTime = std::chrono::steady_clock::now();
+
         while (m_Running)
         {
-            // NOTE: real delta time comes from the platform Timer (Phase 2).
-            // Fixed delta is a placeholder until Window + high-res clock are in place.
-            constexpr double fixedDelta = 1.0 / 60.0;
-            m_TotalTime += fixedDelta;
+            auto now = std::chrono::steady_clock::now();
+            double delta = std::chrono::duration<double>(now - lastTime).count();
+            lastTime = now;
 
-            FrameTime ft(fixedDelta, m_TotalTime);
+            m_TotalTime += delta;
+            FrameTime ft(delta, m_TotalTime);
 
             for (auto& system : m_Systems)
                 system->OnUpdate(ft);
-
-            // Prevents 100% CPU spin — remove once Window event polling exists (Phase 2).
-            break;
         }
     }
 

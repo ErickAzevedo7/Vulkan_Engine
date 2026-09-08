@@ -7,15 +7,18 @@ add_subdirectory(core)
 add_subdirectory(math)
 add_subdirectory(events)
 
+# Phase 2 modules
+add_subdirectory(platform)
+
 # The parent aggregates all modules — modules do NOT link to VKE_Engine themselves
 target_link_libraries(VKE_Engine INTERFACE
     VKE_Core
     VKE_Math
     VKE_Events
+    VKE_Platform
 )
 
 # Phase 2+ modules — uncomment as implemented
-# add_subdirectory(platform)
 # add_subdirectory(rhi)
 # add_subdirectory(renderer)
 # add_subdirectory(scene)

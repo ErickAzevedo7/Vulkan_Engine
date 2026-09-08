@@ -18,5 +18,4 @@ add_subdirectory(engine)
 # Executables — will be uncommented as phases are completed
 # add_subdirectory(editor)
 # add_subdirectory(runtime)
-# add_subdirectory(sandbox)
-
+add_subdirectory(sandbox)

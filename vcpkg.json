@@ -16,6 +16,7 @@
     "assimp",
     "glm",
     "vulkan",
+    "vulkan-memory-allocator",
     "nlohmann-json",
     "spdlog"
   ]
