@@ -3,14 +3,16 @@
 #include <core/Log.h>
 #include <platform/PlatformSystem.h>
 
-// Phase 2 verification target: opens a window and runs the main loop.
-// RHI/rendering (the triangle test) lands on top of this same app once
-// VKE_RHI exists.
+#include "TriangleRenderSystem.h"
+
+// Opens a window and draws a hardcoded triangle through the RHI, to verify
+// the engine/window/graphics pipeline end-to-end.
 class SandboxApp : public VKE::Application {
 public:
     SandboxApp() {
-        Register<VKE::Platform::PlatformSystem>(
+        auto* platform = Register<VKE::Platform::PlatformSystem>(
             VKE::Platform::WindowDesc{ "Vulkan Engine — Sandbox", 1280, 720, true });
+        Register<VKE::TriangleRenderSystem>(platform->GetWindow());
     }
 };
 
