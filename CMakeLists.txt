@@ -12,6 +12,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Vulkan REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(VkeShaders)
+
 # Engine library (all modules)
 add_subdirectory(engine)
 
