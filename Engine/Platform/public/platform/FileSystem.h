@@ -1,15 +1,16 @@
 #pragma once
 
 #include <core/Types.h>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 // Generic, backend-independent file I/O.
-//
-// TODO: overlaps with `Utils::readFile` (Vulkan_Engine/Vulkan_Engine/core/Utils.*);
-// migrate remaining callers here as the RHI migration touches them.
 
 namespace VKE::Platform::FileSystem {
+
+    // Directory containing the running executable.
+    std::filesystem::path GetExecutableDirectory();
 
     // Reads an entire binary file into memory.
     // Returns an empty vector and logs an error if the file cannot be opened.
