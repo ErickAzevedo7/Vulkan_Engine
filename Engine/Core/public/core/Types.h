@@ -2,6 +2,23 @@
 
 #include <cstdint>
 #include <memory>
+#include <type_traits>
+
+// Enables bitwise operators on an enum class used as a set of flags.
+#define VKE_ENUM_FLAGS(Enum)                                                                                           \
+    inline constexpr Enum operator|(Enum a, Enum b) {                                                                  \
+        using U = std::underlying_type_t<Enum>;                                                                        \
+        return static_cast<Enum>(static_cast<U>(a) | static_cast<U>(b));                                               \
+    }                                                                                                                  \
+    inline constexpr Enum operator&(Enum a, Enum b) {                                                                  \
+        using U = std::underlying_type_t<Enum>;                                                                        \
+        return static_cast<Enum>(static_cast<U>(a) & static_cast<U>(b));                                               \
+    }                                                                                                                  \
+    inline constexpr Enum& operator|=(Enum& a, Enum b) { return a = a | b; }                                           \
+    inline constexpr bool HasFlag(Enum value, Enum flag) {                                                             \
+        using U = std::underlying_type_t<Enum>;                                                                        \
+        return static_cast<U>(flag) != 0 && (static_cast<U>(value) & static_cast<U>(flag)) == static_cast<U>(flag);   \
+    }
 
 namespace VKE {
 
