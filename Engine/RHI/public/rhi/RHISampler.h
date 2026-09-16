@@ -3,13 +3,11 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-// Not implemented yet — see RHITexture.h's note; a sampler has no purpose
-// without a texture to sample.
-
 namespace VKE::RHI {
 
     class RHIDevice;
 
+    // Filtering and addressing state used to sample textures.
     class RHISampler {
     public:
         virtual ~RHISampler() = default;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <core/Types.h>
+#include <rhi/RHITypes.h>
 
 namespace VKE::Platform {
     class IWindow;
@@ -8,19 +9,20 @@ namespace VKE::Platform {
 
 namespace VKE::RHI {
 
-    // Owns the graphics device for the running engine. One instance only;
-    // every other RHI object is created through it, directly or indirectly.
+    // Owns the graphics device. Every other RHI object is created through it.
     class RHIDevice {
     public:
         virtual ~RHIDevice() = default;
 
         static Iunique<RHIDevice> Create(Platform::IWindow& window);
 
-        // Blocks until all GPU work submitted through this device has
-        // completed. Call before destroying any RHI resource still in use
-        // by an in-flight frame (e.g. on shutdown, or before a resize-driven
-        // swapchain recreation).
+        // Blocks until the GPU has finished all submitted work.
         virtual void WaitIdle() = 0;
+
+        virtual const DeviceLimits& GetLimits() const = 0;
+
+        // Best supported format for depth attachments.
+        virtual Format GetDepthFormat() const = 0;
     };
 
 } // namespace VKE::RHI
