@@ -13,16 +13,11 @@
 namespace VKE::RHI {
 
     namespace {
-        // VMA needs vulkanApiVersion to match what the instance/device were
-        // created with (VulkanAllocator.cpp's vmaCreateAllocator call reads
-        // this back from VulkanDevice's constructor).
+        // Must match the version passed to the memory allocator.
         constexpr u32 kVulkanApiVersion = VK_API_VERSION_1_2;
 
         const std::vector<const char*> kValidationLayers = {"VK_LAYER_KHRONOS_validation"};
 
-        // Swapchain only. VK_KHR_MULTIVIEW is deliberately not required —
-        // it's only useful for multi-view rendering (e.g. shadow cascades),
-        // which nothing here does.
         const std::vector<const char*> kDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 #ifdef VKE_DEBUG
@@ -78,6 +73,8 @@ namespace VKE::RHI {
         PickPhysicalDevice();
         CreateLogicalDevice();
         CreateCommandPool();
+        QueryDeviceInfo();
+        CreateDescriptorResources();
 
         m_Allocator = MakeIunique<VulkanAllocator>(m_Instance, m_PhysicalDevice, m_Device, kVulkanApiVersion);
 
@@ -86,6 +83,8 @@ namespace VKE::RHI {
 
     VulkanDevice::~VulkanDevice() {
         m_Allocator.reset();
+        m_DescriptorAllocator.reset();
+        if (m_EmptySetLayout) vkDestroyDescriptorSetLayout(m_Device, m_EmptySetLayout, nullptr);
 
         if (m_CommandPool) vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
         if (m_Device) vkDestroyDevice(m_Device, nullptr);
@@ -98,6 +97,56 @@ namespace VKE::RHI {
 
     void VulkanDevice::WaitIdle() {
         vkDeviceWaitIdle(m_Device);
+    }
+
+    void VulkanDevice::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& record) {
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = m_CommandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
+
+        VkCommandBuffer cmd = VK_NULL_HANDLE;
+        VK_CHECK(vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd));
+
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+
+        record(cmd);
+
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        VkFence fence = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateFence(m_Device, &fenceInfo, nullptr, &fence));
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmd;
+        VK_CHECK(vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, fence));
+        VK_CHECK(vkWaitForFences(m_Device, 1, &fence, VK_TRUE, UINT64_MAX));
+
+        vkDestroyFence(m_Device, fence, nullptr);
+        vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
+    }
+
+    void VulkanDevice::SetDebugName(VkObjectType type, u64 handle, const char* name) const {
+        if (!kEnableValidationLayers || !name) return;
+
+        auto setObjectName = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetInstanceProcAddr(m_Instance, "vkSetDebugUtilsObjectNameEXT"));
+        if (!setObjectName) return;
+
+        VkDebugUtilsObjectNameInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+        info.objectType = type;
+        info.objectHandle = handle;
+        info.pObjectName = name;
+        setObjectName(m_Device, &info);
     }
 
     bool VulkanDevice::CheckValidationLayerSupport() const {
@@ -273,20 +322,19 @@ namespace VKE::RHI {
             queueCreateInfos.push_back(queueCreateInfo);
         }
 
-        // Enable anisotropic filtering only if the GPU actually supports it —
-        // not hard-required for device suitability since nothing samples a
-        // texture yet (see RHITexture.h's note).
+        // Optional features, enabled only when available.
         VkPhysicalDeviceFeatures availableFeatures{};
         vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &availableFeatures);
 
-        VkPhysicalDeviceFeatures enabledFeatures{};
-        enabledFeatures.samplerAnisotropy = availableFeatures.samplerAnisotropy;
+        m_EnabledFeatures = {};
+        m_EnabledFeatures.samplerAnisotropy = availableFeatures.samplerAnisotropy;
+        m_EnabledFeatures.fillModeNonSolid = availableFeatures.fillModeNonSolid;
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.queueCreateInfoCount = static_cast<u32>(queueCreateInfos.size());
-        createInfo.pEnabledFeatures = &enabledFeatures;
+        createInfo.pEnabledFeatures = &m_EnabledFeatures;
         createInfo.enabledExtensionCount = static_cast<u32>(kDeviceExtensions.size());
         createInfo.ppEnabledExtensionNames = kDeviceExtensions.data();
         if (kEnableValidationLayers) {
@@ -309,6 +357,34 @@ namespace VKE::RHI {
         poolInfo.queueFamilyIndex = m_GraphicsQueueFamily;
 
         VK_CHECK(vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool));
+    }
+
+    void VulkanDevice::CreateDescriptorResources() {
+        m_DescriptorAllocator = MakeIunique<VulkanDescriptorAllocator>(m_Device);
+
+        VkDescriptorSetLayoutCreateInfo emptyLayoutInfo{};
+        emptyLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        VK_CHECK(vkCreateDescriptorSetLayout(m_Device, &emptyLayoutInfo, nullptr, &m_EmptySetLayout));
+    }
+
+    void VulkanDevice::QueryDeviceInfo() {
+        VkPhysicalDeviceProperties properties;
+        vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
+
+        m_Limits.MinUniformBufferOffsetAlignment = static_cast<u32>(properties.limits.minUniformBufferOffsetAlignment);
+        m_Limits.MaxPushConstantSize = properties.limits.maxPushConstantsSize;
+        m_Limits.MaxSamplerAnisotropy = m_EnabledFeatures.samplerAnisotropy ? properties.limits.maxSamplerAnisotropy : 1.0f;
+
+        const VkFormat depthCandidates[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+        for (VkFormat candidate : depthCandidates) {
+            VkFormatProperties formatProperties;
+            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, candidate, &formatProperties);
+            if (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+                m_DepthFormat = FromVkFormat(candidate);
+                break;
+            }
+        }
+        VKE_CORE_ASSERT(m_DepthFormat != Format::Undefined, "No supported depth format");
     }
 
     Iunique<RHIDevice> RHIDevice::Create(Platform::IWindow& window) {

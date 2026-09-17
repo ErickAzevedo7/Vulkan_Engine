@@ -177,9 +177,7 @@ namespace VKE::RHI {
     }
 
     void VulkanSwapchain::Recreate() {
-        // Caller (TriangleRenderSystem) is expected to skip frames while the
-        // window is minimized rather than call this with a 0x0 target — see
-        // RHISwapchain.h's Recreate() note.
+        // Callers skip frames while the window is minimized instead of recreating at 0x0.
         m_Device.WaitIdle();
         CleanupSwapchain();
         CreateSwapchain();

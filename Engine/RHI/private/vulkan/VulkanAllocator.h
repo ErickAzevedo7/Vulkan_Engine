@@ -1,9 +1,6 @@
 #pragma once
 
-// Thin VMA wrapper — VulkanBuffer/VulkanTexture allocate through this
-// instead of raw vkAllocateMemory/vkBindBufferMemory (one allocation per
-// resource), which is what the legacy engine does in
-// Vulkan_Engine/Vulkan_Engine/Engine/Core/utils/Utils.cpp.
+// Owns the VMA allocator used by buffers and textures.
 
 #include <core/Types.h>
 #include <vk_mem_alloc.h>

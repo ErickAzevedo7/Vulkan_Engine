@@ -1,4 +1,5 @@
 #include "VulkanPipeline.h"
+#include "VulkanBindGroup.h"
 #include "VulkanDevice.h"
 #include "VulkanRenderPass.h"
 #include "VulkanShader.h"
@@ -8,6 +9,7 @@ namespace VKE::RHI {
 
     VulkanPipeline::VulkanPipeline(VulkanDevice& device, VulkanRenderPass& renderPass, const PipelineDesc& desc)
         : m_Device(device) {
+        // Shader modules are only needed while the pipeline is built.
         VulkanShader vertShader(device, desc.VertexShaderPath, ShaderStageKind::Vertex);
         VulkanShader fragShader(device, desc.FragmentShaderPath, ShaderStageKind::Fragment);
 
@@ -25,8 +27,6 @@ namespace VKE::RHI {
 
         VkPipelineShaderStageCreateInfo stages[] = {vertStageInfo, fragStageInfo};
 
-        // Single interleaved vertex binding — see PipelineDesc's comment
-        // (RHITypes.h) on why multiple bindings aren't supported yet.
         VkVertexInputBindingDescription binding{};
         binding.binding = 0;
         binding.stride = desc.VertexStride;
@@ -54,9 +54,7 @@ namespace VKE::RHI {
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         inputAssembly.topology = ToVkTopology(desc.Topology);
 
-        // Viewport/scissor are dynamic — VulkanCommandBuffer::BeginRenderPass
-        // sets them to the framebuffer's full size each frame, so pipelines
-        // don't need to be rebuilt on resize.
+        // Viewport and scissor are dynamic so the pipeline survives resizes.
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
@@ -68,14 +66,19 @@ namespace VKE::RHI {
         dynamicState.dynamicStateCount = 2;
         dynamicState.pDynamicStates = dynamicStates;
 
+        PolygonMode polygonMode = desc.PolygonMode;
+        if (polygonMode != PolygonMode::Fill && !m_Device.GetEnabledFeatures().fillModeNonSolid) {
+            VKE_CORE_WARN("Pipeline: line/point polygon mode is not supported by this GPU, using Fill");
+            polygonMode = PolygonMode::Fill;
+        }
+
         VkPipelineRasterizationStateCreateInfo rasterizer{};
         rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.polygonMode = ToVkPolygonMode(desc.PolygonMode);
+        rasterizer.polygonMode = ToVkPolygonMode(polygonMode);
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = ToVkCullMode(desc.CullMode);
         rasterizer.frontFace = ToVkFrontFace(desc.FrontFace);
 
-        // No multisampling — must match the render pass's sample count.
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -96,10 +99,31 @@ namespace VKE::RHI {
         colorBlending.attachmentCount = 1;
         colorBlending.pAttachments = &colorBlendAttachment;
 
-        // No descriptor sets, no push constants — PipelineDesc doesn't
-        // describe either yet, since nothing currently needs them.
+        std::vector<VkPushConstantRange> pushConstantRanges;
+        pushConstantRanges.reserve(desc.PushConstantRanges.size());
+        for (const auto& range : desc.PushConstantRanges) {
+            VKE_CORE_ASSERT(range.Offset + range.Size <= m_Device.GetLimits().MaxPushConstantSize,
+                            "Push constant range exceeds the device limit");
+            VkPushConstantRange vkRange{};
+            vkRange.stageFlags = ToVkShaderStages(range.Stages);
+            vkRange.offset = range.Offset;
+            vkRange.size = range.Size;
+            pushConstantRanges.push_back(vkRange);
+        }
+
+        std::vector<VkDescriptorSetLayout> setLayouts;
+        setLayouts.reserve(desc.BindGroupLayouts.size());
+        for (RHIBindGroupLayout* layout : desc.BindGroupLayouts) {
+            setLayouts.push_back(layout ? static_cast<VulkanBindGroupLayout*>(layout)->GetHandle()
+                                        : m_Device.GetEmptySetLayout());
+        }
+
         VkPipelineLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutInfo.setLayoutCount = static_cast<u32>(setLayouts.size());
+        layoutInfo.pSetLayouts = setLayouts.data();
+        layoutInfo.pushConstantRangeCount = static_cast<u32>(pushConstantRanges.size());
+        layoutInfo.pPushConstantRanges = pushConstantRanges.data();
         VK_CHECK(vkCreatePipelineLayout(m_Device.GetDevice(), &layoutInfo, nullptr, &m_Layout));
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -119,10 +143,6 @@ namespace VKE::RHI {
         pipelineInfo.subpass = 0;
 
         VK_CHECK(vkCreateGraphicsPipelines(m_Device.GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline));
-
-        // Shader modules are only needed to build the pipeline — destroyed
-        // immediately after, same as the legacy engine's
-        // VulkanCore::createGraphicsPipeline.
     }
 
     VulkanPipeline::~VulkanPipeline() {

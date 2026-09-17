@@ -15,7 +15,8 @@ target_sources(VKE_RHI PRIVATE
     private/vulkan/VulkanCommandBuffer.cpp
     private/vulkan/VulkanTexture.cpp
     private/vulkan/VulkanSampler.cpp
-    private/vulkan/VulkanDescriptor.cpp
+    private/vulkan/VulkanDescriptorAllocator.cpp
+    private/vulkan/VulkanBindGroup.cpp
 )
 
 target_include_directories(VKE_RHI

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "VulkanAllocator.h"
+#include "VulkanDescriptorAllocator.h"
 #include <core/Types.h>
 #include <rhi/RHIDevice.h>
+#include <functional>
 #include <optional>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -13,27 +15,23 @@ namespace VKE::Platform {
 
 namespace VKE::RHI {
 
-    // Vulkan backend for RHIDevice. Owns the instance, debug messenger,
-    // window surface, physical/logical device, queues, a shared command
-    // pool, and the VMA allocator — the same responsibilities the legacy
-    // engine's VulkanCore held, minus the swapchain/render-pass/pipeline
-    // state (those move to VulkanSwapchain/VulkanRenderPass/VulkanPipeline)
-    // and minus the unused geometryShader feature requirement / VK_KHR_MULTIVIEW
-    // device extension (neither is used by anything here).
-    //
-    // Owns the VkSurfaceKHR (not VulkanSwapchain) because physical device
-    // selection needs it to query present support — VulkanSwapchain reuses
-    // it via GetSurface().
+    // Vulkan backend for RHIDevice. Owns the instance, window surface,
+    // physical and logical device, queues, command pool and memory allocator.
     class VulkanDevice : public RHIDevice {
     public:
         explicit VulkanDevice(Platform::IWindow& window);
         ~VulkanDevice() override;
 
         void WaitIdle() override;
+        const DeviceLimits& GetLimits() const override { return m_Limits; }
+        Format GetDepthFormat() const override { return m_DepthFormat; }
 
-        // Vulkan-internal accessors: consumed by other Vulkan* backend
-        // classes through a concrete VulkanDevice&, never through the
-        // abstract RHIDevice interface.
+        // Records a one-off command buffer and blocks until the GPU has run it.
+        void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& record);
+
+        // Names a Vulkan object in validation messages. No-op without validation layers.
+        void SetDebugName(VkObjectType type, u64 handle, const char* name) const;
+
         VkInstance GetInstance() const { return m_Instance; }
         VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
         VkDevice GetDevice() const { return m_Device; }
@@ -44,6 +42,11 @@ namespace VKE::RHI {
         u32 GetPresentQueueFamily() const { return m_PresentQueueFamily; }
         VkCommandPool GetCommandPool() const { return m_CommandPool; }
         VmaAllocator GetAllocator() const { return m_Allocator->GetHandle(); }
+        const VkPhysicalDeviceFeatures& GetEnabledFeatures() const { return m_EnabledFeatures; }
+        VulkanDescriptorAllocator& GetDescriptorAllocator() { return *m_DescriptorAllocator; }
+
+        // Layout with no bindings, used for bind group indices a pipeline leaves unused.
+        VkDescriptorSetLayout GetEmptySetLayout() const { return m_EmptySetLayout; }
 
     private:
         struct QueueFamilyIndices {
@@ -58,6 +61,8 @@ namespace VKE::RHI {
         void PickPhysicalDevice();
         void CreateLogicalDevice();
         void CreateCommandPool();
+        void QueryDeviceInfo();
+        void CreateDescriptorResources();
 
         int RateDeviceSuitability(VkPhysicalDevice device) const;
         QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
@@ -75,6 +80,13 @@ namespace VKE::RHI {
         u32 m_GraphicsQueueFamily = 0;
         u32 m_PresentQueueFamily = 0;
         VkCommandPool m_CommandPool = VK_NULL_HANDLE;
+
+        VkPhysicalDeviceFeatures m_EnabledFeatures{};
+        DeviceLimits m_Limits;
+        Format m_DepthFormat = Format::Undefined;
+
+        Iunique<VulkanDescriptorAllocator> m_DescriptorAllocator;
+        VkDescriptorSetLayout m_EmptySetLayout = VK_NULL_HANDLE;
 
         Iunique<VulkanAllocator> m_Allocator;
     };

@@ -12,18 +12,20 @@ namespace VKE::RHI {
     class RHITexture;
     class RHISampler;
 
-    struct BindGroupLayoutEntry {
+    // A binding slot declared by a layout: its number, what it holds and which stages read it.
+    struct BindingSlot {
         u32 Binding = 0;
         BindingType Type = BindingType::UniformBuffer;
         ShaderStageFlags Stages = ShaderStageFlags::AllGraphics;
     };
 
     struct BindGroupLayoutDesc {
-        std::vector<BindGroupLayoutEntry> Entries;
+        std::vector<BindingSlot> Slots;
         const char* DebugName = nullptr;
     };
 
-    // Describes which resources a bind group holds and which shader stages see them.
+    // The shape of a bind group: which slots exist. Shared by every bind group
+    // created from it, and used by pipelines to accept those groups.
     class RHIBindGroupLayout {
     public:
         virtual ~RHIBindGroupLayout() = default;
@@ -31,7 +33,8 @@ namespace VKE::RHI {
         static Iunique<RHIBindGroupLayout> Create(RHIDevice& device, const BindGroupLayoutDesc& desc);
     };
 
-    struct BindGroupEntry {
+    // The resource placed in one slot of a bind group.
+    struct BoundResource {
         u32 Binding = 0;
 
         // Uniform buffers. Size 0 binds from Offset to the end of the buffer.
@@ -46,12 +49,13 @@ namespace VKE::RHI {
 
     struct BindGroupDesc {
         RHIBindGroupLayout* Layout = nullptr;
-        // One entry per layout binding.
-        std::vector<BindGroupEntry> Entries;
+        // One resource per layout slot.
+        std::vector<BoundResource> Resources;
         const char* DebugName = nullptr;
     };
 
-    // Resources bound together to a pipeline. Immutable: create a new one to change its contents.
+    // The contents of a bind group: the resources filling a layout's slots.
+    // Immutable: create a new one to change its contents.
     class RHIBindGroup {
     public:
         virtual ~RHIBindGroup() = default;
