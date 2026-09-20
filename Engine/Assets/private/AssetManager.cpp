@@ -109,6 +109,12 @@ namespace VKE::Assets {
     }
 
     Handle<MeshData> AssetManager::AddMesh(MeshData mesh) {
+        // Geometry is only drawn through submeshes, so a mesh with none gets one covering it all.
+        if (mesh.Submeshes.empty() && !mesh.Indices.empty()) {
+            Submesh submesh;
+            submesh.IndexCount = static_cast<u32>(mesh.Indices.size());
+            mesh.Submeshes.push_back(submesh);
+        }
         return m_Meshes.Emplace(std::move(mesh));
     }
 

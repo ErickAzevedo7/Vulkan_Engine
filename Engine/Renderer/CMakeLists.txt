@@ -1,0 +1,32 @@
+add_library(VKE_Renderer STATIC)
+
+target_sources(VKE_Renderer PRIVATE
+    private/Renderer.cpp
+    private/RenderScene.cpp
+    private/Camera.cpp
+    private/ForwardPath.cpp
+    private/GpuCache.cpp
+)
+
+target_include_directories(VKE_Renderer
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/public
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/private
+)
+
+target_link_libraries(VKE_Renderer
+    PUBLIC  VKE_Core
+            VKE_Math
+            VKE_Assets
+    PRIVATE VKE_RHI
+            VKE_Platform
+)
+
+set_target_properties(VKE_Renderer PROPERTIES FOLDER "Engine")
+
+vke_add_shaders(RendererShaders
+    SOURCES
+        shaders/forward.vert
+        shaders/forward.frag
+    INCLUDE_DIRS
+        shaders
+)
