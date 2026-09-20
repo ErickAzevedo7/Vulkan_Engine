@@ -1,18 +1,20 @@
 #include <core/EntryPoint.h>
 #include <core/Application.h>
-#include <core/Log.h>
+#include <assets/AssetManager.h>
 #include <platform/PlatformSystem.h>
+#include <renderer/Renderer.h>
 
-#include "TriangleRenderSystem.h"
+#include "SandboxSceneSystem.h"
 
-// Opens a window and draws a hardcoded triangle through the RHI, to verify
-// the engine/window/graphics pipeline end-to-end.
+// Opens a window and renders a test scene.
 class SandboxApp : public VKE::Application {
 public:
     SandboxApp() {
         auto* platform = Register<VKE::Platform::PlatformSystem>(
             VKE::Platform::WindowDesc{ "Vulkan Engine — Sandbox", 1280, 720, true });
-        Register<VKE::TriangleRenderSystem>(platform->GetWindow());
+        auto* assets = Register<VKE::Assets::AssetManager>(VKE_SANDBOX_ASSET_ROOT);
+        auto* renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
+        Register<VKE::SandboxSceneSystem>(platform->GetInput(), *assets, *renderer);
     }
 };
 
