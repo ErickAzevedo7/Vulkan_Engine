@@ -23,11 +23,9 @@ namespace VKE::RHI {
         ~VulkanDevice() override;
 
         void WaitIdle() override;
+        void ExecuteImmediate(const std::function<void(RHICommandBuffer&)>& record) override;
         const DeviceLimits& GetLimits() const override { return m_Limits; }
         Format GetDepthFormat() const override { return m_DepthFormat; }
-
-        // Records a one-off command buffer and blocks until the GPU has run it.
-        void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& record);
 
         // Names a Vulkan object in validation messages. No-op without validation layers.
         void SetDebugName(VkObjectType type, u64 handle, const char* name) const;
@@ -63,6 +61,9 @@ namespace VKE::RHI {
         void CreateCommandPool();
         void QueryDeviceInfo();
         void CreateDescriptorResources();
+
+        // Submits an already recorded command buffer and blocks until it finishes.
+        void SubmitAndWait(VkCommandBuffer commandBuffer);
 
         int RateDeviceSuitability(VkPhysicalDevice device) const;
         QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;

@@ -28,6 +28,8 @@ namespace VKE::RHI {
             case Format::R32G32_SFLOAT: return VK_FORMAT_R32G32_SFLOAT;
             case Format::R32G32B32_SFLOAT: return VK_FORMAT_R32G32B32_SFLOAT;
             case Format::R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case Format::R16G16_SFLOAT: return VK_FORMAT_R16G16_SFLOAT;
+            case Format::R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
             case Format::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
             case Format::R8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
             case Format::B8G8R8A8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
@@ -45,6 +47,8 @@ namespace VKE::RHI {
             case VK_FORMAT_R32G32_SFLOAT: return Format::R32G32_SFLOAT;
             case VK_FORMAT_R32G32B32_SFLOAT: return Format::R32G32B32_SFLOAT;
             case VK_FORMAT_R32G32B32A32_SFLOAT: return Format::R32G32B32A32_SFLOAT;
+            case VK_FORMAT_R16G16_SFLOAT: return Format::R16G16_SFLOAT;
+            case VK_FORMAT_R16G16B16A16_SFLOAT: return Format::R16G16B16A16_SFLOAT;
             case VK_FORMAT_R8G8B8A8_UNORM: return Format::R8G8B8A8_UNORM;
             case VK_FORMAT_R8G8B8A8_SRGB: return Format::R8G8B8A8_SRGB;
             case VK_FORMAT_B8G8R8A8_UNORM: return Format::B8G8R8A8_UNORM;
@@ -114,6 +118,8 @@ namespace VKE::RHI {
             case Format::R32G32_SFLOAT: return 8;
             case Format::R32G32B32_SFLOAT: return 12;
             case Format::R32G32B32A32_SFLOAT: return 16;
+            case Format::R16G16_SFLOAT: return 4;
+            case Format::R16G16B16A16_SFLOAT: return 8;
             case Format::R8G8B8A8_UNORM:
             case Format::R8G8B8A8_SRGB:
             case Format::B8G8R8A8_UNORM:

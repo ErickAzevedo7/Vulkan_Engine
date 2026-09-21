@@ -43,12 +43,15 @@ namespace VKE::RHI {
             attributes.push_back(vkAttr);
         }
 
+        // A stride of 0 means the shader builds its own vertices, so the pipeline declares no input.
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &binding;
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<u32>(attributes.size());
-        vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
+        if (desc.VertexStride > 0) {
+            vertexInputInfo.vertexBindingDescriptionCount = 1;
+            vertexInputInfo.pVertexBindingDescriptions = &binding;
+            vertexInputInfo.vertexAttributeDescriptionCount = static_cast<u32>(attributes.size());
+            vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
+        }
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -78,6 +81,9 @@ namespace VKE::RHI {
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = ToVkCullMode(desc.CullMode);
         rasterizer.frontFace = ToVkFrontFace(desc.FrontFace);
+        rasterizer.depthBiasEnable = desc.DepthBiasEnable ? VK_TRUE : VK_FALSE;
+        rasterizer.depthBiasConstantFactor = desc.DepthBiasConstant;
+        rasterizer.depthBiasSlopeFactor = desc.DepthBiasSlope;
 
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;

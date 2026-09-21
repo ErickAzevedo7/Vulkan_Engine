@@ -25,9 +25,16 @@ namespace VKE::RHI {
             attachments.push_back(attachment);
         };
 
+        bool sampledAfter = desc.DepthAttachment.SampledAfter;
+
         for (const auto& color : desc.ColorAttachments) {
-            VkImageLayout finalLayout =
-                color.PresentAfter ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            VkImageLayout finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            if (color.PresentAfter) {
+                finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            } else if (color.SampledAfter) {
+                finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                sampledAfter = true;
+            }
             addAttachment(color, finalLayout);
 
             VkAttachmentReference ref{};
@@ -37,7 +44,9 @@ namespace VKE::RHI {
         }
 
         if (hasDepth) {
-            addAttachment(desc.DepthAttachment, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            addAttachment(desc.DepthAttachment, desc.DepthAttachment.SampledAfter
+                                                    ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                                                    : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             depthRef.attachment = static_cast<u32>(attachments.size() - 1);
             depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         }
@@ -67,8 +76,23 @@ namespace VKE::RHI {
         renderPassInfo.pAttachments = attachments.data();
         renderPassInfo.subpassCount = 1;
         renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = 1;
-        renderPassInfo.pDependencies = &dependency;
+        std::vector<VkSubpassDependency> dependencies{dependency};
+        if (sampledAfter) {
+            // Makes what the pass wrote visible to the shaders that sample it next.
+            VkSubpassDependency readDependency{};
+            readDependency.srcSubpass = 0;
+            readDependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+            readDependency.srcStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            readDependency.srcAccessMask =
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            readDependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            readDependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dependencies.push_back(readDependency);
+        }
+
+        renderPassInfo.dependencyCount = static_cast<u32>(dependencies.size());
+        renderPassInfo.pDependencies = dependencies.data();
 
         VK_CHECK(vkCreateRenderPass(m_Device.GetDevice(), &renderPassInfo, nullptr, &m_RenderPass));
     }

@@ -39,8 +39,8 @@ namespace VKE::RHI {
             }
         }
 
-        void TransitionLayout(VkCommandBuffer cmd, VkImage image, u32 baseMip, u32 mipCount, VkImageLayout from,
-                              VkImageLayout to) {
+        void TransitionLayout(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect, u32 baseMip, u32 mipCount,
+                              u32 layerCount, VkImageLayout from, VkImageLayout to) {
             LayoutState src = GetLayoutState(from);
             LayoutState dst = GetLayoutState(to);
 
@@ -51,7 +51,7 @@ namespace VKE::RHI {
             barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.image = image;
-            barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, baseMip, mipCount, 0, 1};
+            barrier.subresourceRange = {aspect, baseMip, mipCount, 0, layerCount};
             barrier.srcAccessMask = src.Access;
             barrier.dstAccessMask = dst.Access;
 
@@ -64,33 +64,42 @@ namespace VKE::RHI {
         VKE_CORE_ASSERT(desc.Width > 0 && desc.Height > 0, "Texture size must be greater than zero");
         VKE_CORE_ASSERT(desc.Usage != TextureUsage::None, "Texture usage must be set");
 
-        VkFormat format = ToVkFormat(desc.Format);
-        VkImageUsageFlags usage = ToVkImageUsage(desc.Usage);
+        bool isCube = desc.Type == TextureType::TextureCube;
+        m_ArrayLayers = std::max(desc.ArrayLayers, isCube ? 6u : 1u);
+        VKE_CORE_ASSERT(!isCube || m_ArrayLayers % 6 == 0, "A cube texture needs six layers per cube");
 
+        m_VkFormat = ToVkFormat(desc.Format);
+        VkImageUsageFlags usage = ToVkImageUsage(desc.Usage);
+        m_MipLevels = desc.MipLevels == 0 ? CalculateMipLevels(desc.Width, desc.Height) : desc.MipLevels;
+
+        bool generateMips = false;
         if (desc.GenerateMips && initialData) {
             constexpr VkFormatFeatureFlags kBlitFeatures = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
                                                            VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
             VkFormatProperties formatProperties;
-            vkGetPhysicalDeviceFormatProperties(m_Device.GetPhysicalDevice(), format, &formatProperties);
+            vkGetPhysicalDeviceFormatProperties(m_Device.GetPhysicalDevice(), m_VkFormat, &formatProperties);
 
             if ((formatProperties.optimalTilingFeatures & kBlitFeatures) == kBlitFeatures) {
                 m_MipLevels = CalculateMipLevels(desc.Width, desc.Height);
+                generateMips = m_MipLevels > 1;
             } else {
                 VKE_CORE_WARN("Texture '{}': format can't be filtered for mip generation, using a single level",
                               desc.DebugName ? desc.DebugName : "<unnamed>");
+                m_MipLevels = 1;
             }
         }
 
         if (initialData) usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        if (m_MipLevels > 1) usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (generateMips) usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.flags = isCube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.format = format;
+        imageInfo.format = m_VkFormat;
         imageInfo.extent = {desc.Width, desc.Height, 1};
         imageInfo.mipLevels = m_MipLevels;
-        imageInfo.arrayLayers = 1;
+        imageInfo.arrayLayers = m_ArrayLayers;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         imageInfo.usage = usage;
@@ -103,34 +112,70 @@ namespace VKE::RHI {
         VK_CHECK(vmaCreateImage(m_Device.GetAllocator(), &imageInfo, &allocInfo, &m_Image, &m_Allocation, nullptr));
         m_Device.SetDebugName(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<u64>(m_Image), desc.DebugName);
 
-        VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        m_Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
         if (IsDepthFormat(desc.Format)) {
-            aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-            if (HasStencil(desc.Format)) aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            m_Aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+            if (HasStencil(desc.Format)) m_Aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
 
-        VkImageViewCreateInfo viewInfo{};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = m_Image;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = format;
-        viewInfo.subresourceRange.aspectMask = aspect;
-        viewInfo.subresourceRange.levelCount = m_MipLevels;
-        viewInfo.subresourceRange.layerCount = 1;
+        VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
+        if (isCube) {
+            viewType = m_ArrayLayers > 6 ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
+            VKE_CORE_ASSERT(viewType != VK_IMAGE_VIEW_TYPE_CUBE_ARRAY || m_Device.GetEnabledFeatures().imageCubeArray,
+                            "Cube arrays are not supported by this GPU");
+        } else if (m_ArrayLayers > 1) {
+            viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        }
 
-        VK_CHECK(vkCreateImageView(m_Device.GetDevice(), &viewInfo, nullptr, &m_View));
+        m_View = CreateView(viewType, 0, m_MipLevels, 0, m_ArrayLayers);
 
         if (initialData) {
-            Upload(initialData);
+            Upload(initialData, generateMips);
         }
     }
 
     VulkanTexture::~VulkanTexture() {
-        if (m_View) vkDestroyImageView(m_Device.GetDevice(), m_View, nullptr);
+        VkDevice device = m_Device.GetDevice();
+        for (auto& [key, view] : m_AttachmentViews) {
+            vkDestroyImageView(device, view, nullptr);
+        }
+        if (m_View) vkDestroyImageView(device, m_View, nullptr);
         if (m_Image) vmaDestroyImage(m_Device.GetAllocator(), m_Image, m_Allocation);
     }
 
-    void VulkanTexture::Upload(const void* data) {
+    VkImageView VulkanTexture::CreateView(VkImageViewType type, u32 baseMip, u32 mipCount, u32 baseLayer, u32 layerCount) {
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = m_Image;
+        viewInfo.viewType = type;
+        viewInfo.format = m_VkFormat;
+        viewInfo.subresourceRange.aspectMask = m_Aspect;
+        viewInfo.subresourceRange.baseMipLevel = baseMip;
+        viewInfo.subresourceRange.levelCount = mipCount;
+        viewInfo.subresourceRange.baseArrayLayer = baseLayer;
+        viewInfo.subresourceRange.layerCount = layerCount;
+
+        VkImageView view = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateImageView(m_Device.GetDevice(), &viewInfo, nullptr, &view));
+        return view;
+    }
+
+    void* VulkanTexture::GetAttachmentView(u32 mipLevel, u32 layer) {
+        VKE_CORE_ASSERT(mipLevel < m_MipLevels && layer < m_ArrayLayers, "Attachment view is out of range");
+
+        u32 key = (mipLevel << 16) | layer;
+        if (auto it = m_AttachmentViews.find(key); it != m_AttachmentViews.end()) {
+            return it->second;
+        }
+
+        VkImageView view = CreateView(VK_IMAGE_VIEW_TYPE_2D, mipLevel, 1, layer, 1);
+        m_AttachmentViews.emplace(key, view);
+        return view;
+    }
+
+    void VulkanTexture::Upload(const void* data, bool generateMips) {
+        VKE_CORE_ASSERT(m_ArrayLayers == 1, "Pixel upload to cube and array textures is not supported yet");
+
         u32 bytesPerPixel = GetBytesPerPixel(m_Format);
         VKE_CORE_ASSERT(bytesPerPixel > 0, "Texture format can't be uploaded from pixel data");
         VkDeviceSize size = static_cast<VkDeviceSize>(m_Width) * m_Height * bytesPerPixel;
@@ -155,41 +200,45 @@ namespace VKE::RHI {
         std::memcpy(stagingResult.pMappedData, data, static_cast<size_t>(size));
         vmaFlushAllocation(allocator, stagingAllocation, 0, size);
 
+        u32 mipLevels = generateMips ? m_MipLevels : 1;
+
         m_Device.ImmediateSubmit([&](VkCommandBuffer cmd) {
-            TransitionLayout(cmd, m_Image, 0, m_MipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            TransitionLayout(cmd, m_Image, m_Aspect, 0, m_MipLevels, m_ArrayLayers, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             VkBufferImageCopy copy{};
-            copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copy.imageSubresource = {m_Aspect, 0, 0, 1};
             copy.imageExtent = {m_Width, m_Height, 1};
             vkCmdCopyBufferToImage(cmd, staging, m_Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
             // Each level is downsampled from the previous one, then made readable.
             i32 mipWidth = static_cast<i32>(m_Width);
             i32 mipHeight = static_cast<i32>(m_Height);
-            for (u32 level = 1; level < m_MipLevels; ++level) {
-                TransitionLayout(cmd, m_Image, level - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            for (u32 level = 1; level < mipLevels; ++level) {
+                TransitionLayout(cmd, m_Image, m_Aspect, level - 1, 1, m_ArrayLayers,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
                 i32 nextWidth = std::max(mipWidth / 2, 1);
                 i32 nextHeight = std::max(mipHeight / 2, 1);
 
                 VkImageBlit blit{};
                 blit.srcOffsets[1] = {mipWidth, mipHeight, 1};
-                blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level - 1, 0, 1};
+                blit.srcSubresource = {m_Aspect, level - 1, 0, 1};
                 blit.dstOffsets[1] = {nextWidth, nextHeight, 1};
-                blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+                blit.dstSubresource = {m_Aspect, level, 0, 1};
                 vkCmdBlitImage(cmd, m_Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_Image,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
 
-                TransitionLayout(cmd, m_Image, level - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                TransitionLayout(cmd, m_Image, m_Aspect, level - 1, 1, m_ArrayLayers,
+                                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
                 mipWidth = nextWidth;
                 mipHeight = nextHeight;
             }
 
-            TransitionLayout(cmd, m_Image, m_MipLevels - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            // Whatever levels were not blitted into still need to become readable.
+            TransitionLayout(cmd, m_Image, m_Aspect, mipLevels - 1, m_MipLevels - (mipLevels - 1), m_ArrayLayers,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         });
 
         vmaDestroyBuffer(allocator, staging, stagingAllocation);

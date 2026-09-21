@@ -14,6 +14,8 @@ namespace VKE::RHI {
         ~VulkanCommandBuffer() override;
 
         void Begin() override;
+        // Same as Begin(), with usage flags such as VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.
+        void Begin(VkCommandBufferUsageFlags usage);
         void End() override;
 
         void BeginRenderPass(RHIRenderPass& renderPass, RHIFramebuffer& framebuffer, const ClearValue& clear) override;

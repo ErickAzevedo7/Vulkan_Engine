@@ -16,6 +16,8 @@ namespace VKE::RHI {
         R32G32_SFLOAT,
         R32G32B32_SFLOAT,
         R32G32B32A32_SFLOAT,
+        R16G16_SFLOAT,
+        R16G16B16A16_SFLOAT,
         R8G8B8A8_UNORM,
         R8G8B8A8_SRGB,
         B8G8R8A8_UNORM,
@@ -115,12 +117,22 @@ namespace VKE::RHI {
     };
     VKE_ENUM_FLAGS(TextureUsage)
 
+    enum class TextureType {
+        Texture2D,
+        // Six layers per cube, ordered +X, -X, +Y, -Y, +Z, -Z.
+        TextureCube,
+    };
+
     struct TextureDesc {
         u32 Width = 1;
         u32 Height = 1;
+        u32 ArrayLayers = 1;
+        // 0 allocates the full mip chain.
+        u32 MipLevels = 1;
+        TextureType Type = TextureType::Texture2D;
         Format Format = Format::R8G8B8A8_UNORM;
         TextureUsage Usage = TextureUsage::Sampled;
-        // Builds the full mip chain from the initial data.
+        // Fills the mip chain from the initial data.
         bool GenerateMips = false;
         const char* DebugName = nullptr;
     };
@@ -162,6 +174,8 @@ namespace VKE::RHI {
         bool Clear = true;
         // Set on color attachments that are presented to the screen.
         bool PresentAfter = false;
+        // Leaves the attachment readable by shaders once the pass ends.
+        bool SampledAfter = false;
     };
 
     struct RenderPassDesc {
@@ -214,7 +228,8 @@ namespace VKE::RHI {
         std::string VertexShaderPath;
         std::string FragmentShaderPath;
 
-        // Single interleaved vertex binding.
+        // Single interleaved vertex binding. A stride of 0 declares no vertex
+        // input at all, for passes whose shaders build their own vertices.
         std::vector<VertexAttribute> VertexAttributes;
         u32 VertexStride = 0;
 
@@ -230,6 +245,11 @@ namespace VKE::RHI {
         bool DepthTestEnable = false;
         bool DepthWriteEnable = false;
         CompareOp DepthCompareOp = CompareOp::Less;
+
+        // Pushes depth away from the light when rendering shadow maps.
+        bool DepthBiasEnable = false;
+        f32 DepthBiasConstant = 0.0f;
+        f32 DepthBiasSlope = 0.0f;
     };
 
     // -------------------------------------------------------------------------

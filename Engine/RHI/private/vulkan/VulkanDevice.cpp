@@ -1,4 +1,5 @@
 #include "VulkanDevice.h"
+#include "VulkanCommandBuffer.h"
 #include "VulkanUtils.h"
 
 #include <core/Log.h>
@@ -99,25 +100,7 @@ namespace VKE::RHI {
         vkDeviceWaitIdle(m_Device);
     }
 
-    void VulkanDevice::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& record) {
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = m_CommandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
-
-        VkCommandBuffer cmd = VK_NULL_HANDLE;
-        VK_CHECK(vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd));
-
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
-
-        record(cmd);
-
-        VK_CHECK(vkEndCommandBuffer(cmd));
-
+    void VulkanDevice::SubmitAndWait(VkCommandBuffer commandBuffer) {
         VkFenceCreateInfo fenceInfo{};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         VkFence fence = VK_NULL_HANDLE;
@@ -126,12 +109,19 @@ namespace VKE::RHI {
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &cmd;
+        submitInfo.pCommandBuffers = &commandBuffer;
         VK_CHECK(vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, fence));
         VK_CHECK(vkWaitForFences(m_Device, 1, &fence, VK_TRUE, UINT64_MAX));
 
         vkDestroyFence(m_Device, fence, nullptr);
-        vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
+    }
+
+    void VulkanDevice::ExecuteImmediate(const std::function<void(RHICommandBuffer&)>& record) {
+        VulkanCommandBuffer commandBuffer(*this);
+        commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        record(commandBuffer);
+        commandBuffer.End();
+        SubmitAndWait(commandBuffer.GetHandle());
     }
 
     void VulkanDevice::SetDebugName(VkObjectType type, u64 handle, const char* name) const {
@@ -329,6 +319,7 @@ namespace VKE::RHI {
         m_EnabledFeatures = {};
         m_EnabledFeatures.samplerAnisotropy = availableFeatures.samplerAnisotropy;
         m_EnabledFeatures.fillModeNonSolid = availableFeatures.fillModeNonSolid;
+        m_EnabledFeatures.imageCubeArray = availableFeatures.imageCubeArray;
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

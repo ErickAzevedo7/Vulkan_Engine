@@ -19,9 +19,14 @@ namespace VKE::RHI {
         virtual u32 GetHeight() const = 0;
         virtual Format GetFormat() const = 0;
         virtual u32 GetMipLevels() const = 0;
+        virtual u32 GetArrayLayers() const = 0;
 
-        // Opaque view, used as an RHIFramebuffer attachment.
+        // Opaque view of the whole texture, used to sample it.
         virtual void* GetView() const = 0;
+
+        // Opaque view of a single mip level of a single layer, used as an
+        // RHIFramebuffer attachment to render into that part of the texture.
+        virtual void* GetAttachmentView(u32 mipLevel, u32 layer) = 0;
     };
 
 } // namespace VKE::RHI

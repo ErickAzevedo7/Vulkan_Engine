@@ -26,9 +26,14 @@ namespace VKE::RHI {
     }
 
     void VulkanCommandBuffer::Begin() {
+        Begin(0);
+    }
+
+    void VulkanCommandBuffer::Begin(VkCommandBufferUsageFlags usage) {
         // The command pool allows per-buffer reset, so beginning again resets the buffer.
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = usage;
         VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &beginInfo));
         m_BoundPipeline = nullptr;
     }
