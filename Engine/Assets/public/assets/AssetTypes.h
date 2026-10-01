@@ -42,12 +42,20 @@ namespace VKE::Assets {
         SRGB,
     };
 
-    // RGBA8 pixels, top row first.
+    enum class PixelType {
+        UNorm8,
+        // Used by .hdr images, whose values go above 1.
+        Float32,
+    };
+
+    // Four channels per pixel, top row first.
     struct TextureData {
         std::string Name;
         u32 Width = 0;
         u32 Height = 0;
         ColorSpace ColorSpace = ColorSpace::Linear;
+        PixelType PixelType = PixelType::UNorm8;
+        // Raw bytes, whose meaning follows PixelType.
         std::vector<u8> Pixels;
     };
 

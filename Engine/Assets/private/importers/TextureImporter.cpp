@@ -15,8 +15,21 @@ namespace VKE::Assets::Importers {
         int width = 0;
         int height = 0;
         int channels = 0;
-        stbi_uc* pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels,
-                                                STBI_rgb_alpha);
+
+        // .hdr images hold values above 1 and are always linear.
+        bool isFloat = stbi_is_hdr_from_memory(bytes.data(), static_cast<int>(bytes.size())) != 0;
+
+        void* pixels = nullptr;
+        size_t bytesPerPixel = 4;
+        if (isFloat) {
+            pixels = stbi_loadf_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels,
+                                            STBI_rgb_alpha);
+            bytesPerPixel = 4 * sizeof(float);
+        } else {
+            pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels,
+                                           STBI_rgb_alpha);
+        }
+
         if (!pixels) {
             VKE_CORE_ERROR("TextureImporter: '{}': {}", file.string(), stbi_failure_reason());
             return false;
@@ -25,8 +38,10 @@ namespace VKE::Assets::Importers {
         outTexture.Name = file.filename().string();
         outTexture.Width = static_cast<u32>(width);
         outTexture.Height = static_cast<u32>(height);
-        outTexture.ColorSpace = colorSpace;
-        outTexture.Pixels.assign(pixels, pixels + static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+        outTexture.ColorSpace = isFloat ? ColorSpace::Linear : colorSpace;
+        outTexture.PixelType = isFloat ? PixelType::Float32 : PixelType::UNorm8;
+        const u8* first = static_cast<const u8*>(pixels);
+        outTexture.Pixels.assign(first, first + static_cast<size_t>(width) * height * bytesPerPixel);
 
         stbi_image_free(pixels);
         return true;
