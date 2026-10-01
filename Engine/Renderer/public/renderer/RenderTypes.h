@@ -35,6 +35,13 @@ namespace VKE::Renderer {
         Vec3 Direction{0.0f, -1.0f, 0.0f};
     };
 
+    // What surrounds the scene, lighting it and showing behind everything else.
+    struct EnvironmentDesc {
+        // Equirectangular image, usually a .hdr. An invalid handle uses a stand-in sky.
+        Handle<Assets::TextureData> Source;
+        f32 Intensity = 1.0f;
+    };
+
     using MeshInstanceID = Handle<MeshInstanceDesc>;
     using LightID = Handle<LightDesc>;
 

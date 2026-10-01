@@ -16,6 +16,9 @@ namespace VKE::Renderer {
         void SetVisible(MeshInstanceID id, bool visible);
         void DestroyMesh(MeshInstanceID id);
 
+        void SetEnvironment(const EnvironmentDesc& desc) { m_Environment = desc; }
+        const EnvironmentDesc& GetEnvironment() const { return m_Environment; }
+
         LightID CreateLight(const LightDesc& desc);
         void SetLight(LightID id, const LightDesc& desc);
         void DestroyLight(LightID id);
@@ -26,6 +29,7 @@ namespace VKE::Renderer {
     private:
         SlotMap<MeshInstanceDesc> m_Meshes;
         SlotMap<LightDesc> m_Lights;
+        EnvironmentDesc m_Environment;
     };
 
 } // namespace VKE::Renderer

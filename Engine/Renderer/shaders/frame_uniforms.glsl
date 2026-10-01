@@ -16,5 +16,7 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
     mat4 projection;
     vec4 cameraPosition;
     uvec4 lightCount;
+    // x = environment intensity
+    vec4 environmentParameters;
     Light lights[MAX_LIGHTS];
 } frame;
