@@ -12,6 +12,7 @@ namespace VKE::Renderer {
 
     void Renderer::OnInitialize() {
         m_ForwardPath = MakeIunique<ForwardPath>(m_Window, m_Assets);
+        m_ForwardPath->SetExposure(m_Exposure);
         VKE_CORE_INFO("Renderer initialized");
     }
 
@@ -22,6 +23,13 @@ namespace VKE::Renderer {
             m_ForwardPath.reset();
         }
         VKE_CORE_INFO("Renderer shutdown");
+    }
+
+    void Renderer::SetExposure(f32 exposure) {
+        m_Exposure = exposure;
+        if (m_ForwardPath) {
+            m_ForwardPath->SetExposure(exposure);
+        }
     }
 
     void Renderer::Render(const RenderScene& scene, const RenderView& view) {

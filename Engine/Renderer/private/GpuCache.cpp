@@ -16,6 +16,8 @@ namespace VKE::Renderer {
         samplerDesc.DebugName = "MaterialSampler";
         m_Sampler = RHI::RHISampler::Create(m_Device, samplerDesc);
 
+        m_EnvironmentBaker = MakeIunique<EnvironmentBaker>(m_Device);
+
         Assets::MaterialData defaultMaterial;
         defaultMaterial.Name = "$default";
         defaultMaterial.Metallic = 0.0f;
@@ -99,6 +101,19 @@ namespace VKE::Renderer {
         return *it->second;
     }
 
+    const GpuEnvironment& GpuCache::GetEnvironmentMaps(Handle<Assets::TextureData> source) {
+        if (source.IsValid() && !m_Assets.GetTexture(source)) {
+            source = {};
+        }
+        if (auto it = m_Environments.find(source); it != m_Environments.end()) {
+            return *it->second;
+        }
+
+        RHI::RHITexture* sourceTexture = source.IsValid() ? &GetTexture(source) : nullptr;
+        auto [it, inserted] = m_Environments.emplace(source, m_EnvironmentBaker->Bake(sourceTexture));
+        return *it->second;
+    }
+
     RHI::RHITexture& GpuCache::GetTexture(Handle<Assets::TextureData> handle) {
         if (!m_Assets.GetTexture(handle)) {
             handle = m_Assets.GetDefaultTexture(Assets::DefaultTexture::White);
@@ -112,8 +127,12 @@ namespace VKE::Renderer {
         RHI::TextureDesc desc;
         desc.Width = texture.Width;
         desc.Height = texture.Height;
-        desc.Format = texture.ColorSpace == Assets::ColorSpace::SRGB ? RHI::Format::R8G8B8A8_SRGB
-                                                                     : RHI::Format::R8G8B8A8_UNORM;
+        if (texture.PixelType == Assets::PixelType::Float32) {
+            desc.Format = RHI::Format::R32G32B32A32_SFLOAT;
+        } else {
+            desc.Format = texture.ColorSpace == Assets::ColorSpace::SRGB ? RHI::Format::R8G8B8A8_SRGB
+                                                                         : RHI::Format::R8G8B8A8_UNORM;
+        }
         desc.Usage = RHI::TextureUsage::Sampled;
         desc.GenerateMips = texture.Width > 1 || texture.Height > 1;
         desc.DebugName = texture.Name.c_str();

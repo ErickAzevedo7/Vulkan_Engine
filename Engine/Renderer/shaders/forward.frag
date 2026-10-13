@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "frame_uniforms.glsl"
+#include "environment_uniforms.glsl"
 #include "material_uniforms.glsl"
 #include "pbr_common.glsl"
 
@@ -13,9 +14,6 @@ layout(location = 2) in vec2 fragUV;
 layout(location = 3) in vec4 fragTangent;
 
 layout(location = 0) out vec4 outColor;
-
-// Stands in for environment lighting.
-const vec3 AMBIENT_COLOR = vec3(0.03);
 
 vec3 GetNormal()
 {
@@ -89,6 +87,18 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
-    vec3 ambient = AMBIENT_COLOR * albedo * occlusion;
+    // Ambient light comes from the environment: its average color for the diffuse
+    // half, and its blurred reflection for the specular half.
+    vec3 ambientFresnel = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 ambientDiffuseFactor = (vec3(1.0) - ambientFresnel) * (1.0 - metallic);
+
+    vec3 diffuseIBL = texture(irradianceMap, N).rgb * albedo;
+
+    vec3 reflection = reflect(-V, N);
+    vec3 prefiltered = textureLod(prefilterMap, reflection, roughness * kMaxReflectionLod).rgb;
+    vec2 environmentBRDF = texture(brdfLut, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specularIBL = prefiltered * (ambientFresnel * environmentBRDF.x + environmentBRDF.y);
+
+    vec3 ambient = (ambientDiffuseFactor * diffuseIBL + specularIBL) * occlusion * frame.environmentParameters.x;
     outColor = vec4(ambient + Lo + emissive, albedoSample.a * material.baseColor.a);
 }

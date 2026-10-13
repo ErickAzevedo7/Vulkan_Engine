@@ -1,4 +1,5 @@
 #include "VulkanBuffer.h"
+#include "VulkanCommandBuffer.h"
 #include "VulkanDevice.h"
 #include "VulkanUtils.h"
 
@@ -84,7 +85,8 @@ namespace VKE::RHI {
         std::memcpy(stagingResult.pMappedData, data, m_Size);
         vmaFlushAllocation(allocator, stagingAllocation, 0, m_Size);
 
-        m_Device.ImmediateSubmit([&](VkCommandBuffer cmd) {
+        m_Device.ExecuteImmediate([&](RHICommandBuffer& commandBuffer) {
+            VkCommandBuffer cmd = static_cast<VulkanCommandBuffer&>(commandBuffer).GetHandle();
             VkBufferCopy copy{};
             copy.size = m_Size;
             vkCmdCopyBuffer(cmd, staging, m_Buffer, 1, &copy);

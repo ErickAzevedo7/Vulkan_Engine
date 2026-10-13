@@ -1,4 +1,5 @@
 #include "VulkanTexture.h"
+#include "VulkanCommandBuffer.h"
 #include "VulkanDevice.h"
 #include "VulkanUtils.h"
 
@@ -202,7 +203,8 @@ namespace VKE::RHI {
 
         u32 mipLevels = generateMips ? m_MipLevels : 1;
 
-        m_Device.ImmediateSubmit([&](VkCommandBuffer cmd) {
+        m_Device.ExecuteImmediate([&](RHICommandBuffer& commandBuffer) {
+            VkCommandBuffer cmd = static_cast<VulkanCommandBuffer&>(commandBuffer).GetHandle();
             TransitionLayout(cmd, m_Image, m_Aspect, 0, m_MipLevels, m_ArrayLayers, VK_IMAGE_LAYOUT_UNDEFINED,
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 

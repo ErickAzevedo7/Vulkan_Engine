@@ -1,5 +1,7 @@
 #pragma once
 
+#include "EnvironmentBaker.h"
+
 #include <assets/AssetTypes.h>
 #include <core/Handle.h>
 #include <core/Types.h>
@@ -44,6 +46,10 @@ namespace VKE::Renderer {
         // Uses a default material if the asset doesn't exist.
         const GpuMaterial& GetMaterial(Handle<Assets::MaterialData> handle);
 
+        // The lighting maps for an environment image, baked the first time they are
+        // asked for. An invalid handle, or one whose asset is gone, gives the stand-in sky.
+        const GpuEnvironment& GetEnvironmentMaps(Handle<Assets::TextureData> source);
+
     private:
         RHI::RHITexture& GetTexture(Handle<Assets::TextureData> handle);
 
@@ -52,12 +58,14 @@ namespace VKE::Renderer {
         RHI::RHIBindGroupLayout& m_MaterialLayout;
 
         Iunique<RHI::RHISampler> m_Sampler;
+        Iunique<EnvironmentBaker> m_EnvironmentBaker;
         Handle<Assets::MaterialData> m_DefaultMaterial;
 
         // Destroyed in reverse declaration order: meshes, then materials, then textures.
         std::unordered_map<Handle<Assets::TextureData>, Iunique<RHI::RHITexture>> m_Textures;
         std::unordered_map<Handle<Assets::MaterialData>, Iunique<GpuMaterial>> m_Materials;
         std::unordered_map<Handle<Assets::MeshData>, Iunique<GpuMesh>> m_Meshes;
+        std::unordered_map<Handle<Assets::TextureData>, Iunique<GpuEnvironment>> m_Environments;
     };
 
 } // namespace VKE::Renderer

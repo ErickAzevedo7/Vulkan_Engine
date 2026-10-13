@@ -6,6 +6,9 @@ target_sources(VKE_Renderer PRIVATE
     private/Camera.cpp
     private/ForwardPath.cpp
     private/GpuCache.cpp
+    private/TonemapPass.cpp
+    private/SkyboxPass.cpp
+    private/EnvironmentBaker.cpp
 )
 
 target_include_directories(VKE_Renderer
@@ -27,6 +30,16 @@ vke_add_shaders(RendererShaders
     SOURCES
         shaders/forward.vert
         shaders/forward.frag
+        shaders/fullscreen.vert
+        shaders/tonemap.frag
+        shaders/cubemap.vert
+        shaders/equirect_to_cubemap.frag
+        shaders/procedural_sky.frag
+        shaders/skybox.vert
+        shaders/skybox.frag
+        shaders/irradiance.frag
+        shaders/prefilter.frag
+        shaders/brdf_lut.frag
     INCLUDE_DIRS
         shaders
 )

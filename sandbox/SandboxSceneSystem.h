@@ -21,7 +21,8 @@ namespace VKE {
 
     // Sandbox-only scene: fills a render scene with test content and flies a camera around it.
     // Hold the right mouse button to look, WASD/QE to move, Shift to go faster, Escape to quit.
-    // Keys 1-3 switch the helmet between its own material and two test materials.
+    // Keys 1-3 switch the helmet between its own material and two test materials,
+    // and -/= change the exposure.
     class SandboxSceneSystem : public System {
     public:
         SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets, Renderer::Renderer& renderer);
@@ -47,6 +48,7 @@ namespace VKE {
         Handle<Assets::MaterialData> m_SmoothPlastic;
         Handle<Assets::MaterialData> m_RoughMetal;
 
+        f32 m_Exposure = 1.0f;
         f32 m_LastMouseX = 0.0f;
         f32 m_LastMouseY = 0.0f;
         bool m_Looking = false;

@@ -69,6 +69,14 @@ namespace VKE {
 
         UpdateCamera(ft.GetDeltaF());
 
+        f32 exposureStep = 0.0f;
+        if (m_Input.IsKeyDown(Platform::KeyCode::Minus)) exposureStep -= 1.0f;
+        if (m_Input.IsKeyDown(Platform::KeyCode::Equal)) exposureStep += 1.0f;
+        if (exposureStep != 0.0f) {
+            m_Exposure = glm::clamp(m_Exposure + exposureStep * ft.GetDeltaF(), 0.05f, 8.0f);
+            m_Renderer.SetExposure(m_Exposure);
+        }
+
         if (m_Input.IsKeyPressed(Platform::KeyCode::D1)) m_Scene.SetMaterials(m_Helmet, {});
         if (m_Input.IsKeyPressed(Platform::KeyCode::D2)) m_Scene.SetMaterials(m_Helmet, {m_SmoothPlastic});
         if (m_Input.IsKeyPressed(Platform::KeyCode::D3)) m_Scene.SetMaterials(m_Helmet, {m_RoughMetal});

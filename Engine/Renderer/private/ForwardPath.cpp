@@ -16,6 +16,9 @@ namespace VKE::Renderer {
     namespace {
         static_assert(sizeof(Assets::Vertex) == 48, "Vertex layout changed, update the pipeline attributes");
 
+        // Keeps light values above 1.0 instead of clipping them at the swapchain.
+        constexpr RHI::Format kSceneColorFormat = RHI::Format::R16G16B16A16_SFLOAT;
+
         Vec3 SafeNormalize(const Vec3& v) {
             f32 length = glm::length(v);
             return length > 0.0f ? v / length : Vec3(0.0f);
@@ -26,22 +29,35 @@ namespace VKE::Renderer {
         m_Device = RHI::RHIDevice::Create(m_Window);
         m_Swapchain = RHI::RHISwapchain::Create(*m_Device, m_Window);
 
-        RHI::RenderPassDesc renderPassDesc;
-        RHI::AttachmentDesc colorAttachment;
-        colorAttachment.Format = m_Swapchain->GetColorFormat();
-        colorAttachment.PresentAfter = true;
-        renderPassDesc.ColorAttachments = {colorAttachment};
-        renderPassDesc.HasDepthAttachment = true;
-        renderPassDesc.DepthAttachment.Format = m_Device->GetDepthFormat();
-        renderPassDesc.DepthAttachment.IsDepth = true;
-        m_RenderPass = RHI::RHIRenderPass::Create(*m_Device, renderPassDesc);
+        RHI::RenderPassDesc scenePassDesc;
+        RHI::AttachmentDesc sceneColor;
+        sceneColor.Format = kSceneColorFormat;
+        sceneColor.SampledAfter = true;
+        scenePassDesc.ColorAttachments = {sceneColor};
+        scenePassDesc.HasDepthAttachment = true;
+        scenePassDesc.DepthAttachment.Format = m_Device->GetDepthFormat();
+        scenePassDesc.DepthAttachment.IsDepth = true;
+        m_ScenePass = RHI::RHIRenderPass::Create(*m_Device, scenePassDesc);
 
-        CreateSwapchainTargets();
+        RHI::RenderPassDesc outputPassDesc;
+        RHI::AttachmentDesc outputColor;
+        outputColor.Format = m_Swapchain->GetColorFormat();
+        outputColor.PresentAfter = true;
+        outputPassDesc.ColorAttachments = {outputColor};
+        m_OutputPass = RHI::RHIRenderPass::Create(*m_Device, outputPassDesc);
 
         RHI::BindGroupLayoutDesc frameLayoutDesc;
         frameLayoutDesc.Slots = {{0, RHI::BindingType::UniformBuffer, RHI::ShaderStageFlags::AllGraphics}};
         frameLayoutDesc.DebugName = "FrameLayout";
         m_FrameLayout = RHI::RHIBindGroupLayout::Create(*m_Device, frameLayoutDesc);
+
+        RHI::BindGroupLayoutDesc environmentLayoutDesc;
+        for (u32 binding : {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding}) {
+            environmentLayoutDesc.Slots.push_back(
+                {binding, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment});
+        }
+        environmentLayoutDesc.DebugName = "EnvironmentLayout";
+        m_EnvironmentLayout = RHI::RHIBindGroupLayout::Create(*m_Device, environmentLayoutDesc);
 
         RHI::BindGroupLayoutDesc materialLayoutDesc;
         for (u32 slot = 0; slot < static_cast<u32>(Assets::MaterialTexture::Count); ++slot) {
@@ -56,6 +72,19 @@ namespace VKE::Renderer {
         CreatePipeline();
 
         m_GpuCache = MakeIunique<GpuCache>(*m_Device, assets, *m_MaterialLayout);
+
+        RHI::SamplerDesc environmentSamplerDesc;
+        environmentSamplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;
+        environmentSamplerDesc.AddressModeV = RHI::SamplerAddressMode::ClampToEdge;
+        environmentSamplerDesc.AddressModeW = RHI::SamplerAddressMode::ClampToEdge;
+        environmentSamplerDesc.MaxAnisotropy = 1.0f;
+        environmentSamplerDesc.DebugName = "EnvironmentSampler";
+        m_EnvironmentSampler = RHI::RHISampler::Create(*m_Device, environmentSamplerDesc);
+
+        m_SkyboxPass = MakeIunique<SkyboxPass>(*m_Device, *m_ScenePass, *m_FrameLayout, *m_EnvironmentLayout);
+        m_TonemapPass = MakeIunique<TonemapPass>(*m_Device, *m_OutputPass);
+
+        CreateTargets();
 
         for (u32 i = 0; i < m_Swapchain->GetFramesInFlightCount(); ++i) {
             RHI::BufferDesc uniformDesc;
@@ -94,47 +123,50 @@ namespace VKE::Renderer {
             {2, RHI::Format::R32G32_SFLOAT, offsetof(Assets::Vertex, UV)},
             {3, RHI::Format::R32G32B32A32_SFLOAT, offsetof(Assets::Vertex, Tangent)},
         };
-        desc.BindGroupLayouts = {m_FrameLayout.get(), nullptr, m_MaterialLayout.get()};
+        desc.BindGroupLayouts = {m_FrameLayout.get(), m_EnvironmentLayout.get(), m_MaterialLayout.get()};
         desc.PushConstantRanges = {{RHI::ShaderStageFlags::Vertex, 0, sizeof(ObjectPushConstants)}};
         desc.CullMode = RHI::CullMode::Back;
         desc.FrontFace = RHI::FrontFace::CounterClockwise;
         desc.DepthTestEnable = true;
         desc.DepthWriteEnable = true;
-        m_Pipeline = RHI::RHIPipeline::Create(*m_Device, *m_RenderPass, desc);
+        m_Pipeline = RHI::RHIPipeline::Create(*m_Device, *m_ScenePass, desc);
     }
 
-    void ForwardPath::CreateSwapchainTargets() {
-        m_Framebuffers.clear();
-        m_DepthTextures.clear();
+    void ForwardPath::CreateTargets() {
+        m_OutputFramebuffers.clear();
+        m_SceneTargets.clear();
 
         u32 width = m_Swapchain->GetWidth();
         u32 height = m_Swapchain->GetHeight();
 
-        // One depth texture per swapchain image, so frames in flight never share one.
-        for (u32 i = 0; i < m_Swapchain->GetImageCount(); ++i) {
-            RHI::TextureDesc depthDesc;
-            depthDesc.Width = width;
-            depthDesc.Height = height;
-            depthDesc.Format = m_Device->GetDepthFormat();
-            depthDesc.Usage = RHI::TextureUsage::DepthAttachment;
-            depthDesc.DebugName = "SwapchainDepth";
-            m_DepthTextures.push_back(RHI::RHITexture::Create(*m_Device, depthDesc));
+        // One scene target per frame in flight, so a frame never draws over the
+        // target the previous one is still presenting.
+        m_SceneTargets.resize(m_Swapchain->GetFramesInFlightCount());
+        std::vector<RHI::RHITexture*> sources;
+        sources.reserve(m_SceneTargets.size());
+        for (RenderTarget& target : m_SceneTargets) {
+            target.Create(*m_Device, *m_ScenePass, width, height, kSceneColorFormat, m_Device->GetDepthFormat(),
+                          "SceneTarget");
+            sources.push_back(target.Color.get());
+        }
+        m_TonemapPass->SetSources(sources);
 
+        for (u32 i = 0; i < m_Swapchain->GetImageCount(); ++i) {
             RHI::FramebufferDesc framebufferDesc;
-            framebufferDesc.AttachmentViews = {m_Swapchain->GetImageView(i), m_DepthTextures.back()->GetView()};
+            framebufferDesc.AttachmentViews = {m_Swapchain->GetImageView(i)};
             framebufferDesc.Width = width;
             framebufferDesc.Height = height;
-            m_Framebuffers.push_back(RHI::RHIFramebuffer::Create(*m_Device, *m_RenderPass, framebufferDesc));
+            m_OutputFramebuffers.push_back(RHI::RHIFramebuffer::Create(*m_Device, *m_OutputPass, framebufferDesc));
         }
     }
 
     void ForwardPath::RecreateSwapchain() {
         // Framebuffers reference the swapchain views, so release them before recreating.
         m_Device->WaitIdle();
-        m_Framebuffers.clear();
-        m_DepthTextures.clear();
+        m_OutputFramebuffers.clear();
+        m_SceneTargets.clear();
         m_Swapchain->Recreate();
-        CreateSwapchainTargets();
+        CreateTargets();
     }
 
     void ForwardPath::CollectDrawItems(const RenderScene& scene) {
@@ -164,6 +196,34 @@ namespace VKE::Renderer {
         });
     }
 
+    void ForwardPath::UpdateEnvironment(const RenderScene& scene) {
+        const EnvironmentDesc& environment = scene.GetEnvironment();
+        const GpuEnvironment& maps = m_GpuCache->GetEnvironmentMaps(environment.Source);
+        if (&maps == m_BoundEnvironmentMaps) return;
+
+        // A frame in flight may still be reading the group being replaced.
+        m_Device->WaitIdle();
+
+        RHI::BindGroupDesc groupDesc;
+        groupDesc.Layout = m_EnvironmentLayout.get();
+        groupDesc.DebugName = "EnvironmentGroup";
+
+        auto bind = [&](u32 binding, RHI::RHITexture* texture) {
+            RHI::BoundResource resource;
+            resource.Binding = binding;
+            resource.Texture = texture;
+            resource.Sampler = m_EnvironmentSampler.get();
+            groupDesc.Resources.push_back(resource);
+        };
+        bind(kIrradianceBinding, maps.Irradiance.get());
+        bind(kPrefilterBinding, maps.Prefilter.get());
+        bind(kBrdfLutBinding, maps.BrdfLut.get());
+        bind(kRadianceBinding, maps.Radiance.get());
+
+        m_EnvironmentGroup = RHI::RHIBindGroup::Create(*m_Device, groupDesc);
+        m_BoundEnvironmentMaps = &maps;
+    }
+
     void ForwardPath::WriteFrameUniforms(u32 frameIndex, const RenderScene& scene, const RenderView& view) {
         f32 aspect = static_cast<f32>(m_Swapchain->GetWidth()) / static_cast<f32>(m_Swapchain->GetHeight());
 
@@ -171,6 +231,7 @@ namespace VKE::Renderer {
         frame.View = view.View;
         frame.Projection = glm::perspectiveRH_ZO(view.FieldOfView, aspect, view.NearPlane, view.FarPlane);
         frame.CameraPosition = Vec4(view.Position, 1.0f);
+        frame.EnvironmentParameters = Vec4(scene.GetEnvironment().Intensity, 0.0f, 0.0f, 0.0f);
 
         const std::vector<LightDesc>& lights = scene.GetLights().Values();
         if (lights.size() > kMaxLights && !m_LightLimitWarned) {
@@ -200,6 +261,7 @@ namespace VKE::Renderer {
 
         // Uploads any assets seen for the first time before recording starts.
         CollectDrawItems(scene);
+        UpdateEnvironment(scene);
 
         u32 imageIndex;
         if (!m_Swapchain->AcquireNextImage(imageIndex)) {
@@ -210,16 +272,18 @@ namespace VKE::Renderer {
         u32 frameIndex = m_Swapchain->GetCurrentFrameIndex();
         WriteFrameUniforms(frameIndex, scene, view);
 
-        RHI::ClearValue clear;
-        clear.R = 0.02f;
-        clear.G = 0.02f;
-        clear.B = 0.05f;
+        RHI::ClearValue sceneClear;
+        sceneClear.R = 0.02f;
+        sceneClear.G = 0.02f;
+        sceneClear.B = 0.05f;
 
         RHI::RHICommandBuffer& cmd = *m_CommandBuffers[frameIndex];
         cmd.Begin();
-        cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffers[imageIndex], clear);
+
+        cmd.BeginRenderPass(*m_ScenePass, *m_SceneTargets[frameIndex].Framebuffer, sceneClear);
         cmd.BindPipeline(*m_Pipeline);
         cmd.BindBindGroup(kFrameSet, *m_FrameGroups[frameIndex]);
+        cmd.BindBindGroup(kEnvironmentSet, *m_EnvironmentGroup);
 
         const GpuMaterial* boundMaterial = nullptr;
         const GpuMesh* boundMesh = nullptr;
@@ -245,7 +309,16 @@ namespace VKE::Renderer {
             cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
         }
 
+        // Last in the pass, so it only touches pixels the scene left empty.
+        m_SkyboxPass->Record(cmd, *m_FrameGroups[frameIndex], *m_EnvironmentGroup);
+
         cmd.EndRenderPass();
+
+        RHI::ClearValue outputClear;
+        cmd.BeginRenderPass(*m_OutputPass, *m_OutputFramebuffers[imageIndex], outputClear);
+        m_TonemapPass->Record(cmd, frameIndex, m_Exposure);
+        cmd.EndRenderPass();
+
         cmd.End();
 
         if (!m_Swapchain->SubmitAndPresent(cmd)) {

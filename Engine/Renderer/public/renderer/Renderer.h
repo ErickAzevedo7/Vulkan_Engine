@@ -31,9 +31,13 @@ namespace VKE::Renderer {
         // Draws `scene` as seen from `view` and presents the frame.
         void Render(const RenderScene& scene, const RenderView& view);
 
+        // Scales the scene's color before it is mapped to displayable range.
+        void SetExposure(f32 exposure);
+
     private:
         Platform::IWindow& m_Window;
         Assets::AssetManager& m_Assets;
+        f32 m_Exposure = 1.0f;
         Iunique<ForwardPath> m_ForwardPath;
     };
 
