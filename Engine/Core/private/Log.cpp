@@ -7,7 +7,8 @@ namespace VKE {
     std::shared_ptr<spdlog::logger> Log::s_ClientLogger;
 
     void Log::Init() {
-        spdlog::set_pattern("%^[%T] %n: %v%$");
+        // Level is printed so warnings and errors can be told apart and searched for.
+        spdlog::set_pattern("%^[%T] [%l] %n: %v%$");
 
         s_CoreLogger = spdlog::stdout_color_mt("ENGINE");
         s_CoreLogger->set_level(spdlog::level::trace);

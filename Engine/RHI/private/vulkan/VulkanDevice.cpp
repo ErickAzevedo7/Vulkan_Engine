@@ -31,7 +31,9 @@ namespace VKE::RHI {
                                                       VkDebugUtilsMessageTypeFlagsEXT /*type*/,
                                                       const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
                                                       void* /*userData*/) {
-            if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+            if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+                VKE_CORE_ERROR("[Vulkan] {}", callbackData->pMessage);
+            } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
                 VKE_CORE_WARN("[Vulkan] {}", callbackData->pMessage);
             } else {
                 VKE_CORE_TRACE("[Vulkan] {}", callbackData->pMessage);
