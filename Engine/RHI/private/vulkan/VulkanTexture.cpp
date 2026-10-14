@@ -122,8 +122,6 @@ namespace VKE::RHI {
         VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
         if (isCube) {
             viewType = m_ArrayLayers > 6 ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
-            VKE_CORE_ASSERT(viewType != VK_IMAGE_VIEW_TYPE_CUBE_ARRAY || m_Device.GetEnabledFeatures().imageCubeArray,
-                            "Cube arrays are not supported by this GPU");
         } else if (m_ArrayLayers > 1) {
             viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
         }

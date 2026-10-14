@@ -267,6 +267,11 @@ namespace VKE::RHI {
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
         if (formatCount == 0 || presentModeCount == 0) return 0;
 
+        // Point light shadows live in a cube array.
+        VkPhysicalDeviceFeatures features;
+        vkGetPhysicalDeviceFeatures(device, &features);
+        if (!features.imageCubeArray) return 0;
+
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(device, &properties);
 
@@ -314,14 +319,14 @@ namespace VKE::RHI {
             queueCreateInfos.push_back(queueCreateInfo);
         }
 
-        // Optional features, enabled only when available.
+        // Cube arrays are required when the GPU is picked; the rest are enabled when available.
         VkPhysicalDeviceFeatures availableFeatures{};
         vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &availableFeatures);
 
         m_EnabledFeatures = {};
         m_EnabledFeatures.samplerAnisotropy = availableFeatures.samplerAnisotropy;
         m_EnabledFeatures.fillModeNonSolid = availableFeatures.fillModeNonSolid;
-        m_EnabledFeatures.imageCubeArray = availableFeatures.imageCubeArray;
+        m_EnabledFeatures.imageCubeArray = VK_TRUE;
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

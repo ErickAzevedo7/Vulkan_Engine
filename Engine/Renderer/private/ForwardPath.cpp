@@ -21,6 +21,19 @@ namespace VKE::Renderer {
         // Keeps light values above 1.0 instead of clipping them at the swapchain.
         constexpr RHI::Format kSceneColorFormat = RHI::Format::R16G16B16A16_SFLOAT;
 
+        // Box around the eight transformed corners of `bounds`.
+        AABB TransformBounds(const AABB& bounds, const Mat4& transform) {
+            AABB result(Vec3(FLT_MAX), Vec3(-FLT_MAX));
+            for (u32 corner = 0; corner < 8; ++corner) {
+                Vec3 point((corner & 1) ? bounds.Max.x : bounds.Min.x, (corner & 2) ? bounds.Max.y : bounds.Min.y,
+                           (corner & 4) ? bounds.Max.z : bounds.Min.z);
+                Vec3 world = Vec3(transform * Vec4(point, 1.0f));
+                result.Min = glm::min(result.Min, world);
+                result.Max = glm::max(result.Max, world);
+            }
+            return result;
+        }
+
         Vec3 SafeNormalize(const Vec3& v) {
             f32 length = glm::length(v);
             return length > 0.0f ? v / length : Vec3(0.0f);
@@ -55,7 +68,8 @@ namespace VKE::Renderer {
 
         RHI::BindGroupLayoutDesc environmentLayoutDesc;
         for (u32 binding :
-             {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowMapBinding}) {
+             {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowMapBinding,
+              kPointShadowMapBinding}) {
             environmentLayoutDesc.Slots.push_back(
                 {binding, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment});
         }
@@ -183,23 +197,18 @@ namespace VKE::Renderer {
             const GpuMesh* mesh = m_GpuCache->GetMesh(instance.Mesh);
             if (!mesh) continue;
 
-            for (u32 corner = 0; corner < 8; ++corner) {
-                const AABB& bounds = mesh->Bounds;
-                Vec3 point((corner & 1) ? bounds.Max.x : bounds.Min.x, (corner & 2) ? bounds.Max.y : bounds.Min.y,
-                           (corner & 4) ? bounds.Max.z : bounds.Min.z);
-                Vec3 world = Vec3(instance.Transform * Vec4(point, 1.0f));
-                m_SceneBounds.Min = glm::min(m_SceneBounds.Min, world);
-                m_SceneBounds.Max = glm::max(m_SceneBounds.Max, world);
-            }
-
-            for (const Assets::Submesh& submesh : mesh->Submeshes) {
+            for (size_t i = 0; i < mesh->Submeshes.size(); ++i) {
+                const Assets::Submesh& submesh = mesh->Submeshes[i];
                 Handle<Assets::MaterialData> material;
                 if (submesh.MaterialIndex < instance.Materials.size()) {
                     material = instance.Materials[submesh.MaterialIndex];
                 } else if (submesh.MaterialIndex < mesh->Materials.size()) {
                     material = mesh->Materials[submesh.MaterialIndex];
                 }
-                m_DrawItems.push_back({&m_GpuCache->GetMaterial(material), mesh, &submesh, &instance});
+
+                AABB worldBounds = TransformBounds(mesh->SubmeshBounds[i], instance.Transform);
+                m_SceneBounds.Merge(worldBounds);
+                m_DrawItems.push_back({&m_GpuCache->GetMaterial(material), mesh, &submesh, &instance, worldBounds});
             }
         }
 
@@ -234,6 +243,7 @@ namespace VKE::Renderer {
         bind(kBrdfLutBinding, maps.BrdfLut.get(), m_EnvironmentSampler.get());
         bind(kRadianceBinding, maps.Radiance.get(), m_EnvironmentSampler.get());
         bind(kShadowMapBinding, &m_ShadowPass->GetShadowMaps(), &m_ShadowPass->GetSampler());
+        bind(kPointShadowMapBinding, &m_ShadowPass->GetPointShadowMaps(), &m_ShadowPass->GetSampler());
 
         m_EnvironmentGroup = RHI::RHIBindGroup::Create(*m_Device, groupDesc);
         m_BoundEnvironmentMaps = &maps;

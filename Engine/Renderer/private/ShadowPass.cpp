@@ -1,9 +1,11 @@
 #include "ShadowPass.h"
+#include "CubeFaces.h"
 
 #include <core/Log.h>
 #include <platform/FileSystem.h>
 
 #include <algorithm>
+#include <array>
 #include <cfloat>
 #include <cmath>
 #include <cstddef>
@@ -12,10 +14,17 @@ namespace VKE::Renderer {
 
     namespace {
         constexpr u32 kShadowMapSize = 2048;
+        constexpr u32 kPointShadowMapSize = 512;
         constexpr RHI::Format kShadowMapFormat = RHI::Format::D32_SFLOAT;
         constexpr f32 kSpotNearPlane = 0.05f;
         // Keeps casters right at the edge of the scene bounds from being clipped.
         constexpr f32 kDirectionalPadding = 0.5f;
+
+        bool TouchesSphere(const AABB& bounds, const Vec3& center, f32 radius) {
+            Vec3 closest = glm::clamp(center, bounds.Min, bounds.Max);
+            Vec3 offset = closest - center;
+            return glm::dot(offset, offset) <= radius * radius;
+        }
 
         Mat4 LookAlong(const Vec3& eye, const Vec3& direction) {
             Vec3 up = std::abs(direction.y) > 0.99f ? Vec3(0.0f, 0.0f, 1.0f) : Vec3(0.0f, 1.0f, 0.0f);
@@ -80,6 +89,24 @@ namespace VKE::Renderer {
             m_Framebuffers.push_back(RHI::RHIFramebuffer::Create(device, *m_RenderPass, framebufferDesc));
         }
 
+        RHI::TextureDesc pointMapDesc;
+        pointMapDesc.Width = kPointShadowMapSize;
+        pointMapDesc.Height = kPointShadowMapSize;
+        pointMapDesc.ArrayLayers = kMaxPointShadows * 6;
+        pointMapDesc.Type = RHI::TextureType::TextureCube;
+        pointMapDesc.Format = kShadowMapFormat;
+        pointMapDesc.Usage = RHI::TextureUsage::DepthAttachment | RHI::TextureUsage::Sampled;
+        pointMapDesc.DebugName = "PointShadowMaps";
+        m_PointShadowMaps = RHI::RHITexture::Create(device, pointMapDesc);
+
+        for (u32 layer = 0; layer < kMaxPointShadows * 6; ++layer) {
+            RHI::FramebufferDesc framebufferDesc;
+            framebufferDesc.AttachmentViews = {m_PointShadowMaps->GetAttachmentView(0, layer)};
+            framebufferDesc.Width = kPointShadowMapSize;
+            framebufferDesc.Height = kPointShadowMapSize;
+            m_PointFramebuffers.push_back(RHI::RHIFramebuffer::Create(device, *m_RenderPass, framebufferDesc));
+        }
+
         const auto shaderDir = Platform::FileSystem::GetExecutableDirectory() / "shaders";
 
         RHI::PipelineDesc pipelineDesc;
@@ -111,52 +138,82 @@ namespace VKE::Renderer {
         // cleared to the far plane and ready to be sampled.
         device.ExecuteImmediate([&](RHI::RHICommandBuffer& cmd) {
             RHI::ClearValue clear;
-            for (auto& framebuffer : m_Framebuffers) {
-                cmd.BeginRenderPass(*m_RenderPass, *framebuffer, clear);
-                cmd.EndRenderPass();
+            for (auto* framebuffers : {&m_Framebuffers, &m_PointFramebuffers}) {
+                for (auto& framebuffer : *framebuffers) {
+                    cmd.BeginRenderPass(*m_RenderPass, *framebuffer, clear);
+                    cmd.EndRenderPass();
+                }
             }
         });
     }
 
     void ShadowPass::Prepare(const std::vector<LightDesc>& lights, u32 lightCount, const AABB& sceneBounds,
                              FrameUniforms& frame) {
-        m_ShadowCount = 0;
+        m_Views.clear();
+        u32 shadowCount = 0;
+        u32 pointShadowCount = 0;
+
         for (u32 i = 0; i < lightCount; ++i) {
             const LightDesc& light = lights[i];
-            if (!light.CastsShadow || light.Type == LightType::Point) continue;
+            if (!light.CastsShadow) continue;
 
-            if (m_ShadowCount == kMaxShadows) {
+            if (light.Type == LightType::Point) {
+                if (pointShadowCount == kMaxPointShadows) {
+                    if (!m_PointLimitWarned) {
+                        VKE_CORE_WARN("Renderer: more than {} point lights cast shadows, the rest have none",
+                                      kMaxPointShadows);
+                        m_PointLimitWarned = true;
+                    }
+                    continue;
+                }
+
+                u32 cube = pointShadowCount++;
+                // The shader rebuilds depth from the same planes.
+                f32 farPlane = std::max(light.Range, kPointShadowNearPlane * 2.0f);
+                Mat4 projection = GetCubeFaceProjection(kPointShadowNearPlane, farPlane);
+                std::array<Mat4, 6> views = GetCubeFaceViews(light.Position);
+                for (u32 face = 0; face < 6; ++face) {
+                    m_Views.push_back({projection * views[face], m_PointFramebuffers[cube * 6 + face].get(), true,
+                                       light.Position, farPlane});
+                }
+                frame.Lights[i].SpotAndShadow.z = static_cast<f32>(cube);
+                continue;
+            }
+
+            if (shadowCount == kMaxShadows) {
                 if (!m_LimitWarned) {
                     VKE_CORE_WARN("Renderer: more than {} lights cast shadows, the rest have none", kMaxShadows);
                     m_LimitWarned = true;
                 }
-                break;
+                continue;
             }
 
             f32 directionLength = glm::length(light.Direction);
             Vec3 direction = directionLength > 0.0f ? light.Direction / directionLength : Vec3(0.0f, -1.0f, 0.0f);
 
             f32 texelSize = 0.0f;
-            Mat4 viewProjection = light.Type == LightType::Directional
-                                      ? FitDirectional(direction, sceneBounds, texelSize)
-                                      : FitSpot(light, direction, texelSize);
+            bool isSpot = light.Type == LightType::Spot;
+            Mat4 viewProjection = isSpot ? FitSpot(light, direction, texelSize)
+                                         : FitDirectional(direction, sceneBounds, texelSize);
 
-            m_ViewProjections[m_ShadowCount] = viewProjection;
-            frame.Shadows[m_ShadowCount].ViewProjection = viewProjection;
-            frame.Shadows[m_ShadowCount].Parameters = Vec4(texelSize, static_cast<f32>(m_ShadowCount), 0.0f, 0.0f);
-            frame.Lights[i].SpotAndShadow.z = static_cast<f32>(m_ShadowCount);
-            ++m_ShadowCount;
+            m_Views.push_back({viewProjection, m_Framebuffers[shadowCount].get(), isSpot, light.Position, light.Range});
+            frame.Shadows[shadowCount].ViewProjection = viewProjection;
+            frame.Shadows[shadowCount].Parameters = Vec4(texelSize, static_cast<f32>(shadowCount), 0.0f, 0.0f);
+            frame.Lights[i].SpotAndShadow.z = static_cast<f32>(shadowCount);
+            ++shadowCount;
         }
     }
 
     void ShadowPass::Record(RHI::RHICommandBuffer& cmd, const std::vector<DrawItem>& items) {
         RHI::ClearValue clear;
-        for (u32 shadow = 0; shadow < m_ShadowCount; ++shadow) {
-            cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffers[shadow], clear);
+        for (const ShadowView& view : m_Views) {
+            cmd.BeginRenderPass(*m_RenderPass, *view.Framebuffer, clear);
             cmd.BindPipeline(*m_Pipeline);
 
             const GpuMesh* boundMesh = nullptr;
             for (const DrawItem& item : items) {
+                if (view.CullToRange && !TouchesSphere(item.WorldBounds, view.Position, view.Range)) continue;
+
                 if (item.Mesh != boundMesh) {
                     cmd.BindVertexBuffer(*item.Mesh->VertexBuffer);
                     cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, RHI::IndexType::U32);
@@ -164,7 +221,7 @@ namespace VKE::Renderer {
                 }
 
                 ShadowPushConstants object;
-                object.ModelViewProjection = m_ViewProjections[shadow] * item.Instance->Transform;
+                object.ModelViewProjection = view.ViewProjection * item.Instance->Transform;
                 cmd.PushConstants(RHI::ShaderStageFlags::Vertex, 0, sizeof(object), &object);
                 cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
             }

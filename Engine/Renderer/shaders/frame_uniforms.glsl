@@ -11,7 +11,8 @@ struct Light {
     vec4 positionAndRange;
     vec4 directionAndType;
     vec4 colorAndIntensity;
-    // x = cos(inner angle), y = cos(outer angle), z = shadow index or -1
+    // x = cos(inner angle), y = cos(outer angle), z = shadow index or -1:
+    // into shadows[] for directional and spot lights, a pointShadowMaps cube for point lights
     vec4 spotAndShadow;
 };
 

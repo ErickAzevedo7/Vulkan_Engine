@@ -1,4 +1,5 @@
 #include "EnvironmentBaker.h"
+#include "CubeFaces.h"
 #include "ShaderLayouts.h"
 
 #include <core/Log.h>
@@ -24,27 +25,6 @@ namespace VKE::Renderer {
         constexpr RHI::Format kBrdfLutFormat = RHI::Format::R16G16_SFLOAT;
         constexpr u32 kCubeVertexCount = 36;
         constexpr u32 kFullscreenVertexCount = 3;
-
-        // One camera per cube face, all sitting at the origin, in the order the
-        // layers are stored: +X, -X, +Y, -Y, +Z, -Z.
-        //
-        // Each camera's up vector is the one that lands the face's texels the way
-        // the cube sampler reads them back, given that the RHI draws with Y up.
-        std::array<Mat4, 6> GetFaceViewProjections() {
-            Mat4 projection = glm::perspectiveRH_ZO(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
-
-            const Vec3 origin(0.0f);
-            const Vec3 up(0.0f, 1.0f, 0.0f);
-
-            return {
-                projection * glm::lookAt(origin, Vec3(1.0f, 0.0f, 0.0f), up),
-                projection * glm::lookAt(origin, Vec3(-1.0f, 0.0f, 0.0f), up),
-                projection * glm::lookAt(origin, Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f)),
-                projection * glm::lookAt(origin, Vec3(0.0f, -1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f)),
-                projection * glm::lookAt(origin, Vec3(0.0f, 0.0f, 1.0f), up),
-                projection * glm::lookAt(origin, Vec3(0.0f, 0.0f, -1.0f), up),
-            };
-        }
     } // namespace
 
     EnvironmentBaker::EnvironmentBaker(RHI::RHIDevice& device) : m_Device(device) {
@@ -175,7 +155,8 @@ namespace VKE::Renderer {
             faceTargets.push_back(RHI::RHIFramebuffer::Create(m_Device, *m_FacePass, framebufferDesc));
         }
 
-        std::array<Mat4, 6> viewProjections = GetFaceViewProjections();
+        const Mat4 projection = GetCubeFaceProjection(0.1f, 10.0f);
+        const std::array<Mat4, 6> views = GetCubeFaceViews(Vec3(0.0f));
 
         m_Device.ExecuteImmediate([&](RHI::RHICommandBuffer& cmd) {
             for (u32 face = 0; face < 6; ++face) {
@@ -187,7 +168,7 @@ namespace VKE::Renderer {
                 }
 
                 CapturePushConstants constants{};
-                constants.ViewProjection = viewProjections[face];
+                constants.ViewProjection = projection * views[face];
                 constants.Parameters = Vec4(roughness, 0.0f, 0.0f, 0.0f);
                 cmd.PushConstants(RHI::ShaderStageFlags::AllGraphics, 0, sizeof(constants), &constants);
 

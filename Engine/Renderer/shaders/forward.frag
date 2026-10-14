@@ -72,6 +72,53 @@ float GetShadow(int shadowIndex, vec3 worldPosition, vec3 normal)
     return lit / 25.0;
 }
 
+// Must match kPointShadowNearPlane in private/ShaderLayouts.h.
+const float kPointShadowNearPlane = 0.05;
+
+// Directions spread around a point shadow lookup, used to filter it.
+const vec3 kPointShadowOffsets[20] = vec3[](
+    vec3(1, 1, 1), vec3(1, -1, 1), vec3(-1, -1, 1), vec3(-1, 1, 1),
+    vec3(1, 1, -1), vec3(1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+    vec3(1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0), vec3(-1, 1, 0),
+    vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
+    vec3(0, 1, 1), vec3(0, -1, 1), vec3(0, -1, -1), vec3(0, 1, -1));
+
+// Fraction of a point light that reaches the surface, filtered over 20 lookups.
+float GetPointShadow(float cube, vec3 lightPosition, float range, vec3 worldPosition, vec3 normal)
+{
+    float farPlane = max(range, kPointShadowNearPlane * 2.0);
+    float faceSize = float(textureSize(pointShadowMaps, 0).x);
+
+    // Each face covers 90 degrees, so a texel grows with the distance along the face's axis.
+    vec3 toSurface = worldPosition - lightPosition;
+    float axisDistance = max(abs(toSurface.x), max(abs(toSurface.y), abs(toSurface.z)));
+    float texelWorldSize = 2.0 * axisDistance / faceSize;
+    toSurface += normal * texelWorldSize * kShadowNormalOffset;
+
+    if (axisDistance >= farPlane) {
+        return 1.0;
+    }
+
+    vec3 surfaceSize = abs(toSurface);
+    float radius = texelWorldSize * 1.5;
+    float lit = 0.0;
+    for (int i = 0; i < 20; ++i) {
+        vec3 lookup = toSurface + kPointShadowOffsets[i] * radius;
+
+        // Each face stores depth along its own axis, so the surface's reference depth is
+        // measured along the axis of the face this lookup lands on.
+        vec3 lookupSize = abs(lookup);
+        float z = lookupSize.x > lookupSize.y && lookupSize.x > lookupSize.z ? surfaceSize.x
+                : lookupSize.y > lookupSize.z                                ? surfaceSize.y
+                                                                             : surfaceSize.z;
+        z = max(z, kPointShadowNearPlane);
+        float depth = farPlane * (z - kPointShadowNearPlane) / (z * (farPlane - kPointShadowNearPlane));
+
+        lit += texture(pointShadowMaps, vec4(lookup, cube), depth);
+    }
+    return lit / 20.0;
+}
+
 void main()
 {
     vec4 albedoSample = texture(albedoMap, fragUV);
@@ -113,8 +160,14 @@ void main()
             }
         }
 
-        if (light.spotAndShadow.z >= 0.0) {
-            radiance *= GetShadow(int(light.spotAndShadow.z + 0.5), fragWorldPosition, geometricNormal);
+        float shadowIndex = light.spotAndShadow.z;
+        if (shadowIndex >= 0.0) {
+            if (type == LIGHT_POINT) {
+                radiance *= GetPointShadow(shadowIndex, light.positionAndRange.xyz, light.positionAndRange.w,
+                                           fragWorldPosition, geometricNormal);
+            } else {
+                radiance *= GetShadow(int(shadowIndex + 0.5), fragWorldPosition, geometricNormal);
+            }
         }
 
         vec3 H = normalize(V + L);

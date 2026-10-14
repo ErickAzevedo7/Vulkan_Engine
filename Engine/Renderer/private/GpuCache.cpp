@@ -5,6 +5,8 @@
 #include <core/Log.h>
 #include <rhi/RHIDevice.h>
 
+#include <cfloat>
+
 namespace VKE::Renderer {
 
     static_assert(kMaterialUniformsBinding == static_cast<u32>(Assets::MaterialTexture::Count),
@@ -52,10 +54,14 @@ namespace VKE::Renderer {
 
         gpuMesh->Submeshes = mesh->Submeshes;
         gpuMesh->Materials = mesh->Materials;
-        gpuMesh->Bounds = AABB(mesh->Vertices[0].Position, mesh->Vertices[0].Position);
-        for (const Assets::Vertex& vertex : mesh->Vertices) {
-            gpuMesh->Bounds.Min = glm::min(gpuMesh->Bounds.Min, vertex.Position);
-            gpuMesh->Bounds.Max = glm::max(gpuMesh->Bounds.Max, vertex.Position);
+        for (const Assets::Submesh& submesh : mesh->Submeshes) {
+            AABB bounds(Vec3(FLT_MAX), Vec3(-FLT_MAX));
+            for (u32 i = submesh.FirstIndex; i < submesh.FirstIndex + submesh.IndexCount; ++i) {
+                const Vec3& position = mesh->Vertices[mesh->Indices[i]].Position;
+                bounds.Min = glm::min(bounds.Min, position);
+                bounds.Max = glm::max(bounds.Max, position);
+            }
+            gpuMesh->SubmeshBounds.push_back(bounds);
         }
 
         auto [it, inserted] = m_Meshes.emplace(handle, std::move(gpuMesh));

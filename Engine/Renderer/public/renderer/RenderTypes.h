@@ -38,7 +38,6 @@ namespace VKE::Renderer {
         // full strength at the inner angle to nothing at the outer one.
         f32 InnerConeAngle = glm::radians(20.0f);
         f32 OuterConeAngle = glm::radians(30.0f);
-        // Only directional and spot lights cast shadows for now.
         bool CastsShadow = false;
     };
 

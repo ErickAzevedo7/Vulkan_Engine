@@ -28,8 +28,8 @@ namespace VKE::Renderer {
         Iunique<RHI::RHIBuffer> IndexBuffer;
         std::vector<Assets::Submesh> Submeshes;
         std::vector<Handle<Assets::MaterialData>> Materials;
-        // In the mesh's own space.
-        AABB Bounds;
+        // One per submesh, in the mesh's own space.
+        std::vector<AABB> SubmeshBounds;
     };
 
     struct GpuMaterial {

@@ -19,11 +19,16 @@ namespace VKE::Renderer {
     constexpr u32 kBrdfLutBinding = 2;
     constexpr u32 kRadianceBinding = 3;
     constexpr u32 kShadowMapBinding = 4;
+    constexpr u32 kPointShadowMapBinding = 5;
 
     // Must match MAX_LIGHTS in shaders/frame_uniforms.glsl.
     constexpr u32 kMaxLights = 8;
     // Must match MAX_SHADOWS in shaders/frame_uniforms.glsl. One shadow map layer each.
     constexpr u32 kMaxShadows = 4;
+    // Cubes in the point light shadow array.
+    constexpr u32 kMaxPointShadows = 4;
+    // Must match kPointShadowNearPlane in shaders/forward.frag.
+    constexpr f32 kPointShadowNearPlane = 0.05f;
 
     // Material textures use bindings 0-5 in Assets::MaterialTexture order.
     constexpr u32 kMaterialUniformsBinding = 6;
@@ -32,8 +37,9 @@ namespace VKE::Renderer {
         Vec4 PositionAndRange;
         Vec4 DirectionAndType;
         Vec4 ColorAndIntensity;
-        // x = cosine of the inner cone angle, y = cosine of the outer one,
-        // z = index into FrameUniforms::Shadows, or -1 without a shadow.
+        // x = cosine of the inner cone angle, y = cosine of the outer one, z = shadow index,
+        // or -1 without a shadow: into FrameUniforms::Shadows for directional and spot
+        // lights, and the cube in the point shadow array for point lights.
         Vec4 SpotAndShadow;
     };
     static_assert(sizeof(GpuLight) == 64, "GpuLight layout mismatch");

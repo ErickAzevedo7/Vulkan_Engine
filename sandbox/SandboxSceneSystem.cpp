@@ -6,6 +6,8 @@
 #include <platform/Input.h>
 #include <renderer/Renderer.h>
 
+#include <utility>
+
 namespace VKE {
 
     SandboxSceneSystem::SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets,
@@ -14,15 +16,25 @@ namespace VKE {
     }
 
     void SandboxSceneSystem::OnInitialize() {
+        CreateHelmetScene();
+
+        m_Camera.Position = Vec3(1.25f, 0.5f, 4.5f);
+        m_Camera.LookAt(Vec3(1.25f, 0.0f, 0.0f));
+
+        m_OtherCamera.Position = Vec3(-10.0f, 1.8f, -0.4f);
+        m_OtherCamera.LookAt(Vec3(10.0f, 3.0f, -0.4f));
+    }
+
+    void SandboxSceneSystem::CreateHelmetScene() {
         Handle<Assets::MeshData> helmet = m_Assets.LoadMesh("DamagedHelmet/glTF/DamagedHelmet.gltf");
 
         Renderer::MeshInstanceDesc desc;
         desc.Mesh = helmet;
-        m_Helmet = m_Scene.CreateMesh(desc);
+        m_Helmet = m_HelmetScene.CreateMesh(desc);
 
         // Removed after a few seconds to exercise destroying an entry while rendering.
         desc.Transform = glm::translate(Mat4(1.0f), Vec3(2.5f, 0.0f, 0.0f));
-        m_TemporaryHelmet = m_Scene.CreateMesh(desc);
+        m_TemporaryHelmet = m_HelmetScene.CreateMesh(desc);
 
         CreateFloor();
 
@@ -32,7 +44,7 @@ namespace VKE {
         sun.Color = Vec3(1.0f, 0.96f, 0.9f);
         sun.Intensity = 3.0f;
         sun.CastsShadow = true;
-        m_Scene.CreateLight(sun);
+        m_HelmetScene.CreateLight(sun);
 
         Renderer::LightDesc spot;
         spot.Type = Renderer::LightType::Spot;
@@ -44,7 +56,7 @@ namespace VKE {
         spot.InnerConeAngle = glm::radians(15.0f);
         spot.OuterConeAngle = glm::radians(25.0f);
         spot.CastsShadow = true;
-        m_Scene.CreateLight(spot);
+        m_HelmetScene.CreateLight(spot);
 
         Renderer::LightDesc blueLight;
         blueLight.Type = Renderer::LightType::Point;
@@ -52,12 +64,13 @@ namespace VKE {
         blueLight.Color = Vec3(0.3f, 0.5f, 1.0f);
         blueLight.Intensity = 20.0f;
         blueLight.Range = 8.0f;
-        m_Scene.CreateLight(blueLight);
+        blueLight.CastsShadow = true;
+        m_HelmetScene.CreateLight(blueLight);
 
         Renderer::LightDesc orangeLight = blueLight;
         orangeLight.Position = Vec3(-1.5f, 0.3f, 1.0f);
         orangeLight.Color = Vec3(1.0f, 0.55f, 0.2f);
-        m_Scene.CreateLight(orangeLight);
+        m_HelmetScene.CreateLight(orangeLight);
 
         Assets::MaterialData plastic;
         plastic.Name = "SmoothPlastic";
@@ -72,9 +85,60 @@ namespace VKE {
         metal.Metallic = 1.0f;
         metal.Roughness = 0.7f;
         m_RoughMetal = m_Assets.AddMaterial(metal);
+    }
 
-        m_Camera.Position = Vec3(1.25f, 0.5f, 4.5f);
-        m_Camera.LookAt(Vec3(1.25f, 0.0f, 0.0f));
+    void SandboxSceneSystem::CreateSponzaScene() {
+        Renderer::MeshInstanceDesc sponza;
+        sponza.Mesh = m_Assets.LoadMesh("sponza-atrium-3/source/glTF/Sponza.gltf");
+        m_SponzaScene.CreateMesh(sponza);
+
+        Renderer::LightDesc sun;
+        sun.Type = Renderer::LightType::Directional;
+        sun.Direction = Vec3(-0.3f, -1.0f, 0.15f);
+        sun.Color = Vec3(1.0f, 0.95f, 0.85f);
+        sun.Intensity = 5.0f;
+        sun.CastsShadow = true;
+        m_SponzaScene.CreateLight(sun);
+
+        // A row of shadowed lamps down the middle of the atrium.
+        const Vec3 colors[] = {Vec3(1.0f, 0.6f, 0.3f), Vec3(0.4f, 0.6f, 1.0f), Vec3(1.0f, 0.6f, 0.3f),
+                               Vec3(0.4f, 0.6f, 1.0f)};
+        for (u32 i = 0; i < 4; ++i) {
+            Renderer::LightDesc lamp;
+            lamp.Type = Renderer::LightType::Point;
+            lamp.Position = Vec3(-7.5f + 5.0f * static_cast<f32>(i), 1.5f, -0.4f);
+            lamp.Color = colors[i];
+            lamp.Intensity = 30.0f;
+            lamp.Range = 8.0f;
+            lamp.CastsShadow = true;
+            m_SponzaScene.CreateLight(lamp);
+        }
+    }
+
+    void SandboxSceneSystem::SwitchScene() {
+        if (m_ActiveScene == &m_HelmetScene && !m_SponzaCreated) {
+            CreateSponzaScene();
+            m_SponzaCreated = true;
+        }
+
+        m_ActiveScene = m_ActiveScene == &m_HelmetScene ? &m_SponzaScene : &m_HelmetScene;
+        std::swap(m_Camera, m_OtherCamera);
+        m_FrameTimeSum = 0.0f;
+        m_FrameCount = 0;
+    }
+
+    void SandboxSceneSystem::UpdateFrameTimeLog(f32 deltaTime) {
+        constexpr f32 kLogInterval = 5.0f;
+
+        m_FrameTimeSum += deltaTime;
+        ++m_FrameCount;
+        if (m_FrameTimeSum >= kLogInterval) {
+            VKE_CORE_INFO("SandboxSceneSystem: {:.2f} ms per frame in the {} scene",
+                          1000.0f * m_FrameTimeSum / static_cast<f32>(m_FrameCount),
+                          m_ActiveScene == &m_HelmetScene ? "helmet" : "Sponza");
+            m_FrameTimeSum = 0.0f;
+            m_FrameCount = 0;
+        }
     }
 
     void SandboxSceneSystem::OnUpdate(FrameTime ft) {
@@ -82,7 +146,12 @@ namespace VKE {
             RequestExit();
         }
 
+        if (m_Input.IsKeyPressed(Platform::KeyCode::Tab)) {
+            SwitchScene();
+        }
+
         UpdateCamera(ft.GetDeltaF());
+        UpdateFrameTimeLog(ft.GetDeltaF());
 
         f32 exposureStep = 0.0f;
         if (m_Input.IsKeyDown(Platform::KeyCode::Minus)) exposureStep -= 1.0f;
@@ -92,9 +161,9 @@ namespace VKE {
             m_Renderer.SetExposure(m_Exposure);
         }
 
-        if (m_Input.IsKeyPressed(Platform::KeyCode::D1)) m_Scene.SetMaterials(m_Helmet, {});
-        if (m_Input.IsKeyPressed(Platform::KeyCode::D2)) m_Scene.SetMaterials(m_Helmet, {m_SmoothPlastic});
-        if (m_Input.IsKeyPressed(Platform::KeyCode::D3)) m_Scene.SetMaterials(m_Helmet, {m_RoughMetal});
+        if (m_Input.IsKeyPressed(Platform::KeyCode::D1)) m_HelmetScene.SetMaterials(m_Helmet, {});
+        if (m_Input.IsKeyPressed(Platform::KeyCode::D2)) m_HelmetScene.SetMaterials(m_Helmet, {m_SmoothPlastic});
+        if (m_Input.IsKeyPressed(Platform::KeyCode::D3)) m_HelmetScene.SetMaterials(m_Helmet, {m_RoughMetal});
 
         if (m_Input.IsKeyPressed(Platform::KeyCode::T)) {
             m_ShadowsEnabled = !m_ShadowsEnabled;
@@ -103,14 +172,14 @@ namespace VKE {
         }
 
         if (m_TemporaryHelmet.IsValid() && ft.GetTotalF() > 3.0f) {
-            m_Scene.DestroyMesh(m_TemporaryHelmet);
+            m_HelmetScene.DestroyMesh(m_TemporaryHelmet);
             m_TemporaryHelmet = {};
             VKE_CORE_INFO("SandboxSceneSystem: destroyed the second helmet");
         }
 
-        m_Scene.SetTransform(m_Helmet, glm::rotate(Mat4(1.0f), ft.GetTotalF() * 0.3f, Vec3(0.0f, 1.0f, 0.0f)));
+        m_HelmetScene.SetTransform(m_Helmet, glm::rotate(Mat4(1.0f), ft.GetTotalF() * 0.3f, Vec3(0.0f, 1.0f, 0.0f)));
 
-        m_Renderer.Render(m_Scene, m_Camera.GetView());
+        m_Renderer.Render(*m_ActiveScene, m_Camera.GetView());
     }
 
     void SandboxSceneSystem::CreateFloor() {
@@ -139,7 +208,7 @@ namespace VKE {
         Renderer::MeshInstanceDesc desc;
         desc.Mesh = m_Assets.AddMesh(std::move(floor));
         desc.Materials = {m_Assets.AddMaterial(material)};
-        m_Scene.CreateMesh(desc);
+        m_HelmetScene.CreateMesh(desc);
     }
 
     void SandboxSceneSystem::UpdateCamera(f32 deltaTime) {
