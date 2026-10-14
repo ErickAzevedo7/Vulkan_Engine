@@ -40,6 +40,38 @@ float GetAttenuation(float distance, float range)
     return (window * window) / max(distance * distance, 1e-4);
 }
 
+// How far past the surface, in shadow map texels, the lookup point is moved along
+// the normal. Keeps surfaces from shadowing themselves at grazing angles.
+const float kShadowNormalOffset = 1.5;
+
+// Fraction of light that reaches the surface, filtered over 5x5 texels.
+float GetShadow(int shadowIndex, vec3 worldPosition, vec3 normal)
+{
+    Shadow shadow = frame.shadows[shadowIndex];
+    float layer = shadow.parameters.y;
+
+    // Texel size grows with distance for spot lights; clip w is 1 for directional ones.
+    float texelWorldSize = shadow.parameters.x * (shadow.viewProjection * vec4(worldPosition, 1.0)).w;
+    vec3 offsetPosition = worldPosition + normal * texelWorldSize * kShadowNormalOffset;
+
+    vec4 clip = shadow.viewProjection * vec4(offsetPosition, 1.0);
+    vec3 ndc = clip.xyz / clip.w;
+    // Clip space is Y-up, texture rows start at the top.
+    vec2 uv = vec2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if (clip.w <= 0.0 || ndc.z > 1.0 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        return 1.0;
+    }
+
+    vec2 texel = 1.0 / vec2(textureSize(shadowMaps, 0).xy);
+    float lit = 0.0;
+    for (int y = -2; y <= 2; ++y) {
+        for (int x = -2; x <= 2; ++x) {
+            lit += texture(shadowMaps, vec4(uv + vec2(x, y) * texel, layer, ndc.z));
+        }
+    }
+    return lit / 25.0;
+}
+
 void main()
 {
     vec4 albedoSample = texture(albedoMap, fragUV);
@@ -53,6 +85,7 @@ void main()
     vec3 emissive = texture(emissiveMap, fragUV).rgb * material.emissiveAndOcclusion.rgb;
 
     vec3 N = GetNormal();
+    vec3 geometricNormal = normalize(fragNormal);
     vec3 V = normalize(frame.cameraPosition.xyz - fragWorldPosition);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
@@ -70,6 +103,18 @@ void main()
             float distance = length(toLight);
             L = toLight / max(distance, 1e-4);
             radiance *= GetAttenuation(distance, light.positionAndRange.w);
+
+            if (type == LIGHT_SPOT) {
+                float cosAngle = dot(-L, light.directionAndType.xyz);
+                float cosInner = light.spotAndShadow.x;
+                float cosOuter = light.spotAndShadow.y;
+                float cone = clamp((cosAngle - cosOuter) / max(cosInner - cosOuter, 1e-4), 0.0, 1.0);
+                radiance *= cone * cone;
+            }
+        }
+
+        if (light.spotAndShadow.z >= 0.0) {
+            radiance *= GetShadow(int(light.spotAndShadow.z + 0.5), fragWorldPosition, geometricNormal);
         }
 
         vec3 H = normalize(V + L);

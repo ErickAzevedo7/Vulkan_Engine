@@ -9,6 +9,7 @@ target_sources(VKE_Renderer PRIVATE
     private/TonemapPass.cpp
     private/SkyboxPass.cpp
     private/EnvironmentBaker.cpp
+    private/ShadowPass.cpp
 )
 
 target_include_directories(VKE_Renderer
@@ -40,6 +41,7 @@ vke_add_shaders(RendererShaders
         shaders/irradiance.frag
         shaders/prefilter.frag
         shaders/brdf_lut.frag
+        shaders/shadow.vert
     INCLUDE_DIRS
         shaders
 )

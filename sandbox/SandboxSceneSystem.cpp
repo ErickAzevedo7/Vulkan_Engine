@@ -24,12 +24,27 @@ namespace VKE {
         desc.Transform = glm::translate(Mat4(1.0f), Vec3(2.5f, 0.0f, 0.0f));
         m_TemporaryHelmet = m_Scene.CreateMesh(desc);
 
+        CreateFloor();
+
         Renderer::LightDesc sun;
         sun.Type = Renderer::LightType::Directional;
         sun.Direction = Vec3(-0.4f, -1.0f, -0.6f);
         sun.Color = Vec3(1.0f, 0.96f, 0.9f);
         sun.Intensity = 3.0f;
+        sun.CastsShadow = true;
         m_Scene.CreateLight(sun);
+
+        Renderer::LightDesc spot;
+        spot.Type = Renderer::LightType::Spot;
+        spot.Position = Vec3(-2.5f, 2.5f, 2.0f);
+        spot.Direction = Vec3(2.5f, -3.5f, -2.0f);
+        spot.Color = Vec3(1.0f, 0.85f, 0.6f);
+        spot.Intensity = 60.0f;
+        spot.Range = 15.0f;
+        spot.InnerConeAngle = glm::radians(15.0f);
+        spot.OuterConeAngle = glm::radians(25.0f);
+        spot.CastsShadow = true;
+        m_Scene.CreateLight(spot);
 
         Renderer::LightDesc blueLight;
         blueLight.Type = Renderer::LightType::Point;
@@ -81,6 +96,12 @@ namespace VKE {
         if (m_Input.IsKeyPressed(Platform::KeyCode::D2)) m_Scene.SetMaterials(m_Helmet, {m_SmoothPlastic});
         if (m_Input.IsKeyPressed(Platform::KeyCode::D3)) m_Scene.SetMaterials(m_Helmet, {m_RoughMetal});
 
+        if (m_Input.IsKeyPressed(Platform::KeyCode::T)) {
+            m_ShadowsEnabled = !m_ShadowsEnabled;
+            m_Renderer.SetShadowsEnabled(m_ShadowsEnabled);
+            VKE_CORE_INFO("SandboxSceneSystem: shadows {}", m_ShadowsEnabled ? "on" : "off");
+        }
+
         if (m_TemporaryHelmet.IsValid() && ft.GetTotalF() > 3.0f) {
             m_Scene.DestroyMesh(m_TemporaryHelmet);
             m_TemporaryHelmet = {};
@@ -90,6 +111,35 @@ namespace VKE {
         m_Scene.SetTransform(m_Helmet, glm::rotate(Mat4(1.0f), ft.GetTotalF() * 0.3f, Vec3(0.0f, 1.0f, 0.0f)));
 
         m_Renderer.Render(m_Scene, m_Camera.GetView());
+    }
+
+    void SandboxSceneSystem::CreateFloor() {
+        constexpr f32 kHalfSize = 10.0f;
+        constexpr f32 kHeight = -1.2f;
+
+        Assets::MeshData floor;
+        floor.Name = "Floor";
+        for (Vec2 corner : {Vec2(-1.0f, -1.0f), Vec2(-1.0f, 1.0f), Vec2(1.0f, 1.0f), Vec2(1.0f, -1.0f)}) {
+            Assets::Vertex vertex;
+            vertex.Position = Vec3(corner.x * kHalfSize, kHeight, corner.y * kHalfSize);
+            vertex.Normal = Vec3(0.0f, 1.0f, 0.0f);
+            vertex.UV = corner * 0.5f + 0.5f;
+            vertex.Tangent = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+            floor.Vertices.push_back(vertex);
+        }
+        floor.Indices = {0, 1, 2, 0, 2, 3};
+        floor.Submeshes.push_back({0, 6, 0});
+
+        Assets::MaterialData material;
+        material.Name = "Floor";
+        material.BaseColor = Vec4(0.6f, 0.6f, 0.6f, 1.0f);
+        material.Metallic = 0.0f;
+        material.Roughness = 0.8f;
+
+        Renderer::MeshInstanceDesc desc;
+        desc.Mesh = m_Assets.AddMesh(std::move(floor));
+        desc.Materials = {m_Assets.AddMaterial(material)};
+        m_Scene.CreateMesh(desc);
     }
 
     void SandboxSceneSystem::UpdateCamera(f32 deltaTime) {

@@ -34,10 +34,14 @@ namespace VKE::Renderer {
         // Scales the scene's color before it is mapped to displayable range.
         void SetExposure(f32 exposure);
 
+        // Lights that ask for shadows only get them while this is on.
+        void SetShadowsEnabled(bool enabled);
+
     private:
         Platform::IWindow& m_Window;
         Assets::AssetManager& m_Assets;
         f32 m_Exposure = 1.0f;
+        bool m_ShadowsEnabled = true;
         Iunique<ForwardPath> m_ForwardPath;
     };
 

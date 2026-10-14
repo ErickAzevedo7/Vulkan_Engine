@@ -52,6 +52,11 @@ namespace VKE::Renderer {
 
         gpuMesh->Submeshes = mesh->Submeshes;
         gpuMesh->Materials = mesh->Materials;
+        gpuMesh->Bounds = AABB(mesh->Vertices[0].Position, mesh->Vertices[0].Position);
+        for (const Assets::Vertex& vertex : mesh->Vertices) {
+            gpuMesh->Bounds.Min = glm::min(gpuMesh->Bounds.Min, vertex.Position);
+            gpuMesh->Bounds.Max = glm::max(gpuMesh->Bounds.Max, vertex.Position);
+        }
 
         auto [it, inserted] = m_Meshes.emplace(handle, std::move(gpuMesh));
         return it->second.get();

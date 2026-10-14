@@ -5,6 +5,7 @@
 #include <assets/AssetTypes.h>
 #include <core/Handle.h>
 #include <core/Types.h>
+#include <math/AABB.h>
 #include <rhi/RHIBindGroup.h>
 #include <rhi/RHIBuffer.h>
 #include <rhi/RHISampler.h>
@@ -27,6 +28,8 @@ namespace VKE::Renderer {
         Iunique<RHI::RHIBuffer> IndexBuffer;
         std::vector<Assets::Submesh> Submeshes;
         std::vector<Handle<Assets::MaterialData>> Materials;
+        // In the mesh's own space.
+        AABB Bounds;
     };
 
     struct GpuMaterial {

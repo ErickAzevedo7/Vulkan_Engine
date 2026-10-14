@@ -19,6 +19,8 @@ namespace VKE::RHI {
         samplerInfo.addressModeW = ToVkAddressMode(desc.AddressModeW);
         samplerInfo.anisotropyEnable = maxAnisotropy > 1.0f ? VK_TRUE : VK_FALSE;
         samplerInfo.maxAnisotropy = std::max(maxAnisotropy, 1.0f);
+        samplerInfo.compareEnable = desc.CompareEnable ? VK_TRUE : VK_FALSE;
+        samplerInfo.compareOp = ToVkCompareOp(desc.CompareOp);
         samplerInfo.minLod = 0.0f;
         samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
         samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

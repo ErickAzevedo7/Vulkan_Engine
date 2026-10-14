@@ -13,6 +13,7 @@ namespace VKE::Renderer {
     void Renderer::OnInitialize() {
         m_ForwardPath = MakeIunique<ForwardPath>(m_Window, m_Assets);
         m_ForwardPath->SetExposure(m_Exposure);
+        m_ForwardPath->SetShadowsEnabled(m_ShadowsEnabled);
         VKE_CORE_INFO("Renderer initialized");
     }
 
@@ -29,6 +30,13 @@ namespace VKE::Renderer {
         m_Exposure = exposure;
         if (m_ForwardPath) {
             m_ForwardPath->SetExposure(exposure);
+        }
+    }
+
+    void Renderer::SetShadowsEnabled(bool enabled) {
+        m_ShadowsEnabled = enabled;
+        if (m_ForwardPath) {
+            m_ForwardPath->SetShadowsEnabled(enabled);
         }
     }
 

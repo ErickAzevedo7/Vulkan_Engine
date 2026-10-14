@@ -1,11 +1,14 @@
 #pragma once
 
+#include "DrawItem.h"
 #include "GpuCache.h"
 #include "RenderTarget.h"
+#include "ShadowPass.h"
 #include "SkyboxPass.h"
 #include "TonemapPass.h"
 
 #include <core/Types.h>
+#include <math/AABB.h>
 #include <renderer/RenderTypes.h>
 #include <rhi/RHIBindGroup.h>
 #include <rhi/RHIBuffer.h>
@@ -39,16 +42,10 @@ namespace VKE::Renderer {
 
         void Render(const RenderScene& scene, const RenderView& view);
         void SetExposure(f32 exposure) { m_Exposure = exposure; }
+        void SetShadowsEnabled(bool enabled) { m_ShadowsEnabled = enabled; }
         void WaitIdle();
 
     private:
-        struct DrawItem {
-            const GpuMaterial* Material;
-            const GpuMesh* Mesh;
-            const Assets::Submesh* Submesh;
-            const MeshInstanceDesc* Instance;
-        };
-
         void CreatePipeline();
         void CreateTargets();
         void RecreateSwapchain();
@@ -74,6 +71,7 @@ namespace VKE::Renderer {
         Iunique<RHI::RHIPipeline> m_Pipeline;
 
         Iunique<GpuCache> m_GpuCache;
+        Iunique<ShadowPass> m_ShadowPass;
         Iunique<SkyboxPass> m_SkyboxPass;
         Iunique<TonemapPass> m_TonemapPass;
 
@@ -88,7 +86,10 @@ namespace VKE::Renderer {
         std::vector<Iunique<RHI::RHICommandBuffer>> m_CommandBuffers;
 
         std::vector<DrawItem> m_DrawItems;
+        // World-space bounds of everything in m_DrawItems.
+        AABB m_SceneBounds;
         f32 m_Exposure = 1.0f;
+        bool m_ShadowsEnabled = true;
         bool m_LightLimitWarned = false;
     };
 

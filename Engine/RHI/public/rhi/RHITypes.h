@@ -149,6 +149,10 @@ namespace VKE::RHI {
         SamplerAddressMode AddressModeW = SamplerAddressMode::Repeat;
         // Clamped to the device limit. 1 disables anisotropic filtering.
         f32 MaxAnisotropy = 16.0f;
+        // Sampling returns how much of the filtered area passes the comparison
+        // against a reference depth, instead of the stored value.
+        bool CompareEnable = false;
+        CompareOp CompareOp = CompareOp::LessOrEqual;
         const char* DebugName = nullptr;
     };
 
@@ -226,6 +230,7 @@ namespace VKE::RHI {
 
     struct PipelineDesc {
         std::string VertexShaderPath;
+        // Empty for passes that only write depth.
         std::string FragmentShaderPath;
 
         // Single interleaved vertex binding. A stride of 0 declares no vertex

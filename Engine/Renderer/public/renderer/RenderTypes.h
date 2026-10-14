@@ -22,17 +22,24 @@ namespace VKE::Renderer {
     enum class LightType : u32 {
         Directional = 0,
         Point = 1,
+        Spot = 2,
     };
 
     struct LightDesc {
         LightType Type = LightType::Directional;
         Vec3 Color{1.0f};
         f32 Intensity = 1.0f;
-        // Point lights.
+        // Point and spot lights.
         Vec3 Position{0.0f};
         f32 Range = 10.0f;
-        // Directional lights: the direction the light travels.
+        // Directional and spot lights: the direction the light travels.
         Vec3 Direction{0.0f, -1.0f, 0.0f};
+        // Spot lights, in radians from the center of the cone. Light fades from
+        // full strength at the inner angle to nothing at the outer one.
+        f32 InnerConeAngle = glm::radians(20.0f);
+        f32 OuterConeAngle = glm::radians(30.0f);
+        // Only directional and spot lights cast shadows for now.
+        bool CastsShadow = false;
     };
 
     // What surrounds the scene, lighting it and showing behind everything else.

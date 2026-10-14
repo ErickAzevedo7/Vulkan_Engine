@@ -8,6 +8,8 @@
 #include <renderer/RenderScene.h>
 
 #include <algorithm>
+#include <cfloat>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 
@@ -52,7 +54,8 @@ namespace VKE::Renderer {
         m_FrameLayout = RHI::RHIBindGroupLayout::Create(*m_Device, frameLayoutDesc);
 
         RHI::BindGroupLayoutDesc environmentLayoutDesc;
-        for (u32 binding : {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding}) {
+        for (u32 binding :
+             {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowMapBinding}) {
             environmentLayoutDesc.Slots.push_back(
                 {binding, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment});
         }
@@ -81,6 +84,7 @@ namespace VKE::Renderer {
         environmentSamplerDesc.DebugName = "EnvironmentSampler";
         m_EnvironmentSampler = RHI::RHISampler::Create(*m_Device, environmentSamplerDesc);
 
+        m_ShadowPass = MakeIunique<ShadowPass>(*m_Device);
         m_SkyboxPass = MakeIunique<SkyboxPass>(*m_Device, *m_ScenePass, *m_FrameLayout, *m_EnvironmentLayout);
         m_TonemapPass = MakeIunique<TonemapPass>(*m_Device, *m_OutputPass);
 
@@ -171,12 +175,22 @@ namespace VKE::Renderer {
 
     void ForwardPath::CollectDrawItems(const RenderScene& scene) {
         m_DrawItems.clear();
+        m_SceneBounds = AABB(Vec3(FLT_MAX), Vec3(-FLT_MAX));
 
         for (const MeshInstanceDesc& instance : scene.GetMeshes().Values()) {
             if (!instance.Visible) continue;
 
             const GpuMesh* mesh = m_GpuCache->GetMesh(instance.Mesh);
             if (!mesh) continue;
+
+            for (u32 corner = 0; corner < 8; ++corner) {
+                const AABB& bounds = mesh->Bounds;
+                Vec3 point((corner & 1) ? bounds.Max.x : bounds.Min.x, (corner & 2) ? bounds.Max.y : bounds.Min.y,
+                           (corner & 4) ? bounds.Max.z : bounds.Min.z);
+                Vec3 world = Vec3(instance.Transform * Vec4(point, 1.0f));
+                m_SceneBounds.Min = glm::min(m_SceneBounds.Min, world);
+                m_SceneBounds.Max = glm::max(m_SceneBounds.Max, world);
+            }
 
             for (const Assets::Submesh& submesh : mesh->Submeshes) {
                 Handle<Assets::MaterialData> material;
@@ -208,17 +222,18 @@ namespace VKE::Renderer {
         groupDesc.Layout = m_EnvironmentLayout.get();
         groupDesc.DebugName = "EnvironmentGroup";
 
-        auto bind = [&](u32 binding, RHI::RHITexture* texture) {
+        auto bind = [&](u32 binding, RHI::RHITexture* texture, RHI::RHISampler* sampler) {
             RHI::BoundResource resource;
             resource.Binding = binding;
             resource.Texture = texture;
-            resource.Sampler = m_EnvironmentSampler.get();
+            resource.Sampler = sampler;
             groupDesc.Resources.push_back(resource);
         };
-        bind(kIrradianceBinding, maps.Irradiance.get());
-        bind(kPrefilterBinding, maps.Prefilter.get());
-        bind(kBrdfLutBinding, maps.BrdfLut.get());
-        bind(kRadianceBinding, maps.Radiance.get());
+        bind(kIrradianceBinding, maps.Irradiance.get(), m_EnvironmentSampler.get());
+        bind(kPrefilterBinding, maps.Prefilter.get(), m_EnvironmentSampler.get());
+        bind(kBrdfLutBinding, maps.BrdfLut.get(), m_EnvironmentSampler.get());
+        bind(kRadianceBinding, maps.Radiance.get(), m_EnvironmentSampler.get());
+        bind(kShadowMapBinding, &m_ShadowPass->GetShadowMaps(), &m_ShadowPass->GetSampler());
 
         m_EnvironmentGroup = RHI::RHIBindGroup::Create(*m_Device, groupDesc);
         m_BoundEnvironmentMaps = &maps;
@@ -247,6 +262,14 @@ namespace VKE::Renderer {
             gpuLight.PositionAndRange = Vec4(light.Position, light.Range);
             gpuLight.DirectionAndType = Vec4(SafeNormalize(light.Direction), static_cast<f32>(light.Type));
             gpuLight.ColorAndIntensity = Vec4(light.Color, light.Intensity);
+            gpuLight.SpotAndShadow =
+                Vec4(std::cos(light.InnerConeAngle), std::cos(light.OuterConeAngle), -1.0f, 0.0f);
+        }
+
+        if (m_ShadowsEnabled && !m_DrawItems.empty()) {
+            m_ShadowPass->Prepare(lights, lightCount, m_SceneBounds, frame);
+        } else {
+            m_ShadowPass->Prepare({}, 0, m_SceneBounds, frame);
         }
 
         m_FrameUniformBuffers[frameIndex]->Write(&frame, sizeof(frame));
@@ -279,6 +302,8 @@ namespace VKE::Renderer {
 
         RHI::RHICommandBuffer& cmd = *m_CommandBuffers[frameIndex];
         cmd.Begin();
+
+        m_ShadowPass->Record(cmd, m_DrawItems);
 
         cmd.BeginRenderPass(*m_ScenePass, *m_SceneTargets[frameIndex].Framebuffer, sceneClear);
         cmd.BindPipeline(*m_Pipeline);

@@ -5,27 +5,36 @@
 #include "VulkanShader.h"
 #include "VulkanUtils.h"
 
+#include <vector>
+
 namespace VKE::RHI {
 
     VulkanPipeline::VulkanPipeline(VulkanDevice& device, VulkanRenderPass& renderPass, const PipelineDesc& desc)
         : m_Device(device) {
         // Shader modules are only needed while the pipeline is built.
         VulkanShader vertShader(device, desc.VertexShaderPath, ShaderStageKind::Vertex);
-        VulkanShader fragShader(device, desc.FragmentShaderPath, ShaderStageKind::Fragment);
+        Iunique<VulkanShader> fragShader;
+        if (!desc.FragmentShaderPath.empty()) {
+            fragShader = MakeIunique<VulkanShader>(device, desc.FragmentShaderPath, ShaderStageKind::Fragment);
+        }
+
+        std::vector<VkPipelineShaderStageCreateInfo> stages;
 
         VkPipelineShaderStageCreateInfo vertStageInfo{};
         vertStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vertStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
         vertStageInfo.module = vertShader.GetHandle();
         vertStageInfo.pName = "main";
+        stages.push_back(vertStageInfo);
 
-        VkPipelineShaderStageCreateInfo fragStageInfo{};
-        fragStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragStageInfo.module = fragShader.GetHandle();
-        fragStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo stages[] = {vertStageInfo, fragStageInfo};
+        if (fragShader) {
+            VkPipelineShaderStageCreateInfo fragStageInfo{};
+            fragStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragStageInfo.module = fragShader->GetHandle();
+            fragStageInfo.pName = "main";
+            stages.push_back(fragStageInfo);
+        }
 
         VkVertexInputBindingDescription binding{};
         binding.binding = 0;
@@ -99,11 +108,13 @@ namespace VKE::RHI {
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         colorBlendAttachment.blendEnable = VK_FALSE;
+        std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments(renderPass.GetColorAttachmentCount(),
+                                                                              colorBlendAttachment);
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
+        colorBlending.attachmentCount = static_cast<u32>(colorBlendAttachments.size());
+        colorBlending.pAttachments = colorBlendAttachments.data();
 
         std::vector<VkPushConstantRange> pushConstantRanges;
         pushConstantRanges.reserve(desc.PushConstantRanges.size());
@@ -134,8 +145,8 @@ namespace VKE::RHI {
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = stages;
+        pipelineInfo.stageCount = static_cast<u32>(stages.size());
+        pipelineInfo.pStages = stages.data();
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;

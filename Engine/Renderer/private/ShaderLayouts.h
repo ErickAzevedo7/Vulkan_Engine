@@ -18,9 +18,12 @@ namespace VKE::Renderer {
     constexpr u32 kPrefilterBinding = 1;
     constexpr u32 kBrdfLutBinding = 2;
     constexpr u32 kRadianceBinding = 3;
+    constexpr u32 kShadowMapBinding = 4;
 
     // Must match MAX_LIGHTS in shaders/frame_uniforms.glsl.
     constexpr u32 kMaxLights = 8;
+    // Must match MAX_SHADOWS in shaders/frame_uniforms.glsl. One shadow map layer each.
+    constexpr u32 kMaxShadows = 4;
 
     // Material textures use bindings 0-5 in Assets::MaterialTexture order.
     constexpr u32 kMaterialUniformsBinding = 6;
@@ -29,8 +32,20 @@ namespace VKE::Renderer {
         Vec4 PositionAndRange;
         Vec4 DirectionAndType;
         Vec4 ColorAndIntensity;
+        // x = cosine of the inner cone angle, y = cosine of the outer one,
+        // z = index into FrameUniforms::Shadows, or -1 without a shadow.
+        Vec4 SpotAndShadow;
     };
-    static_assert(sizeof(GpuLight) == 48, "GpuLight layout mismatch");
+    static_assert(sizeof(GpuLight) == 64, "GpuLight layout mismatch");
+
+    struct GpuShadow {
+        Mat4 ViewProjection;
+        // x = size of a shadow map texel in world units, one unit in front of the light
+        // for perspective shadows. Multiplied by clip w, it works for both projections.
+        // y = shadow map layer, kept as a float so the shader never converts it.
+        Vec4 Parameters;
+    };
+    static_assert(sizeof(GpuShadow) == 80, "GpuShadow layout mismatch");
 
     struct FrameUniforms {
         Mat4 View;
@@ -40,8 +55,9 @@ namespace VKE::Renderer {
         // x = environment intensity.
         Vec4 EnvironmentParameters;
         GpuLight Lights[kMaxLights];
+        GpuShadow Shadows[kMaxShadows];
     };
-    static_assert(sizeof(FrameUniforms) == 560, "FrameUniforms layout mismatch");
+    static_assert(sizeof(FrameUniforms) == 1008, "FrameUniforms layout mismatch");
 
     struct MaterialUniforms {
         Vec4 BaseColor;
@@ -57,6 +73,11 @@ namespace VKE::Renderer {
         Vec4 Parameters;
     };
     static_assert(sizeof(CapturePushConstants) == 80, "CapturePushConstants layout mismatch");
+
+    struct ShadowPushConstants {
+        Mat4 ModelViewProjection;
+    };
+    static_assert(sizeof(ShadowPushConstants) == 64, "ShadowPushConstants layout mismatch");
 
     struct ObjectPushConstants {
         Mat4 Model;
