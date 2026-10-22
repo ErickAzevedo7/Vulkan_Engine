@@ -8,6 +8,10 @@ namespace VKE::Renderer {
         return m_Meshes.Emplace(desc);
     }
 
+    void RenderScene::SetMesh(MeshInstanceID id, Handle<Assets::MeshData> mesh) {
+        if (MeshInstanceDesc* instance = m_Meshes.Get(id)) instance->Mesh = mesh;
+    }
+
     void RenderScene::SetTransform(MeshInstanceID id, const Mat4& transform) {
         if (MeshInstanceDesc* mesh = m_Meshes.Get(id)) mesh->Transform = transform;
     }

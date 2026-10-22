@@ -9,17 +9,23 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
-#include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <initializer_list>
+#include <map>
 #include <utility>
+#include <vector>
 
 namespace VKE::Assets::Importers {
 
     namespace {
         Vec3 ToVec3(const aiVector3D& v) {
             return {v.x, v.y, v.z};
+        }
+
+        // Assimp stores matrices row by row; glm stores them column by column.
+        Mat4 ToMat4(const aiMatrix4x4& m) {
+            return glm::transpose(Mat4(m.a1, m.a2, m.a3, m.a4, m.b1, m.b2, m.b3, m.b4, m.c1, m.c2, m.c3, m.c4, m.d1,
+                                       m.d2, m.d3, m.d4));
         }
 
         // Any unit vector perpendicular to `normal`, for meshes without UVs.
@@ -112,78 +118,117 @@ namespace VKE::Assets::Importers {
         }
     } // namespace
 
-    bool ImportModel(AssetManager& assets, const std::filesystem::path& file, MeshData& outMesh) {
-        std::string extension = file.extension().string();
-        std::transform(extension.begin(), extension.end(), extension.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
+    bool ImportModel(AssetManager& assets, const std::filesystem::path& file, ModelData& outModel) {
         unsigned flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace |
                          aiProcess_JoinIdenticalVertices | aiProcess_ImproveCacheLocality | aiProcess_SortByPType;
-        // Bakes node transforms into the vertices so the mesh can be drawn without its node hierarchy.
-        if (extension != ".obj") {
-            flags |= aiProcess_PreTransformVertices;
-        }
 
         Assimp::Importer importer;
         const aiScene* scene = importer.ReadFile(file.string(), flags);
-        if (!scene || !scene->HasMeshes() || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE)) {
+        if (!scene || !scene->mRootNode || !scene->HasMeshes() || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE)) {
             VKE_CORE_ERROR("ModelImporter: '{}': {}", file.string(), importer.GetErrorString());
             return false;
         }
 
         std::filesystem::path modelDir = file.parent_path();
-        outMesh.Name = file.stem().string();
+        outModel.Name = file.stem().string();
 
-        outMesh.Materials.reserve(scene->mNumMaterials);
+        std::vector<Handle<MaterialData>> materials;
+        materials.reserve(scene->mNumMaterials);
         for (unsigned i = 0; i < scene->mNumMaterials; ++i) {
-            outMesh.Materials.push_back(assets.AddMaterial(ConvertMaterial(assets, *scene->mMaterials[i], modelDir)));
+            materials.push_back(assets.AddMaterial(ConvertMaterial(assets, *scene->mMaterials[i], modelDir)));
         }
 
         bool generatedTangents = false;
-        for (unsigned meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
-            const aiMesh& source = *scene->mMeshes[meshIndex];
-            if (!(source.mPrimitiveTypes & aiPrimitiveType_TRIANGLE) || source.mNumVertices == 0) continue;
+        // Nodes that reference the same meshes share one MeshData.
+        std::map<std::vector<unsigned>, Handle<MeshData>> meshesBySource;
 
-            u32 baseVertex = static_cast<u32>(outMesh.Vertices.size());
-
-            Submesh submesh;
-            submesh.FirstIndex = static_cast<u32>(outMesh.Indices.size());
-            submesh.MaterialIndex = source.mMaterialIndex;
-
-            outMesh.Vertices.reserve(outMesh.Vertices.size() + source.mNumVertices);
-            for (unsigned v = 0; v < source.mNumVertices; ++v) {
-                Vertex vertex{};
-                vertex.Position = ToVec3(source.mVertices[v]);
-                vertex.Normal = source.HasNormals() ? ToVec3(source.mNormals[v]) : Vec3(0.0f, 1.0f, 0.0f);
-                if (source.HasTextureCoords(0)) {
-                    // Assimp puts V = 0 at the bottom of the image; textures are sampled with V = 0 at the top.
-                    vertex.UV = {source.mTextureCoords[0][v].x, 1.0f - source.mTextureCoords[0][v].y};
-                }
-
-                if (source.HasTangentsAndBitangents()) {
-                    Vec3 tangent = ToVec3(source.mTangents[v]);
-                    Vec3 bitangent = ToVec3(source.mBitangents[v]);
-                    f32 sign = glm::dot(glm::cross(vertex.Normal, tangent), bitangent) < 0.0f ? -1.0f : 1.0f;
-                    vertex.Tangent = Vec4(tangent, sign);
-                } else {
-                    vertex.Tangent = FallbackTangent(vertex.Normal);
-                    generatedTangents = true;
-                }
-
-                outMesh.Vertices.push_back(vertex);
-            }
-
-            outMesh.Indices.reserve(outMesh.Indices.size() + static_cast<size_t>(source.mNumFaces) * 3);
-            for (unsigned f = 0; f < source.mNumFaces; ++f) {
-                const aiFace& face = source.mFaces[f];
-                if (face.mNumIndices != 3) continue;
-                for (unsigned i = 0; i < 3; ++i) {
-                    outMesh.Indices.push_back(baseVertex + face.mIndices[i]);
+        auto buildMesh = [&](const aiNode& node) -> Handle<MeshData> {
+            std::vector<unsigned> sources;
+            for (unsigned i = 0; i < node.mNumMeshes; ++i) {
+                const aiMesh& source = *scene->mMeshes[node.mMeshes[i]];
+                if ((source.mPrimitiveTypes & aiPrimitiveType_TRIANGLE) && source.mNumVertices > 0) {
+                    sources.push_back(node.mMeshes[i]);
                 }
             }
+            if (sources.empty()) return {};
+            if (auto it = meshesBySource.find(sources); it != meshesBySource.end()) return it->second;
 
-            submesh.IndexCount = static_cast<u32>(outMesh.Indices.size()) - submesh.FirstIndex;
-            outMesh.Submeshes.push_back(submesh);
+            MeshData mesh;
+            mesh.Name = node.mName.length > 0 ? node.mName.C_Str() : outModel.Name;
+            // The mesh only lists the materials its submeshes use.
+            std::map<unsigned, u32> materialSlots;
+
+            for (unsigned meshIndex : sources) {
+                const aiMesh& source = *scene->mMeshes[meshIndex];
+                u32 baseVertex = static_cast<u32>(mesh.Vertices.size());
+
+                auto [slot, added] = materialSlots.try_emplace(source.mMaterialIndex,
+                                                                static_cast<u32>(mesh.Materials.size()));
+                if (added) mesh.Materials.push_back(materials[source.mMaterialIndex]);
+
+                Submesh submesh;
+                submesh.FirstIndex = static_cast<u32>(mesh.Indices.size());
+                submesh.MaterialIndex = slot->second;
+
+                mesh.Vertices.reserve(mesh.Vertices.size() + source.mNumVertices);
+                for (unsigned v = 0; v < source.mNumVertices; ++v) {
+                    Vertex vertex{};
+                    vertex.Position = ToVec3(source.mVertices[v]);
+                    vertex.Normal = source.HasNormals() ? ToVec3(source.mNormals[v]) : Vec3(0.0f, 1.0f, 0.0f);
+                    if (source.HasTextureCoords(0)) {
+                        // Assimp puts V = 0 at the bottom of the image; textures are sampled with V = 0 at the top.
+                        vertex.UV = {source.mTextureCoords[0][v].x, 1.0f - source.mTextureCoords[0][v].y};
+                    }
+
+                    if (source.HasTangentsAndBitangents()) {
+                        Vec3 tangent = ToVec3(source.mTangents[v]);
+                        Vec3 bitangent = ToVec3(source.mBitangents[v]);
+                        f32 sign = glm::dot(glm::cross(vertex.Normal, tangent), bitangent) < 0.0f ? -1.0f : 1.0f;
+                        vertex.Tangent = Vec4(tangent, sign);
+                    } else {
+                        vertex.Tangent = FallbackTangent(vertex.Normal);
+                        generatedTangents = true;
+                    }
+
+                    mesh.Vertices.push_back(vertex);
+                }
+
+                mesh.Indices.reserve(mesh.Indices.size() + static_cast<size_t>(source.mNumFaces) * 3);
+                for (unsigned f = 0; f < source.mNumFaces; ++f) {
+                    const aiFace& face = source.mFaces[f];
+                    if (face.mNumIndices != 3) continue;
+                    for (unsigned i = 0; i < 3; ++i) {
+                        mesh.Indices.push_back(baseVertex + face.mIndices[i]);
+                    }
+                }
+
+                submesh.IndexCount = static_cast<u32>(mesh.Indices.size()) - submesh.FirstIndex;
+                mesh.Submeshes.push_back(submesh);
+            }
+
+            Handle<MeshData> handle = assets.AddMesh(std::move(mesh));
+            meshesBySource[sources] = handle;
+            return handle;
+        };
+
+        // Depth first, so every parent is added before its children.
+        std::vector<std::pair<const aiNode*, i32>> pending = {{scene->mRootNode, -1}};
+        while (!pending.empty()) {
+            auto [node, parent] = pending.back();
+            pending.pop_back();
+
+            ModelNode modelNode;
+            modelNode.Name = node->mName.C_Str();
+            modelNode.LocalTransform = ToMat4(node->mTransformation);
+            modelNode.Parent = parent;
+            modelNode.Mesh = buildMesh(*node);
+
+            i32 index = static_cast<i32>(outModel.Nodes.size());
+            outModel.Nodes.push_back(std::move(modelNode));
+            // Reversed, so children come out of the stack in file order.
+            for (unsigned i = node->mNumChildren; i > 0; --i) {
+                pending.emplace_back(node->mChildren[i - 1], index);
+            }
         }
 
         if (generatedTangents) {
@@ -191,7 +236,7 @@ namespace VKE::Assets::Importers {
                           file.filename().string());
         }
 
-        return !outMesh.Submeshes.empty();
+        return !meshesBySource.empty();
     }
 
 } // namespace VKE::Assets::Importers

@@ -9,8 +9,9 @@ namespace VKE::Assets {
 
 namespace VKE::Assets::Importers {
 
-    // Reads geometry and materials from a model file (glTF, OBJ, FBX, ...).
-    bool ImportModel(AssetManager& assets, const std::filesystem::path& file, MeshData& outMesh);
+    // Reads the node hierarchy, geometry and materials of a model file (glTF, OBJ, FBX, ...).
+    // Meshes and materials are added to `assets`.
+    bool ImportModel(AssetManager& assets, const std::filesystem::path& file, ModelData& outModel);
 
     // Decodes an image file into RGBA8 pixels.
     bool ImportTexture(const std::filesystem::path& file, ColorSpace colorSpace, TextureData& outTexture);

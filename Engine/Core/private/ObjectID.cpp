@@ -1,19 +1,19 @@
 #include <core/ObjectID.h>
-#include <atomic>
+
+#include <random>
 
 namespace VKE {
 
-    // Starts at 1 — 0 is reserved for ObjectID::Invalid()
-    static std::atomic<u64> s_Counter{ 1 };
+    ObjectID ObjectID::Generate() {
+        // Each call reads the system's random source, unlike a seeded generator, whose whole
+        // sequence would repeat in any run that drew the same seed.
+        thread_local std::random_device device;
 
-    ObjectID::ObjectID()
-        : m_ID(s_Counter.fetch_add(1, std::memory_order_relaxed))
-    {
-    }
-
-    ObjectID::ObjectID(u64 id)
-        : m_ID(id)
-    {
+        u64 id;
+        do {
+            id = (static_cast<u64>(device()) << 32) | static_cast<u64>(device());
+        } while (id == 0);
+        return ObjectID(id);
     }
 
 } // namespace VKE

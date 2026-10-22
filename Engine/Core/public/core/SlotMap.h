@@ -9,10 +9,12 @@ namespace VKE {
 
     // Stores values in a contiguous array and hands out stable handles to them.
     // Removing swaps the last value into the freed position, so iteration order changes.
-    template<typename T>
+    // `Tag` names the handle type, for maps that store something other than the object the
+    // handle refers to (e.g. a SlotMap<Iunique<GameObject>, GameObject> hands out Handle<GameObject>).
+    template<typename T, typename Tag = T>
     class SlotMap {
     public:
-        using HandleType = Handle<T>;
+        using HandleType = Handle<Tag>;
 
         template<typename... Args>
         HandleType Emplace(Args&&... args) {

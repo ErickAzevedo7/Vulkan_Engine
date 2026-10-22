@@ -5,13 +5,17 @@
 
 namespace VKE {
 
-    // Unique 64-bit identifier for engine objects.
+    // 64-bit identifier that stays the same across runs, used to refer to objects in saved files.
+    // A default-constructed ID is invalid; Generate makes a new one.
     class ObjectID {
     public:
-        ObjectID();                             // generates a random non-zero ID
-        explicit ObjectID(u64 id);
-        ObjectID(const ObjectID&) = default;
-        ObjectID& operator=(const ObjectID&) = default;
+        ObjectID() = default;
+        explicit ObjectID(u64 id) : m_ID(id) {}
+
+        // A new random ID, never zero, drawn from the operating system's random source so
+        // separate runs don't repeat each other's IDs.
+        static ObjectID Generate();
+        static ObjectID Invalid() { return ObjectID(); }
 
         bool operator==(const ObjectID& other) const { return m_ID == other.m_ID; }
         bool operator!=(const ObjectID& other) const { return m_ID != other.m_ID; }
@@ -19,10 +23,9 @@ namespace VKE {
         operator u64() const { return m_ID; }
 
         bool IsValid() const { return m_ID != 0; }
-        static ObjectID Invalid() { return ObjectID(0); }
 
     private:
-        u64 m_ID;
+        u64 m_ID = 0;
     };
 
 } // namespace VKE

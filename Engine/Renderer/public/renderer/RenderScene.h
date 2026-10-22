@@ -11,6 +11,7 @@ namespace VKE::Renderer {
     class RenderScene {
     public:
         MeshInstanceID CreateMesh(const MeshInstanceDesc& desc);
+        void SetMesh(MeshInstanceID id, Handle<Assets::MeshData> mesh);
         void SetTransform(MeshInstanceID id, const Mat4& transform);
         void SetMaterials(MeshInstanceID id, std::vector<Handle<Assets::MaterialData>> materials);
         void SetVisible(MeshInstanceID id, bool visible);

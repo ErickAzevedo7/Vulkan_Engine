@@ -34,7 +34,8 @@ namespace VKE::Assets {
         std::filesystem::path Resolve(const std::string& path) const;
 
         // Each returns an invalid handle if the file can't be loaded.
-        Handle<MeshData> LoadMesh(const std::string& path);
+        // Adds the model's meshes and materials too.
+        Handle<ModelData> LoadModel(const std::string& path);
         Handle<TextureData> LoadTexture(const std::string& path, ColorSpace colorSpace);
         Handle<MaterialData> LoadMaterial(const std::string& path);
 
@@ -43,6 +44,7 @@ namespace VKE::Assets {
         // Empty texture slots are filled with neutral default textures.
         Handle<MaterialData> AddMaterial(MaterialData material);
 
+        const ModelData* GetModel(Handle<ModelData> handle) const { return m_Models.Get(handle); }
         const MeshData* GetMesh(Handle<MeshData> handle) const { return m_Meshes.Get(handle); }
         const TextureData* GetTexture(Handle<TextureData> handle) const { return m_Textures.Get(handle); }
         const MaterialData* GetMaterial(Handle<MaterialData> handle) const { return m_Materials.Get(handle); }
@@ -56,11 +58,12 @@ namespace VKE::Assets {
 
         std::filesystem::path m_AssetRoot;
 
+        SlotMap<ModelData> m_Models;
         SlotMap<MeshData> m_Meshes;
         SlotMap<TextureData> m_Textures;
         SlotMap<MaterialData> m_Materials;
 
-        std::unordered_map<std::string, Handle<MeshData>> m_MeshCache;
+        std::unordered_map<std::string, Handle<ModelData>> m_ModelCache;
         std::unordered_map<std::string, Handle<TextureData>> m_TextureCache;
         std::unordered_map<std::string, Handle<MaterialData>> m_MaterialCache;
 

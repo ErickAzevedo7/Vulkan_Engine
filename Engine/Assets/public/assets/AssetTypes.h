@@ -37,6 +37,24 @@ namespace VKE::Assets {
         std::vector<Handle<MaterialData>> Materials;
     };
 
+    // One node of a model file's hierarchy.
+    struct ModelNode {
+        std::string Name;
+        // Relative to the parent node.
+        Mat4 LocalTransform{1.0f};
+        // Index into ModelData::Nodes, or -1 for the root.
+        i32 Parent = -1;
+        // Invalid when the node has no geometry.
+        Handle<MeshData> Mesh;
+    };
+
+    // The node hierarchy of a model file. Parents always come before their children,
+    // and the first node is the root.
+    struct ModelData {
+        std::string Name;
+        std::vector<ModelNode> Nodes;
+    };
+
     enum class ColorSpace {
         Linear,
         SRGB,

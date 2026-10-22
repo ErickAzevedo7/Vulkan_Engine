@@ -50,24 +50,32 @@ namespace VKE::Assets {
         return asPath.is_absolute() ? asPath : m_AssetRoot / asPath;
     }
 
-    Handle<MeshData> AssetManager::LoadMesh(const std::string& path) {
+    Handle<ModelData> AssetManager::LoadModel(const std::string& path) {
         std::filesystem::path file = Resolve(path);
         std::string key = MakeCacheKey(file);
-        if (auto it = m_MeshCache.find(key); it != m_MeshCache.end() && m_Meshes.Contains(it->second)) {
+        if (auto it = m_ModelCache.find(key); it != m_ModelCache.end() && m_Models.Contains(it->second)) {
             return it->second;
         }
 
-        MeshData mesh;
-        if (!Importers::ImportModel(*this, file, mesh)) {
-            VKE_CORE_ERROR("AssetManager: failed to load mesh '{}'", file.string());
+        ModelData model;
+        if (!Importers::ImportModel(*this, file, model)) {
+            VKE_CORE_ERROR("AssetManager: failed to load model '{}'", file.string());
             return {};
         }
 
-        VKE_CORE_INFO("Loaded mesh '{}': {} submeshes, {} vertices, {} indices, {} materials", path,
-                      mesh.Submeshes.size(), mesh.Vertices.size(), mesh.Indices.size(), mesh.Materials.size());
+        size_t meshCount = 0;
+        size_t vertexCount = 0;
+        for (const ModelNode& node : model.Nodes) {
+            if (const MeshData* mesh = GetMesh(node.Mesh)) {
+                ++meshCount;
+                vertexCount += mesh->Vertices.size();
+            }
+        }
+        VKE_CORE_INFO("Loaded model '{}': {} nodes, {} meshes on nodes, {} vertices", path, model.Nodes.size(),
+                      meshCount, vertexCount);
 
-        Handle<MeshData> handle = AddMesh(std::move(mesh));
-        m_MeshCache[key] = handle;
+        Handle<ModelData> handle = m_Models.Emplace(std::move(model));
+        m_ModelCache[key] = handle;
         return handle;
     }
 
