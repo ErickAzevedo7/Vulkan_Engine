@@ -1,0 +1,75 @@
+#pragma once
+
+#include <core/Handle.h>
+#include <core/Types.h>
+#include <math/MathTypes.h>
+#include <math/Transform.h>
+
+#include <vector>
+
+namespace VKE::Physics {
+
+    // Triangles for mesh bodies, in the mesh's own space. One shape can back many bodies.
+    struct MeshShapeDesc {
+        std::vector<Vec3> Positions;
+        // Three per triangle.
+        std::vector<u32> Indices;
+    };
+
+    enum class ShapeType : u8 {
+        Box,
+        // Always static: a mesh is never pushed.
+        Mesh,
+    };
+
+    enum class BodyMotion : u8 {
+        // Never moves when hit; pushes movable bodies out of it.
+        Static,
+        // Pushed out of the solid bodies it overlaps.
+        Movable,
+    };
+
+    // What the world stores for a mesh shape and a body. Defined only inside the physics module;
+    // outside it they just name the handles.
+    struct MeshShape;
+    struct Body;
+
+    using MeshShapeID = Handle<MeshShape>;
+
+    struct BodyDesc {
+        ShapeType Shape = ShapeType::Box;
+        // Box bodies, in the body's own space, so they follow its rotation and scale.
+        Vec3 Center{0.0f};
+        Vec3 HalfExtents{0.5f};
+        // Mesh bodies.
+        MeshShapeID Mesh;
+        // Where the body is in the world.
+        Transform Pose;
+        BodyMotion Motion = BodyMotion::Static;
+        // A trigger reports overlaps but never pushes or gets pushed.
+        bool IsTrigger = false;
+    };
+
+    using BodyID = Handle<Body>;
+
+    enum class ContactPhase : u8 {
+        // The bodies started touching in this step.
+        Begin,
+        // They were touching in the last step too.
+        Stay,
+        // They stopped touching, one of them was destroyed, or the pair became or stopped being
+        // a trigger pair (which ends it and begins it again).
+        End,
+    };
+
+    struct ContactEvent {
+        BodyID A;
+        BodyID B;
+        ContactPhase Phase = ContactPhase::Begin;
+        // Either body is a trigger, so nothing was pushed.
+        bool IsTrigger = false;
+        // Solid contacts that haven't ended: the direction that moves A away from B.
+        Vec3 Normal{0.0f};
+    };
+
+} // namespace VKE::Physics
