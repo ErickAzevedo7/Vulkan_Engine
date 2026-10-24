@@ -1,4 +1,5 @@
 #include "scene/Scene.h"
+#include "MeshShapeCache.h"
 #include "SceneSystems.h"
 #include "scene/GameObject.h"
 #include "scene/components/CameraComponent.h"
@@ -17,10 +18,12 @@ namespace VKE::Scene {
         }
     } // namespace
 
-    Scene::Scene() = default;
+    Scene::Scene()
+        : m_MeshShapes(MakeIunique<MeshShapeCache>(m_PhysicsWorld)) {
+    }
 
     Scene::~Scene() {
-        SceneSystems systems{m_RenderScene};
+        SceneSystems systems = GetSystems();
         for (GameObject* root : m_Roots) {
             std::vector<GameObject*> objects;
             CollectPostOrder(*root, objects);
@@ -67,14 +70,41 @@ namespace VKE::Scene {
     }
 
     void Scene::Update() {
+        SceneSystems systems = GetSystems();
+        SyncQueued(systems);
+        m_PhysicsWorld.Step();
+        ApplyPhysicsStep();
+        // Sends the objects the step moved.
+        SyncQueued(systems);
+    }
+
+    SceneSystems Scene::GetSystems() {
+        return SceneSystems{m_RenderScene, m_PhysicsWorld, *m_MeshShapes};
+    }
+
+    void Scene::SyncQueued(SceneSystems& systems) {
         std::vector<GameObject*> queue;
         queue.swap(m_SyncQueue);
-        SceneSystems systems{m_RenderScene};
         for (GameObject* object : queue) {
             object->m_SyncQueued = false;
             for (Component* component : object->GetComponents()) {
                 component->SyncToSystems(systems);
             }
+        }
+    }
+
+    void Scene::ApplyPhysicsStep() {
+        for (Physics::BodyID body : m_PhysicsWorld.GetMovedBodies()) {
+            const Physics::BodyDesc* desc = m_PhysicsWorld.GetBody(body);
+            if (GameObject* object = Get(UnpackObjectHandle(desc->UserData))) {
+                object->GetTransform().SetWorldPosition(desc->Pose.Position);
+            }
+        }
+
+        m_Contacts.clear();
+        for (const Physics::ContactEvent& event : m_PhysicsWorld.GetContactEvents()) {
+            m_Contacts.push_back({UnpackObjectHandle(event.UserDataA), UnpackObjectHandle(event.UserDataB), event.Phase,
+                                  event.IsTrigger, event.Normal});
         }
     }
 
@@ -98,7 +128,7 @@ namespace VKE::Scene {
     }
 
     void Scene::ConnectComponent(Component& component, std::type_index type) {
-        SceneSystems systems{m_RenderScene};
+        SceneSystems systems = GetSystems();
         component.ConnectToSystems(systems);
 
         if (!m_MainCamera && type == std::type_index(typeid(CameraComponent))) {
@@ -107,7 +137,7 @@ namespace VKE::Scene {
     }
 
     void Scene::DisconnectComponent(Component& component) {
-        SceneSystems systems{m_RenderScene};
+        SceneSystems systems = GetSystems();
         component.DisconnectFromSystems(systems);
 
         if (&component == static_cast<Component*>(m_MainCamera)) m_MainCamera = nullptr;

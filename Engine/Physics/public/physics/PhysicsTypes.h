@@ -48,6 +48,9 @@ namespace VKE::Physics {
         BodyMotion Motion = BodyMotion::Static;
         // A trigger reports overlaps but never pushes or gets pushed.
         bool IsTrigger = false;
+        // Not used by the world; copied into the body's contact events, so the owner can tell what
+        // the body belongs to even after it is destroyed.
+        u64 UserData = 0;
     };
 
     using BodyID = Handle<Body>;
@@ -70,6 +73,9 @@ namespace VKE::Physics {
         bool IsTrigger = false;
         // Solid contacts that haven't ended: the direction that moves A away from B.
         Vec3 Normal{0.0f};
+        // BodyDesc::UserData of A and B.
+        u64 UserDataA = 0;
+        u64 UserDataB = 0;
     };
 
 } // namespace VKE::Physics

@@ -9,6 +9,7 @@
 #include <scene/ModelInstantiation.h>
 #include <scene/Scene.h>
 #include <scene/components/CameraComponent.h>
+#include <scene/components/ColliderComponent.h>
 #include <scene/components/LightComponent.h>
 #include <scene/components/MeshComponent.h>
 
@@ -25,6 +26,35 @@ namespace VKE {
             Vec3 forward = glm::normalize(direction);
             Vec3 up = std::abs(forward.y) < 0.999f ? kWorldUp : Vec3(0.0f, 0.0f, 1.0f);
             return glm::quatLookAt(forward, up);
+        }
+
+        // A cube centered on the origin, `size` across, with a flat normal per face.
+        Assets::MeshData MakeCube(f32 size) {
+            Assets::MeshData cube;
+            cube.Name = "Cube";
+            const f32 half = 0.5f * size;
+            const Vec3 normals[] = {Vec3(1, 0, 0),  Vec3(-1, 0, 0), Vec3(0, 1, 0),
+                                    Vec3(0, -1, 0), Vec3(0, 0, 1),  Vec3(0, 0, -1)};
+            for (const Vec3& normal : normals) {
+                // Two axes across the face, so (u, v, normal) is right-handed and the corners go
+                // counterclockwise seen from outside.
+                Vec3 u = std::abs(normal.y) > 0.5f ? Vec3(1, 0, 0) : glm::cross(Vec3(0, 1, 0), normal);
+                Vec3 v = glm::cross(normal, u);
+                u32 base = static_cast<u32>(cube.Vertices.size());
+                for (Vec2 corner : {Vec2(-1, -1), Vec2(1, -1), Vec2(1, 1), Vec2(-1, 1)}) {
+                    Assets::Vertex vertex;
+                    vertex.Position = half * (normal + corner.x * u + corner.y * v);
+                    vertex.Normal = normal;
+                    vertex.UV = corner * 0.5f + 0.5f;
+                    vertex.Tangent = Vec4(u, 1.0f);
+                    cube.Vertices.push_back(vertex);
+                }
+                for (u32 index : {0u, 1u, 2u, 0u, 2u, 3u}) {
+                    cube.Indices.push_back(base + index);
+                }
+            }
+            cube.Submeshes.push_back({0, static_cast<u32>(cube.Indices.size()), 0});
+            return cube;
         }
 
         // Yaw turns right as it grows, which is a negative turn around +Y.
@@ -140,7 +170,22 @@ namespace VKE {
         Scene::Scene& scene = *m_SponzaScene.Instance;
 
         CreateCamera(m_SponzaScene, Vec3(-10.0f, 1.8f, -0.4f), Vec3(10.0f, 3.0f, -0.4f));
-        Scene::InstantiateModel(scene, m_Assets, m_Assets.LoadModel("sponza-atrium-3/source/glTF/Sponza.gltf"));
+        Scene::GameObject* sponza =
+            Scene::InstantiateModel(scene, m_Assets, m_Assets.LoadModel("sponza-atrium-3/source/glTF/Sponza.gltf"));
+
+        // Every part of the building collides with its own triangles.
+        std::vector<Scene::GameObject*> pending;
+        if (sponza) pending.push_back(sponza);
+        while (!pending.empty()) {
+            Scene::GameObject* object = pending.back();
+            pending.pop_back();
+            if (auto* mesh = object->GetComponent<Scene::MeshComponent>()) {
+                object->AddComponent<Scene::ColliderComponent>()->SetMesh(m_Assets, mesh->GetMesh());
+            }
+            pending.insert(pending.end(), object->GetChildren().begin(), object->GetChildren().end());
+        }
+
+        CreateCollisionTest(scene);
 
         Scene::LightSettings sun;
         sun.Type = Renderer::LightType::Directional;
@@ -161,6 +206,79 @@ namespace VKE {
             lamp.CastsShadow = true;
             CreateLight(scene, "Lamp " + std::to_string(i + 1), Vec3(-7.5f + 5.0f * static_cast<f32>(i), 1.5f, -0.4f),
                         Vec3(0.0f, -1.0f, 0.0f), lamp);
+        }
+    }
+
+    void SandboxSceneSystem::CreateCollisionTest(Scene::Scene& scene) {
+        constexpr f32 kBoxSize = 0.5f;
+
+        Assets::MaterialData material;
+        material.Name = "Box";
+        material.BaseColor = Vec4(0.8f, 0.35f, 0.1f, 1.0f);
+        material.Metallic = 0.0f;
+        material.Roughness = 0.5f;
+        m_BoxMaterial = m_Assets.AddMaterial(material);
+        material.Name = "BoxInside";
+        material.BaseColor = Vec4(0.1f, 0.8f, 0.2f, 1.0f);
+        m_BoxInsideMaterial = m_Assets.AddMaterial(material);
+
+        // Starts sunk into the floor; the first update pushes it up onto it.
+        Scene::GameObject& box = scene.CreateObject("Box");
+        box.GetTransform().SetLocalPosition(Vec3(-7.0f, 0.1f, -0.4f));
+        auto* mesh = box.AddComponent<Scene::MeshComponent>(m_Assets.AddMesh(MakeCube(kBoxSize)));
+        mesh->SetMaterials({m_BoxMaterial});
+        auto* collider = box.AddComponent<Scene::ColliderComponent>();
+        collider->SetBox(Vec3(0.0f), Vec3(0.5f * kBoxSize));
+        collider->SetMotion(Physics::BodyMotion::Movable);
+        m_Box = box.GetHandle();
+
+        Scene::GameObject& zone = scene.CreateObject("Trigger zone");
+        zone.GetTransform().SetLocalPosition(Vec3(-3.0f, 0.5f, -0.4f));
+        auto* trigger = zone.AddComponent<Scene::ColliderComponent>();
+        trigger->SetBox(Vec3(0.0f), Vec3(0.75f, 0.5f, 1.5f));
+        trigger->SetTrigger(true);
+        m_TriggerZone = zone.GetHandle();
+    }
+
+    void SandboxSceneSystem::UpdateBox(f32 deltaTime) {
+        using Platform::KeyCode;
+        constexpr f32 kSpeed = 2.0f;
+
+        if (m_ActiveScene != &m_SponzaScene) return;
+        Scene::GameObject* box = m_SponzaScene.Instance->Get(m_Box);
+        if (!box) return;
+
+        // Along the atrium (+X) and across it (+Z), as seen from where the camera starts.
+        Vec3 move(0.0f);
+        if (m_Input.IsKeyDown(KeyCode::Up)) move.x += 1.0f;
+        if (m_Input.IsKeyDown(KeyCode::Down)) move.x -= 1.0f;
+        if (m_Input.IsKeyDown(KeyCode::Right)) move.z += 1.0f;
+        if (m_Input.IsKeyDown(KeyCode::Left)) move.z -= 1.0f;
+        if (m_Input.IsKeyDown(KeyCode::PageUp)) move.y += 1.0f;
+        if (m_Input.IsKeyDown(KeyCode::PageDown)) move.y -= 1.0f;
+        if (glm::length(move) == 0.0f) return;
+
+        Scene::TransformComponent& transform = box->GetTransform();
+        transform.SetWorldPosition(transform.GetWorld().Position + glm::normalize(move) * kSpeed * deltaTime);
+    }
+
+    void SandboxSceneSystem::ReportContacts(const Scene::Scene& scene) {
+        for (const Scene::Contact& contact : scene.GetContacts()) {
+            if (contact.Phase == Physics::ContactPhase::Stay) continue;
+            if (contact.A != m_Box && contact.B != m_Box) continue;
+
+            Handle<Scene::GameObject> other = contact.A == m_Box ? contact.B : contact.A;
+            const Scene::GameObject* otherObject = scene.Get(other);
+            bool begins = contact.Phase == Physics::ContactPhase::Begin;
+            VKE_CORE_INFO("SandboxSceneSystem: box {} {} '{}'", begins ? "touches" : "leaves",
+                          contact.IsTrigger ? "trigger" : "solid", otherObject ? otherObject->GetName() : "(destroyed)");
+
+            if (other == m_TriggerZone) {
+                Scene::GameObject* box = scene.Get(m_Box);
+                if (auto* mesh = box ? box->GetComponent<Scene::MeshComponent>() : nullptr) {
+                    mesh->SetMaterials({begins ? m_BoxInsideMaterial : m_BoxMaterial});
+                }
+            }
         }
     }
 
@@ -281,9 +399,11 @@ namespace VKE {
 
         UpdateCamera(*m_ActiveScene, ft.GetDeltaF());
         UpdateHelmet(ft.GetTotalF());
+        UpdateBox(ft.GetDeltaF());
 
         Scene::Scene& scene = *m_ActiveScene->Instance;
         scene.Update();
+        ReportContacts(scene);
         m_Renderer.Render(scene.GetRenderScene(), scene.GetView());
     }
 

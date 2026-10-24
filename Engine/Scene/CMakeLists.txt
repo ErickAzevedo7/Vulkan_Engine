@@ -5,10 +5,12 @@ target_sources(VKE_Scene PRIVATE
     private/GameObject.cpp
     private/Component.cpp
     private/ModelInstantiation.cpp
+    private/MeshShapeCache.cpp
     private/components/TransformComponent.cpp
     private/components/MeshComponent.cpp
     private/components/LightComponent.cpp
     private/components/CameraComponent.cpp
+    private/components/ColliderComponent.cpp
 )
 
 target_include_directories(VKE_Scene
@@ -22,6 +24,7 @@ target_link_libraries(VKE_Scene
             VKE_Events
             VKE_Assets
             VKE_Renderer
+            VKE_Physics
 )
 
 set_target_properties(VKE_Scene PROPERTIES FOLDER "Engine")

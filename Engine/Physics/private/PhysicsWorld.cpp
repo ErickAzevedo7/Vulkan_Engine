@@ -38,6 +38,13 @@ namespace VKE::Physics {
             BodyID B;
             bool IsTrigger = false;
             Vec3 Normal{0.0f};
+            u64 UserDataA = 0;
+            u64 UserDataB = 0;
+
+            ContactEvent ToEvent(ContactPhase phase) const {
+                Vec3 normal = phase == ContactPhase::End ? Vec3(0.0f) : Normal;
+                return {A, B, phase, IsTrigger, normal, UserDataA, UserDataB};
+            }
         };
 
         u64 MakePairKey(BodyID a, BodyID b) {
@@ -100,6 +107,8 @@ namespace VKE::Physics {
 
         std::vector<BodyID> Moved;
         std::vector<ContactEvent> Events;
+        // Reused by each push out of a mesh.
+        std::vector<Triangle> NearbyTriangles;
         bool MovableMeshWarned = false;
 
         Body& BodyAt(u32 denseIndex) { return *Bodies.Get(Bodies.HandleAt(denseIndex)); }
@@ -158,18 +167,33 @@ namespace VKE::Physics {
             if (IsStatic(box.Desc)) return false;
 
             OrientedBox shape = MakeBox(box.Desc);
-            bool pushed = false;
-            // Triangles one after another, each against where the earlier ones left the box,
-            // so a floor and a wall both hold it at once.
-            VisitTriangles(mesh, GetBounds(shape), [&](const Triangle& triangle) {
-                Penetration penetration;
-                if (!TestBoxTriangle(shape, triangle, 0.0f, penetration) || penetration.Depth <= 0.0f) return;
+            NearbyTriangles.clear();
+            VisitTriangles(mesh, GetBounds(shape),
+                           [&](const Triangle& triangle) { NearbyTriangles.push_back(triangle); });
 
-                Vec3 push = penetration.Normal * penetration.Depth;
-                shape.Center += push;
-                box.Desc.Pose.Position += push;
-                pushed = true;
-            });
+            // Triangles one after another, each against where the earlier ones left the box, so a
+            // floor and a wall both hold it at once. The ones the box's center is over go first,
+            // pushing along their normals: they are the surfaces it stands on or walks into. The
+            // ones it only grazes, like the edge of a molding, then get the smallest push, which
+            // their normal would overshoot.
+            // Sorted by where the box was before any push, so each triangle is visited once.
+            const Vec3 center = shape.Center;
+            bool pushed = false;
+            for (bool over : {true, false}) {
+                for (const Triangle& triangle : NearbyTriangles) {
+                    if (IsOverTriangle(center, triangle) != over) continue;
+
+                    Penetration penetration;
+                    if (!TestBoxTriangle(shape, triangle, 0.0f, over, penetration) || penetration.Depth <= 0.0f) {
+                        continue;
+                    }
+
+                    Vec3 push = penetration.Normal * penetration.Depth;
+                    shape.Center += push;
+                    box.Desc.Pose.Position += push;
+                    pushed = true;
+                }
+            }
             return pushed;
         }
 
@@ -185,7 +209,8 @@ namespace VKE::Physics {
                 f32 deepest = -kContactMargin;
                 VisitTriangles(mesh, Expand(GetBounds(shape), kContactMargin), [&](const Triangle& triangle) {
                     Penetration penetration;
-                    if (!TestBoxTriangle(shape, triangle, kContactMargin, penetration)) return;
+                    bool over = IsOverTriangle(shape.Center, triangle);
+                    if (!TestBoxTriangle(shape, triangle, kContactMargin, over, penetration)) return;
                     if (!touching || penetration.Depth > deepest) {
                         deepest = penetration.Depth;
                         outNormal = meshIsA ? -penetration.Normal : penetration.Normal;
@@ -205,7 +230,7 @@ namespace VKE::Physics {
             for (auto it = Touching.begin(); it != Touching.end();) {
                 const TouchingPair& pair = it->second;
                 if (pair.A == id || pair.B == id) {
-                    PendingEnds.push_back({pair.A, pair.B, ContactPhase::End, pair.IsTrigger, Vec3(0.0f)});
+                    PendingEnds.push_back(pair.ToEvent(ContactPhase::End));
                     it = Touching.erase(it);
                 } else {
                     ++it;
@@ -312,7 +337,8 @@ namespace VKE::Physics {
 
             const Body& bodyA = s.BodyAt(first);
             const Body& bodyB = s.BodyAt(second);
-            TouchingPair pair{idA, idB, bodyA.Desc.IsTrigger || bodyB.Desc.IsTrigger, Vec3(0.0f)};
+            TouchingPair pair{idA, idB, bodyA.Desc.IsTrigger || bodyB.Desc.IsTrigger, Vec3(0.0f),
+                              bodyA.Desc.UserData, bodyB.Desc.UserData};
             Vec3 normal;
             if (!s.FindContact(bodyA, bodyB, normal)) continue;
             if (!pair.IsTrigger) pair.Normal = normal;
@@ -323,14 +349,13 @@ namespace VKE::Physics {
             auto now = s.NowTouching.find(key);
             // A pair that turned into a trigger pair, or back, ends and begins again.
             if (now == s.NowTouching.end() || now->second.IsTrigger != pair.IsTrigger) {
-                s.Events.push_back({pair.A, pair.B, ContactPhase::End, pair.IsTrigger, Vec3(0.0f)});
+                s.Events.push_back(pair.ToEvent(ContactPhase::End));
             }
         }
         for (const auto& [key, pair] : s.NowTouching) {
             auto before = s.Touching.find(key);
             bool continues = before != s.Touching.end() && before->second.IsTrigger == pair.IsTrigger;
-            s.Events.push_back({pair.A, pair.B, continues ? ContactPhase::Stay : ContactPhase::Begin, pair.IsTrigger,
-                                pair.Normal});
+            s.Events.push_back(pair.ToEvent(continues ? ContactPhase::Stay : ContactPhase::Begin));
         }
         s.Touching.swap(s.NowTouching);
     }

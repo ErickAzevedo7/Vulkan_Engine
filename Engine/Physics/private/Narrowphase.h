@@ -26,8 +26,15 @@ namespace VKE::Physics {
 
     AABB GetBounds(const OrientedBox& box);
 
+    // Whether `point`, moved along the triangle's normal onto its plane, lands inside it.
+    bool IsOverTriangle(const Vec3& point, const Triangle& triangle);
+
     // Each returns false when the shapes are farther apart than `margin`.
     bool TestBoxBox(const OrientedBox& a, const OrientedBox& b, f32 margin, Penetration& out);
-    bool TestBoxTriangle(const OrientedBox& box, const Triangle& triangle, f32 margin, Penetration& out);
+    // With `alongFace`, `out` is measured along the triangle's normal, which holds a box on a
+    // surface it stands over without catching on the edges between that surface's triangles.
+    // Otherwise it is the axis of least overlap, the smallest push that separates them.
+    bool TestBoxTriangle(const OrientedBox& box, const Triangle& triangle, f32 margin, bool alongFace,
+                         Penetration& out);
 
 } // namespace VKE::Physics

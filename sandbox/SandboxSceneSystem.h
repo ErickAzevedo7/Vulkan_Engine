@@ -32,8 +32,10 @@ namespace VKE {
     // Hold the right mouse button to look, WASD/QE to move, Shift to go faster, Escape to quit.
     // Keys 1-3 switch the helmet between its own material and two test materials,
     // -/= change the exposure, T turns shadows on and off, and Tab switches between the
-    // helmet and Sponza, which loads the first time it is shown. The average frame time is
-    // logged every few seconds.
+    // helmet and Sponza, which loads the first time it is shown. In Sponza, the arrow keys
+    // move a box along the floor and PageUp/PageDown raise and lower it; the walls stop it,
+    // and it turns green inside a trigger zone further down the atrium. The average frame
+    // time is logged every few seconds.
     class SandboxSceneSystem : public System {
     public:
         SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets, Renderer::Renderer& renderer);
@@ -60,6 +62,9 @@ namespace VKE {
         void CreateHelmetScene();
         void CreateFloor();
         void CreateSponzaScene();
+        void CreateCollisionTest(Scene::Scene& scene);
+        void UpdateBox(f32 deltaTime);
+        void ReportContacts(const Scene::Scene& scene);
         void SwitchScene();
 
         void CreateCamera(SandboxScene& scene, const Vec3& position, const Vec3& target);
@@ -78,6 +83,11 @@ namespace VKE {
         // The helmet's own rotation, which the spin is applied on top of.
         Quat m_HelmetRotation{1.0f, 0.0f, 0.0f, 0.0f};
         Handle<Scene::GameObject> m_TemporaryHelmet;
+
+        Handle<Scene::GameObject> m_Box;
+        Handle<Scene::GameObject> m_TriggerZone;
+        Handle<Assets::MaterialData> m_BoxMaterial;
+        Handle<Assets::MaterialData> m_BoxInsideMaterial;
 
         Handle<Assets::MaterialData> m_SmoothPlastic;
         Handle<Assets::MaterialData> m_RoughMetal;

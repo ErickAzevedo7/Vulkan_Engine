@@ -3,6 +3,9 @@
 #include <core/Handle.h>
 #include <core/SlotMap.h>
 #include <core/Types.h>
+#include <math/MathTypes.h>
+#include <physics/PhysicsTypes.h>
+#include <physics/PhysicsWorld.h>
 #include <renderer/RenderScene.h>
 #include <renderer/RenderTypes.h>
 
@@ -15,12 +18,27 @@ namespace VKE::Scene {
     class CameraComponent;
     class Component;
     class GameObject;
+    class MeshShapeCache;
+    struct SceneSystems;
 
-    // Owns a hierarchy of GameObjects and the render scene their components fill.
+    // Two colliders' objects that touched during an update.
+    struct Contact {
+        // Either can be destroyed by the time the contact is read: Scene::Get returns null for it.
+        // An End contact can also refer to an object destroyed during the update.
+        Handle<GameObject> A;
+        Handle<GameObject> B;
+        Physics::ContactPhase Phase = Physics::ContactPhase::Begin;
+        // Either collider is a trigger, so nothing was pushed.
+        bool IsTrigger = false;
+        // Solid contacts that haven't ended: the direction that moves A away from B.
+        Vec3 Normal{0.0f};
+    };
+
+    // Owns a hierarchy of GameObjects and the render scene and physics world their components fill.
     //
-    // Components connect to the render scene when added and disconnect when removed. Changes
-    // in between, to a component or to its object's transform or active state, are sent once
-    // per frame by Update.
+    // Components connect to those systems when added and disconnect when removed. Changes in
+    // between, to a component or to its object's transform or active state, are sent once per
+    // frame by Update.
     class Scene {
     public:
         Scene();
@@ -37,9 +55,13 @@ namespace VKE::Scene {
         GameObject* Get(Handle<GameObject> handle) const;
         const std::vector<GameObject*>& GetRootObjects() const { return m_Roots; }
 
-        // Sends the changes made since the last update to the render scene. Call it before
-        // rendering.
+        // Sends the changes made since the last update to the physics world, pushes movable
+        // colliders out of solid ones (moving their objects), and sends the result to the render
+        // scene. Call it once per frame, before rendering.
         void Update();
+
+        // What touched what during the last Update, each pair once.
+        const std::vector<Contact>& GetContacts() const { return m_Contacts; }
 
         const Renderer::RenderScene& GetRenderScene() const { return m_RenderScene; }
 
@@ -58,8 +80,17 @@ namespace VKE::Scene {
         void ConnectComponent(Component& component, std::type_index type);
         void DisconnectComponent(Component& component);
 
-        // Declared before the objects, so it outlives the components that fill it.
+        SceneSystems GetSystems();
+        // Syncs the components of every queued object.
+        void SyncQueued(SceneSystems& systems);
+        // Moves the objects the physics step pushed and collects its contacts.
+        void ApplyPhysicsStep();
+
+        // Declared before the objects, so they outlive the components that fill them.
         Renderer::RenderScene m_RenderScene;
+        Physics::PhysicsWorld m_PhysicsWorld;
+        Iunique<MeshShapeCache> m_MeshShapes;
+        std::vector<Contact> m_Contacts;
         CameraComponent* m_MainCamera = nullptr;
 
         SlotMap<Iunique<GameObject>, GameObject> m_Objects;

@@ -9,11 +9,6 @@ namespace VKE::Physics {
         // Cross products shorter than this come from parallel edges and give no axis.
         constexpr f32 kMinAxisLength = 1e-6f;
 
-        // Pushing a box out of a mesh along the triangle's own normal keeps it from catching on
-        // the edges between neighboring triangles of a flat surface, which would shove it
-        // sideways. Another axis is used only when it pushes this much less.
-        constexpr f32 kFaceAxisPreference = 0.05f;
-
         f32 ProjectBox(const OrientedBox& box, const Vec3& axis) {
             return box.HalfExtents.x * std::abs(glm::dot(box.Axes[0], axis)) +
                    box.HalfExtents.y * std::abs(glm::dot(box.Axes[1], axis)) +
@@ -85,7 +80,16 @@ namespace VKE::Physics {
         return true;
     }
 
-    bool TestBoxTriangle(const OrientedBox& box, const Triangle& triangle, f32 margin, Penetration& out) {
+    bool IsOverTriangle(const Vec3& point, const Triangle& triangle) {
+        // Inside when the point is on the inner side of all three edges, seen along the normal.
+        Vec3 normal = glm::cross(triangle.B - triangle.A, triangle.C - triangle.A);
+        return glm::dot(glm::cross(triangle.B - triangle.A, point - triangle.A), normal) >= 0.0f &&
+               glm::dot(glm::cross(triangle.C - triangle.B, point - triangle.B), normal) >= 0.0f &&
+               glm::dot(glm::cross(triangle.A - triangle.C, point - triangle.C), normal) >= 0.0f;
+    }
+
+    bool TestBoxTriangle(const OrientedBox& box, const Triangle& triangle, f32 margin, bool alongFace,
+                         Penetration& out) {
         const Vec3 edges[3] = {triangle.B - triangle.A, triangle.C - triangle.B, triangle.A - triangle.C};
         Vec3 normal = glm::cross(edges[0], -edges[2]);
         f32 normalLength = glm::length(normal);
@@ -104,7 +108,7 @@ namespace VKE::Physics {
         };
 
         if (!test(normal)) return false;
-        // The face axis is measured first, alone, so it can be preferred below.
+        // The face axis is measured first, alone, so it can be returned on its own.
         Penetration face = search.GetBest();
 
         for (int i = 0; i < 3; ++i) {
@@ -119,10 +123,7 @@ namespace VKE::Physics {
             }
         }
 
-        // The triangle is flat along its normal, so the face axis pushes the box out toward the
-        // side its center is on.
-        const Penetration& best = search.GetBest();
-        out = face.Depth <= best.Depth + kFaceAxisPreference ? face : best;
+        out = alongFace ? face : search.GetBest();
         return true;
     }
 
