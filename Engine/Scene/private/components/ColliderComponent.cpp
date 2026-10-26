@@ -43,6 +43,15 @@ namespace VKE::Scene {
         MarkSyncNeeded();
     }
 
+    void ColliderComponent::OnPropertiesChanged(const Assets::AssetManager& assets) {
+        // A new mesh needs its triangles read, which SetMesh does.
+        if (m_Shape == Physics::ShapeType::Mesh && m_Mesh != m_ShapeMesh) {
+            SetMesh(assets, m_Mesh);
+        } else {
+            MarkSyncNeeded();
+        }
+    }
+
     void ColliderComponent::ConnectToSystems(SceneSystems&) {
         // The body enters the physics world on the first sync, if its object is active.
         MarkSyncNeeded();

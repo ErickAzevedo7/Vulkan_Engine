@@ -1,7 +1,9 @@
 #pragma once
 
 #include <core/Handle.h>
+#include <core/ObjectID.h>
 #include <core/SlotMap.h>
+#include <scene/ComponentRegistry.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <physics/PhysicsTypes.h>
@@ -10,7 +12,6 @@
 #include <renderer/RenderTypes.h>
 
 #include <string>
-#include <typeindex>
 #include <vector>
 
 namespace VKE::Scene {
@@ -53,6 +54,8 @@ namespace VKE::Scene {
 
         // The object behind a handle, or null once it has been destroyed.
         GameObject* Get(Handle<GameObject> handle) const;
+        // The object with this ID, or null. Looks through every object.
+        GameObject* FindByID(ObjectID id) const;
         const std::vector<GameObject*>& GetRootObjects() const { return m_Roots; }
 
         // Sends the changes made since the last update to the physics world, pushes movable
@@ -73,11 +76,15 @@ namespace VKE::Scene {
 
     private:
         friend class GameObject;
+        friend class SceneSerializer;
+
+        // For loading: the object keeps the ID it was saved with.
+        GameObject& CreateObject(std::string name, ObjectID id);
 
         void OnRootChanged(GameObject& object, bool isRoot);
         // Returns false if the object was already queued.
         bool QueueSync(GameObject& object);
-        void ConnectComponent(Component& component, std::type_index type);
+        void ConnectComponent(Component& component, ComponentTypeID type);
         void DisconnectComponent(Component& component);
 
         SceneSystems GetSystems();

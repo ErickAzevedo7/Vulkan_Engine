@@ -6,6 +6,7 @@ target_sources(VKE_Core PRIVATE
     private/Application.cpp
     private/Log.cpp
     private/ObjectID.cpp
+    private/IDUtils.cpp
 )
 
 target_include_directories(VKE_Core

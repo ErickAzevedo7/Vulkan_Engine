@@ -3,6 +3,7 @@
 #include <assets/AssetManager.h>
 #include <platform/PlatformSystem.h>
 #include <renderer/Renderer.h>
+#include <scene/ComponentRegistry.h>
 
 #include "SandboxSceneSystem.h"
 
@@ -14,6 +15,7 @@ public:
             VKE::Platform::WindowDesc{ "Vulkan Engine — Sandbox", 1280, 720, true });
         auto* assets = Register<VKE::Assets::AssetManager>(VKE_SANDBOX_ASSET_ROOT);
         auto* renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
+        VKE::Scene::ComponentRegistry::RegisterEngineComponents();
         Register<VKE::SandboxSceneSystem>(platform->GetInput(), *assets, *renderer);
     }
 };

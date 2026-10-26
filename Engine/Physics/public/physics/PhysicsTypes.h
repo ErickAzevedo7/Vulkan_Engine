@@ -4,6 +4,7 @@
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <math/Transform.h>
+#include <reflection/Marks.h>
 
 #include <vector>
 
@@ -16,12 +17,14 @@ namespace VKE::Physics {
         std::vector<u32> Indices;
     };
 
+    VKE_ENUM()
     enum class ShapeType : u8 {
         Box,
         // Always static: a mesh is never pushed.
         Mesh,
     };
 
+    VKE_ENUM()
     enum class BodyMotion : u8 {
         // Never moves when hit; pushes movable bodies out of it.
         Static,

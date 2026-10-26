@@ -12,6 +12,8 @@ namespace VKE::Scene {
 
     // Draws a mesh where its object is.
     class MeshComponent final : public Component {
+        VKE_COMPONENT(MeshComponent)
+
     public:
         explicit MeshComponent(Handle<Assets::MeshData> mesh = {});
 
@@ -27,8 +29,8 @@ namespace VKE::Scene {
         void SyncToSystems(SceneSystems& systems) override;
         void DisconnectFromSystems(SceneSystems& systems) override;
 
-        Handle<Assets::MeshData> m_Mesh;
-        std::vector<Handle<Assets::MaterialData>> m_Materials;
+        VKE_PROPERTY() Handle<Assets::MeshData> m_Mesh;
+        VKE_PROPERTY() std::vector<Handle<Assets::MaterialData>> m_Materials;
         Renderer::MeshInstanceID m_Instance;
     };
 

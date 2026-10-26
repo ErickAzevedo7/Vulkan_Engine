@@ -15,6 +15,7 @@ target_include_directories(VKE_Physics
 target_link_libraries(VKE_Physics
     PUBLIC  VKE_Core
             VKE_Math
+            VKE_Reflection
 )
 
 set_target_properties(VKE_Physics PROPERTIES FOLDER "Engine")

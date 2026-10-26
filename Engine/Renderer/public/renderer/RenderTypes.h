@@ -4,6 +4,7 @@
 #include <core/Handle.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
+#include <reflection/Marks.h>
 #include <vector>
 
 namespace VKE::Renderer {
@@ -19,6 +20,7 @@ namespace VKE::Renderer {
         bool Visible = true;
     };
 
+    VKE_ENUM()
     enum class LightType : u32 {
         Directional = 0,
         Point = 1,

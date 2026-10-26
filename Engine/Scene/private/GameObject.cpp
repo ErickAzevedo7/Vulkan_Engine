@@ -11,7 +11,7 @@ namespace VKE::Scene {
         Iunique<TransformComponent> transform(new TransformComponent());
         transform->m_Owner = this;
         m_Transform = transform.get();
-        m_Components.push_back({std::type_index(typeid(TransformComponent)), std::move(transform)});
+        m_Components.push_back({ComponentRegistry::GetID<TransformComponent>(), std::move(transform)});
     }
 
     GameObject::~GameObject() = default;
@@ -58,14 +58,25 @@ namespace VKE::Scene {
         RefreshActiveInHierarchy();
     }
 
-    void GameObject::AttachComponent(std::type_index type, Iunique<Component> component) {
+    Component* GameObject::AddComponent(ComponentTypeID type) {
+        if (Component* existing = GetComponent(type)) return existing;
+
+        const ComponentTypeInfo* info = ComponentRegistry::Find(type);
+        if (!info || !info->Create) return nullptr;
+        Iunique<Component> component(info->Create());
+        Component* result = component.get();
+        AttachComponent(type, std::move(component));
+        return result;
+    }
+
+    void GameObject::AttachComponent(ComponentTypeID type, Iunique<Component> component) {
         Component& added = *component;
         added.m_Owner = this;
         m_Components.push_back({type, std::move(component)});
         m_Scene.ConnectComponent(added, type);
     }
 
-    Component* GameObject::FindComponent(std::type_index type) const {
+    Component* GameObject::GetComponent(ComponentTypeID type) const {
         for (const ComponentEntry& entry : m_Components) {
             if (entry.Type == type) return entry.Instance.get();
         }

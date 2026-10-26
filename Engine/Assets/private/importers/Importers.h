@@ -16,7 +16,7 @@ namespace VKE::Assets::Importers {
     // Decodes an image file into RGBA8 pixels.
     bool ImportTexture(const std::filesystem::path& file, ColorSpace colorSpace, TextureData& outTexture);
 
-    // Reads a .mat JSON file and loads the textures it references.
+    // Reads a .mat YAML file and loads the textures it references.
     bool ImportMaterial(AssetManager& assets, const std::filesystem::path& file, MaterialData& outMaterial);
 
 } // namespace VKE::Assets::Importers

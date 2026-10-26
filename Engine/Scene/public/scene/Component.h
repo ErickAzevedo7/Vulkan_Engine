@@ -1,6 +1,12 @@
 #pragma once
 
+#include <scene/ComponentRegistry.h>
+
 #include <core/Types.h>
+
+namespace VKE::Assets {
+    class AssetManager;
+} // namespace VKE::Assets
 
 namespace VKE::Scene {
 
@@ -13,6 +19,9 @@ namespace VKE::Scene {
     // systems the scene feeds, such as the render scene, through three steps the scene calls:
     // connect when the component is added, sync at the end of an update in which it changed,
     // and disconnect when it is removed.
+    //
+    // Every component type declares itself with VKE_COMPONENT and marks its saved fields with
+    // VKE_PROPERTY; the reflection generator registers it with those properties.
     class Component {
     public:
         virtual ~Component() = default;
@@ -24,6 +33,14 @@ namespace VKE::Scene {
         Scene& GetScene() const;
         // The owner's transform.
         TransformComponent& GetTransform() const;
+
+        // Given by VKE_COMPONENT.
+        virtual ComponentTypeID GetTypeID() const = 0;
+
+        // Call after writing properties directly through the registry's tables, as a loader or
+        // an editor does: the component applies them, as its setters would have. `assets` holds
+        // the assets the properties refer to.
+        void ApplyPropertyChanges(const Assets::AssetManager& assets);
 
     protected:
         Component() = default;
@@ -43,6 +60,9 @@ namespace VKE::Scene {
         virtual void SyncToSystems(SceneSystems& systems) {}
         // Deletes the component's entry from the systems.
         virtual void DisconnectFromSystems(SceneSystems& systems) {}
+
+        // Called by ApplyPropertyChanges. Marks the component for sync by default.
+        virtual void OnPropertiesChanged(const Assets::AssetManager& assets);
 
         GameObject* m_Owner = nullptr;
     };

@@ -15,4 +15,12 @@ namespace VKE::Scene {
         return m_Owner->MarkSyncNeeded();
     }
 
+    void Component::ApplyPropertyChanges(const Assets::AssetManager& assets) {
+        OnPropertiesChanged(assets);
+    }
+
+    void Component::OnPropertiesChanged(const Assets::AssetManager&) {
+        MarkSyncNeeded();
+    }
+
 } // namespace VKE::Scene

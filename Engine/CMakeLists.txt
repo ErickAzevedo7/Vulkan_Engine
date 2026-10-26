@@ -3,6 +3,7 @@ project(VulkanEngine_Engine)
 add_library(VKE_Engine INTERFACE)
 
 # Phase 1 modules
+add_subdirectory(reflection)
 add_subdirectory(core)
 add_subdirectory(math)
 add_subdirectory(events)
@@ -21,6 +22,7 @@ add_subdirectory(scene)
 
 # The parent aggregates all modules — modules do NOT link to VKE_Engine themselves
 target_link_libraries(VKE_Engine INTERFACE
+    VKE_Reflection
     VKE_Core
     VKE_Math
     VKE_Events

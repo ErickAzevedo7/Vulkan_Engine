@@ -9,7 +9,6 @@
 
 #include <string>
 #include <type_traits>
-#include <typeindex>
 #include <utility>
 #include <vector>
 
@@ -82,6 +81,11 @@ namespace VKE::Scene {
 
         ComponentRange GetComponents() const { return ComponentRange(m_Components); }
 
+        // Adds a component of a registered type, as a scene file names it. Returns the existing
+        // one if the object already has that type, or null if the type can't be added by name.
+        Component* AddComponent(ComponentTypeID type);
+        Component* GetComponent(ComponentTypeID type) const;
+
         // Returns the existing component if the object already has one of this type.
         template<typename T, typename... Args>
         T* AddComponent(Args&&... args) {
@@ -91,14 +95,14 @@ namespace VKE::Scene {
 
             Iunique<T> component(new T(std::forward<Args>(args)...));
             T* result = component.get();
-            AttachComponent(std::type_index(typeid(T)), std::move(component));
+            AttachComponent(ComponentRegistry::GetID<T>(), std::move(component));
             return result;
         }
 
         // Finds the exact type: a component of a derived type doesn't match.
         template<typename T>
         T* GetComponent() const {
-            return static_cast<T*>(FindComponent(std::type_index(typeid(T))));
+            return static_cast<T*>(GetComponent(ComponentRegistry::GetID<T>()));
         }
 
         template<typename T>
@@ -127,14 +131,13 @@ namespace VKE::Scene {
         friend class Scene;
 
         struct ComponentEntry {
-            std::type_index Type;
+            ComponentTypeID Type;
             Iunique<Component> Instance;
         };
 
         GameObject(Scene& scene, std::string name);
 
-        void AttachComponent(std::type_index type, Iunique<Component> component);
-        Component* FindComponent(std::type_index type) const;
+        void AttachComponent(ComponentTypeID type, Iunique<Component> component);
         void RemoveComponent(Component& component);
 
         // Has the scene sync this object's components at its next update. Returns false if

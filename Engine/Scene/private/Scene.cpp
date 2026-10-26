@@ -45,6 +45,19 @@ namespace VKE::Scene {
         return result;
     }
 
+    GameObject& Scene::CreateObject(std::string name, ObjectID id) {
+        GameObject& object = CreateObject(std::move(name));
+        object.m_ID = id;
+        return object;
+    }
+
+    GameObject* Scene::FindByID(ObjectID id) const {
+        for (const Iunique<GameObject>& object : m_Objects.Values()) {
+            if (object->GetID() == id) return object.get();
+        }
+        return nullptr;
+    }
+
     void Scene::Destroy(GameObject& object) {
         std::vector<GameObject*> doomed;
         CollectPostOrder(object, doomed);
@@ -127,11 +140,11 @@ namespace VKE::Scene {
         return true;
     }
 
-    void Scene::ConnectComponent(Component& component, std::type_index type) {
+    void Scene::ConnectComponent(Component& component, ComponentTypeID type) {
         SceneSystems systems = GetSystems();
         component.ConnectToSystems(systems);
 
-        if (!m_MainCamera && type == std::type_index(typeid(CameraComponent))) {
+        if (!m_MainCamera && type == ComponentRegistry::GetID<CameraComponent>()) {
             m_MainCamera = static_cast<CameraComponent*>(&component);
         }
     }

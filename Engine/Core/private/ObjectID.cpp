@@ -1,19 +1,18 @@
+#include <core/IDUtils.h>
 #include <core/ObjectID.h>
-
-#include <random>
 
 namespace VKE {
 
     ObjectID ObjectID::Generate() {
-        // Each call reads the system's random source, unlike a seeded generator, whose whole
-        // sequence would repeat in any run that drew the same seed.
-        thread_local std::random_device device;
+        return ObjectID(GenerateID());
+    }
 
-        u64 id;
-        do {
-            id = (static_cast<u64>(device()) << 32) | static_cast<u64>(device());
-        } while (id == 0);
-        return ObjectID(id);
+    std::string ObjectID::ToString() const {
+        return FormatID(m_ID);
+    }
+
+    ObjectID ObjectID::Parse(const std::string& text) {
+        return ObjectID(ParseID(text));
     }
 
 } // namespace VKE

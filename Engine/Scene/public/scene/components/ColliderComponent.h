@@ -19,6 +19,8 @@ namespace VKE::Scene {
     // object; a trigger only reports overlaps. What touched what is in Scene::GetContacts.
     // Leaves the physics world while its object is inactive.
     class ColliderComponent final : public Component {
+        VKE_COMPONENT(ColliderComponent)
+
     public:
         ColliderComponent() = default;
 
@@ -44,16 +46,17 @@ namespace VKE::Scene {
         void ConnectToSystems(SceneSystems& systems) override;
         void SyncToSystems(SceneSystems& systems) override;
         void DisconnectFromSystems(SceneSystems& systems) override;
+        void OnPropertiesChanged(const Assets::AssetManager& assets) override;
 
         void ReleaseMeshShape(SceneSystems& systems);
         void DestroyBody(SceneSystems& systems);
 
-        Physics::ShapeType m_Shape = Physics::ShapeType::Box;
-        Vec3 m_BoxCenter{0.0f};
-        Vec3 m_BoxHalfExtents{0.5f};
-        Handle<Assets::MeshData> m_Mesh;
-        Physics::BodyMotion m_Motion = Physics::BodyMotion::Static;
-        bool m_IsTrigger = false;
+        VKE_PROPERTY() Physics::ShapeType m_Shape = Physics::ShapeType::Box;
+        VKE_PROPERTY() Vec3 m_BoxCenter{0.0f};
+        VKE_PROPERTY() Vec3 m_BoxHalfExtents{0.5f};
+        VKE_PROPERTY() Handle<Assets::MeshData> m_Mesh;
+        VKE_PROPERTY() Physics::BodyMotion m_Motion = Physics::BodyMotion::Static;
+        VKE_PROPERTY() bool m_IsTrigger = false;
 
         // Triangles read by SetMesh, until the next sync turns them into a shape.
         Iunique<Physics::MeshShapeDesc> m_PendingGeometry;

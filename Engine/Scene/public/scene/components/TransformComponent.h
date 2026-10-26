@@ -18,6 +18,8 @@ namespace VKE::Scene {
     // Both spaces are read as a Transform (GetLocal().Position, GetWorld().GetForward(), ...)
     // and written through setters, which keep the world values up to date.
     class TransformComponent final : public Component {
+        VKE_COMPONENT(TransformComponent, NotAddable)
+
     public:
         // Created by GameObject; AddComponent refuses a second one.
         TransformComponent() = default;
@@ -38,6 +40,8 @@ namespace VKE::Scene {
         const Mat4& GetWorldMatrix() const;
 
     private:
+        void OnPropertiesChanged(const Assets::AssetManager& assets) override;
+
         // Recomputes the world values if a change made them stale.
         void UpdateWorld() const;
 
@@ -48,7 +52,7 @@ namespace VKE::Scene {
         // objects synced at the end of the scene update.
         void MarkChanged();
 
-        Transform m_Local;
+        VKE_PROPERTY() Transform m_Local;
         // Recomputed on the first read after a change, which can happen inside const getters.
         mutable Transform m_World;
         mutable Mat4 m_WorldMatrix{1.0f};

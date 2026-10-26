@@ -23,6 +23,12 @@ namespace VKE::Scene {
         MarkChanged();
     }
 
+    void TransformComponent::OnPropertiesChanged(const Assets::AssetManager&) {
+        // The local values were written directly, so the world values of the object and its
+        // children are stale.
+        MarkChanged();
+    }
+
     const Transform& TransformComponent::GetWorld() const {
         UpdateWorld();
         return m_World;

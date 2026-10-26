@@ -8,6 +8,7 @@
 #include <scene/GameObject.h>
 #include <scene/ModelInstantiation.h>
 #include <scene/Scene.h>
+#include <scene/SceneSerializer.h>
 #include <scene/components/CameraComponent.h>
 #include <scene/components/ColliderComponent.h>
 #include <scene/components/LightComponent.h>
@@ -28,33 +29,11 @@ namespace VKE {
             return glm::quatLookAt(forward, up);
         }
 
-        // A cube centered on the origin, `size` across, with a flat normal per face.
-        Assets::MeshData MakeCube(f32 size) {
-            Assets::MeshData cube;
-            cube.Name = "Cube";
-            const f32 half = 0.5f * size;
-            const Vec3 normals[] = {Vec3(1, 0, 0),  Vec3(-1, 0, 0), Vec3(0, 1, 0),
-                                    Vec3(0, -1, 0), Vec3(0, 0, 1),  Vec3(0, 0, -1)};
-            for (const Vec3& normal : normals) {
-                // Two axes across the face, so (u, v, normal) is right-handed and the corners go
-                // counterclockwise seen from outside.
-                Vec3 u = std::abs(normal.y) > 0.5f ? Vec3(1, 0, 0) : glm::cross(Vec3(0, 1, 0), normal);
-                Vec3 v = glm::cross(normal, u);
-                u32 base = static_cast<u32>(cube.Vertices.size());
-                for (Vec2 corner : {Vec2(-1, -1), Vec2(1, -1), Vec2(1, 1), Vec2(-1, 1)}) {
-                    Assets::Vertex vertex;
-                    vertex.Position = half * (normal + corner.x * u + corner.y * v);
-                    vertex.Normal = normal;
-                    vertex.UV = corner * 0.5f + 0.5f;
-                    vertex.Tangent = Vec4(u, 1.0f);
-                    cube.Vertices.push_back(vertex);
-                }
-                for (u32 index : {0u, 1u, 2u, 0u, 2u, 3u}) {
-                    cube.Indices.push_back(base + index);
-                }
+        Scene::GameObject* FindRoot(Scene::Scene& scene, const std::string& name) {
+            for (Scene::GameObject* root : scene.GetRootObjects()) {
+                if (root->GetName() == name) return root;
             }
-            cube.Submeshes.push_back({0, static_cast<u32>(cube.Indices.size()), 0});
-            return cube;
+            return nullptr;
         }
 
         // Yaw turns right as it grows, which is a negative turn around +Y.
@@ -71,6 +50,13 @@ namespace VKE {
     SandboxSceneSystem::~SandboxSceneSystem() = default;
 
     void SandboxSceneSystem::OnInitialize() {
+        m_Cube = m_Assets.LoadModel("sandbox/Cube.obj");
+        m_FloorMaterial = m_Assets.LoadMaterial("sandbox/Floor.mat");
+        m_BoxMaterial = m_Assets.LoadMaterial("sandbox/Box.mat");
+        m_BoxInsideMaterial = m_Assets.LoadMaterial("sandbox/BoxInside.mat");
+        m_SmoothPlastic = m_Assets.LoadMaterial("sandbox/SmoothPlastic.mat");
+        m_RoughMetal = m_Assets.LoadMaterial("sandbox/RoughMetal.mat");
+
         CreateHelmetScene();
         m_ActiveScene = &m_HelmetScene;
     }
@@ -149,20 +135,6 @@ namespace VKE {
         Scene::LightSettings orangeLight = blueLight;
         orangeLight.Color = Vec3(1.0f, 0.55f, 0.2f);
         CreateLight(scene, "Orange light", Vec3(-1.5f, 0.3f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), orangeLight);
-
-        Assets::MaterialData plastic;
-        plastic.Name = "SmoothPlastic";
-        plastic.BaseColor = Vec4(0.8f, 0.1f, 0.1f, 1.0f);
-        plastic.Metallic = 0.0f;
-        plastic.Roughness = 0.2f;
-        m_SmoothPlastic = m_Assets.AddMaterial(plastic);
-
-        Assets::MaterialData metal;
-        metal.Name = "RoughMetal";
-        metal.BaseColor = Vec4(0.95f, 0.8f, 0.5f, 1.0f);
-        metal.Metallic = 1.0f;
-        metal.Roughness = 0.7f;
-        m_RoughMetal = m_Assets.AddMaterial(metal);
     }
 
     void SandboxSceneSystem::CreateSponzaScene() {
@@ -212,25 +184,18 @@ namespace VKE {
     void SandboxSceneSystem::CreateCollisionTest(Scene::Scene& scene) {
         constexpr f32 kBoxSize = 0.5f;
 
-        Assets::MaterialData material;
-        material.Name = "Box";
-        material.BaseColor = Vec4(0.8f, 0.35f, 0.1f, 1.0f);
-        material.Metallic = 0.0f;
-        material.Roughness = 0.5f;
-        m_BoxMaterial = m_Assets.AddMaterial(material);
-        material.Name = "BoxInside";
-        material.BaseColor = Vec4(0.1f, 0.8f, 0.2f, 1.0f);
-        m_BoxInsideMaterial = m_Assets.AddMaterial(material);
-
         // Starts sunk into the floor; the first update pushes it up onto it.
-        Scene::GameObject& box = scene.CreateObject("Box");
-        box.GetTransform().SetLocalPosition(Vec3(-7.0f, 0.1f, -0.4f));
-        auto* mesh = box.AddComponent<Scene::MeshComponent>(m_Assets.AddMesh(MakeCube(kBoxSize)));
-        mesh->SetMaterials({m_BoxMaterial});
-        auto* collider = box.AddComponent<Scene::ColliderComponent>();
-        collider->SetBox(Vec3(0.0f), Vec3(0.5f * kBoxSize));
+        Scene::GameObject* box = Scene::InstantiateModel(scene, m_Assets, m_Cube);
+        if (!box) return;
+        box->SetName("Box");
+        box->GetTransform().SetLocalPosition(Vec3(-7.0f, 0.1f, -0.4f));
+        box->GetTransform().SetLocalScale(Vec3(kBoxSize));
+        if (auto* mesh = box->GetComponentInChildren<Scene::MeshComponent>()) mesh->SetMaterials({m_BoxMaterial});
+        // The unit cube, scaled with the object.
+        auto* collider = box->AddComponent<Scene::ColliderComponent>();
+        collider->SetBox(Vec3(0.0f), Vec3(0.5f));
         collider->SetMotion(Physics::BodyMotion::Movable);
-        m_Box = box.GetHandle();
+        m_Box = box->GetHandle();
 
         Scene::GameObject& zone = scene.CreateObject("Trigger zone");
         zone.GetTransform().SetLocalPosition(Vec3(-3.0f, 0.5f, -0.4f));
@@ -275,7 +240,7 @@ namespace VKE {
 
             if (other == m_TriggerZone) {
                 Scene::GameObject* box = scene.Get(m_Box);
-                if (auto* mesh = box ? box->GetComponent<Scene::MeshComponent>() : nullptr) {
+                if (auto* mesh = box ? box->GetComponentInChildren<Scene::MeshComponent>() : nullptr) {
                     mesh->SetMaterials({begins ? m_BoxInsideMaterial : m_BoxMaterial});
                 }
             }
@@ -380,6 +345,8 @@ namespace VKE {
         if (m_Input.IsKeyPressed(Platform::KeyCode::Tab)) {
             SwitchScene();
         }
+        if (m_Input.IsKeyPressed(Platform::KeyCode::F5)) SaveActiveScene();
+        if (m_Input.IsKeyPressed(Platform::KeyCode::F9)) ReloadActiveScene();
 
         UpdateFrameTimeLog(ft.GetDeltaF());
 
@@ -408,32 +375,54 @@ namespace VKE {
     }
 
     void SandboxSceneSystem::CreateFloor() {
-        constexpr f32 kHalfSize = 10.0f;
+        constexpr f32 kSize = 20.0f;
+        constexpr f32 kThickness = 0.05f;
         constexpr f32 kHeight = -1.2f;
 
-        Assets::MeshData floor;
-        floor.Name = "Floor";
-        for (Vec2 corner : {Vec2(-1.0f, -1.0f), Vec2(-1.0f, 1.0f), Vec2(1.0f, 1.0f), Vec2(1.0f, -1.0f)}) {
-            Assets::Vertex vertex;
-            vertex.Position = Vec3(corner.x * kHalfSize, 0.0f, corner.y * kHalfSize);
-            vertex.Normal = Vec3(0.0f, 1.0f, 0.0f);
-            vertex.UV = corner * 0.5f + 0.5f;
-            vertex.Tangent = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
-            floor.Vertices.push_back(vertex);
+        Scene::GameObject* floor = Scene::InstantiateModel(*m_HelmetScene.Instance, m_Assets, m_Cube);
+        if (!floor) return;
+        floor->SetName("Floor");
+        // The top face at kHeight.
+        floor->GetTransform().SetLocalPosition(Vec3(0.0f, kHeight - 0.5f * kThickness, 0.0f));
+        floor->GetTransform().SetLocalScale(Vec3(kSize, kThickness, kSize));
+        if (auto* mesh = floor->GetComponentInChildren<Scene::MeshComponent>()) mesh->SetMaterials({m_FloorMaterial});
+    }
+
+    std::filesystem::path SandboxSceneSystem::GetSceneFile() const {
+        const char* name = m_ActiveScene == &m_HelmetScene ? "Helmet.scene" : "Sponza.scene";
+        return m_Assets.GetAssetRoot() / "sandbox" / name;
+    }
+
+    void SandboxSceneSystem::SaveActiveScene() {
+        Scene::SceneSerializer::Save(*m_ActiveScene->Instance, m_Assets, GetSceneFile());
+    }
+
+    void SandboxSceneSystem::ReloadActiveScene() {
+        auto scene = MakeIunique<Scene::Scene>();
+        if (!Scene::SceneSerializer::Load(*scene, m_Assets, GetSceneFile())) return;
+
+        SandboxScene& active = *m_ActiveScene;
+        active.Instance = std::move(scene);
+
+        // The handles the sandbox keeps point into the old scene; find the same objects again.
+        active.Camera = {};
+        if (Scene::CameraComponent* camera = active.Instance->GetMainCamera()) {
+            active.Camera = camera->GetOwner().GetHandle();
+            Vec3 forward = camera->GetTransform().GetWorld().GetForward();
+            active.Pitch = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
+            active.Yaw = std::atan2(forward.x, -forward.z);
         }
-        floor.Indices = {0, 1, 2, 0, 2, 3};
-        floor.Submeshes.push_back({0, 6, 0});
-
-        Assets::MaterialData material;
-        material.Name = "Floor";
-        material.BaseColor = Vec4(0.6f, 0.6f, 0.6f, 1.0f);
-        material.Metallic = 0.0f;
-        material.Roughness = 0.8f;
-
-        Scene::GameObject& object = m_HelmetScene.Instance->CreateObject("Floor");
-        object.GetTransform().SetLocalPosition(Vec3(0.0f, kHeight, 0.0f));
-        auto* mesh = object.AddComponent<Scene::MeshComponent>(m_Assets.AddMesh(std::move(floor)));
-        mesh->SetMaterials({m_Assets.AddMaterial(material)});
+        auto find = [&](const char* name) {
+            Scene::GameObject* object = FindRoot(*active.Instance, name);
+            return object ? object->GetHandle() : Handle<Scene::GameObject>{};
+        };
+        if (m_ActiveScene == &m_HelmetScene) {
+            m_Helmet = find("DamagedHelmet");
+            m_TemporaryHelmet = {};
+        } else {
+            m_Box = find("Box");
+            m_TriggerZone = find("Trigger zone");
+        }
     }
 
 } // namespace VKE

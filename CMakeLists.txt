@@ -14,6 +14,10 @@ find_package(Vulkan REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VkeShaders)
+include(VkeReflection)
+
+# Build tools the engine's build runs
+add_subdirectory(tools/reflect)
 
 # Engine library (all modules)
 add_subdirectory(engine)

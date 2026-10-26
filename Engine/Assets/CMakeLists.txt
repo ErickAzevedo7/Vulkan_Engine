@@ -1,11 +1,12 @@
 add_library(VKE_Assets STATIC)
 
 find_package(assimp CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 
 target_sources(VKE_Assets PRIVATE
     private/AssetManager.cpp
+    private/AssetCatalog.cpp
     private/importers/ModelImporter.cpp
     private/importers/TextureImporter.cpp
     private/importers/MaterialImporter.cpp
@@ -22,7 +23,7 @@ target_link_libraries(VKE_Assets
             VKE_Math
     PRIVATE VKE_Platform
             assimp::assimp
-            nlohmann_json::nlohmann_json
+            yaml-cpp::yaml-cpp
 )
 
 set_target_properties(VKE_Assets PROPERTIES FOLDER "Engine")

@@ -21,6 +21,7 @@ target_link_libraries(VKE_Renderer
     PUBLIC  VKE_Core
             VKE_Math
             VKE_Assets
+            VKE_Reflection
     PRIVATE VKE_RHI
             VKE_Platform
 )

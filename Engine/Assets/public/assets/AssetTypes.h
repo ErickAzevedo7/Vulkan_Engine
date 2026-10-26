@@ -1,13 +1,33 @@
 #pragma once
 
 #include <core/Handle.h>
+#include <core/IDUtils.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <array>
+#include <functional>
 #include <string>
 #include <vector>
 
 namespace VKE::Assets {
+
+    // Identifies an asset across runs, and across renames and moves of its file, which keeps it
+    // in a .vkasset file next to itself. Meshes and materials inside a model file have their own,
+    // kept in the model's .vkasset. A default-constructed ID is invalid.
+    struct AssetID {
+        u64 Value = 0;
+
+        bool IsValid() const { return Value != 0; }
+        bool operator==(const AssetID& other) const { return Value == other.Value; }
+        bool operator!=(const AssetID& other) const { return Value != other.Value; }
+
+        // A new random ID, never zero.
+        static AssetID Generate() { return {GenerateID()}; }
+        // As IDs are written in files (see FormatID). Parsing returns an invalid ID for anything
+        // FormatID wouldn't write.
+        std::string ToString() const { return FormatID(Value); }
+        static AssetID Parse(const std::string& text) { return {ParseID(text)}; }
+    };
 
     struct Vertex {
         Vec3 Position;
@@ -31,6 +51,8 @@ namespace VKE::Assets {
     // Geometry from one file. All submeshes share the vertex and index arrays.
     struct MeshData {
         std::string Name;
+        // The asset it was loaded from, set by the AssetManager. Invalid for assets made in code.
+        AssetID ID;
         std::vector<Vertex> Vertices;
         std::vector<u32> Indices;
         std::vector<Submesh> Submeshes;
@@ -52,6 +74,8 @@ namespace VKE::Assets {
     // and the first node is the root.
     struct ModelData {
         std::string Name;
+        // The asset it was loaded from, set by the AssetManager. Invalid for assets made in code.
+        AssetID ID;
         std::vector<ModelNode> Nodes;
     };
 
@@ -69,6 +93,8 @@ namespace VKE::Assets {
     // Four channels per pixel, top row first.
     struct TextureData {
         std::string Name;
+        // The asset it was loaded from, set by the AssetManager. Invalid for assets made in code.
+        AssetID ID;
         u32 Width = 0;
         u32 Height = 0;
         ColorSpace ColorSpace = ColorSpace::Linear;
@@ -90,6 +116,8 @@ namespace VKE::Assets {
     // Each texture is scaled by its matching factor.
     struct MaterialData {
         std::string Name;
+        // The asset it was loaded from, set by the AssetManager. Invalid for assets made in code.
+        AssetID ID;
         Vec4 BaseColor{1.0f};
         Vec3 Emissive{0.0f};
         f32 Metallic = 1.0f;
@@ -99,3 +127,10 @@ namespace VKE::Assets {
     };
 
 } // namespace VKE::Assets
+
+namespace std {
+    template<>
+    struct hash<VKE::Assets::AssetID> {
+        size_t operator()(const VKE::Assets::AssetID& id) const { return hash<VKE::u64>()(id.Value); }
+    };
+} // namespace std

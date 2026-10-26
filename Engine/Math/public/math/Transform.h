@@ -1,12 +1,14 @@
 #pragma once
 
 #include <math/MathTypes.h>
+#include <reflection/Marks.h>
 
 namespace VKE {
+    VKE_STRUCT()
     struct Transform {
-        Vec3 Position{0.0f, 0.0f, 0.0f};
-        Quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
-        Vec3 Scale{1.0f, 1.0f, 1.0f};
+        VKE_PROPERTY() Vec3 Position{0.0f, 0.0f, 0.0f};
+        VKE_PROPERTY() Quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        VKE_PROPERTY() Vec3 Scale{1.0f, 1.0f, 1.0f};
 
         Mat4 GetMatrix() const;
         Mat4 GetInverseMatrix() const;

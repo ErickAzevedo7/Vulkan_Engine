@@ -14,6 +14,7 @@ target_include_directories(VKE_Math
 
 target_link_libraries(VKE_Math
     PUBLIC  glm::glm
+            VKE_Reflection
 )
 
 set_target_properties(VKE_Math PROPERTIES FOLDER "Engine")

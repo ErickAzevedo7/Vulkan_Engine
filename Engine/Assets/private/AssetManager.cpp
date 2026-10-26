@@ -1,25 +1,14 @@
 #include "assets/AssetManager.h"
+#include "AssetCatalog.h"
 #include "importers/Importers.h"
 
 #include <core/Log.h>
 
-#include <algorithm>
-#include <cctype>
+#include <unordered_set>
 
 namespace VKE::Assets {
 
     namespace {
-        std::string MakeCacheKey(const std::filesystem::path& file) {
-            std::error_code ec;
-            std::filesystem::path canonical = std::filesystem::weakly_canonical(file, ec);
-            std::string key = (ec ? file : canonical).generic_string();
-#ifdef _WIN32
-            std::transform(key.begin(), key.end(), key.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-#endif
-            return key;
-        }
-
         TextureData MakeSolidTexture(const char* name, u8 r, u8 g, u8 b) {
             TextureData texture;
             texture.Name = name;
@@ -29,20 +18,39 @@ namespace VKE::Assets {
             texture.Pixels = {r, g, b, 255};
             return texture;
         }
+
+        // Names inside a model file can repeat; later ones get "#2", "#3", ... in the order seen.
+        std::vector<std::string> MakeUniqueNames(const std::vector<std::string>& names, const char* fallback) {
+            std::unordered_set<std::string> taken;
+            std::vector<std::string> unique;
+            unique.reserve(names.size());
+            for (const std::string& name : names) {
+                std::string base = name.empty() ? fallback : name;
+                std::string candidate = base;
+                for (u32 suffix = 2; taken.count(candidate); ++suffix) {
+                    candidate = base + "#" + std::to_string(suffix);
+                }
+                taken.insert(candidate);
+                unique.push_back(std::move(candidate));
+            }
+            return unique;
+        }
     } // namespace
 
     AssetManager::AssetManager(std::filesystem::path assetRoot)
-        : m_AssetRoot(std::move(assetRoot)) {
+        : m_AssetRoot(std::move(assetRoot)), m_Catalog(MakeIunique<AssetCatalog>(m_AssetRoot)) {
         CreateDefaultTextures();
     }
+
+    AssetManager::~AssetManager() = default;
 
     void AssetManager::OnInitialize() {
         std::error_code ec;
         if (!std::filesystem::is_directory(m_AssetRoot, ec)) {
             VKE_CORE_WARN("AssetManager: asset root '{}' does not exist", m_AssetRoot.string());
-        } else {
-            VKE_CORE_INFO("AssetManager: asset root '{}'", m_AssetRoot.string());
+            return;
         }
+        m_Catalog->Scan();
     }
 
     std::filesystem::path AssetManager::Resolve(const std::string& path) const {
@@ -50,16 +58,34 @@ namespace VKE::Assets {
         return asPath.is_absolute() ? asPath : m_AssetRoot / asPath;
     }
 
-    Handle<ModelData> AssetManager::LoadModel(const std::string& path) {
+    AssetID AssetManager::FindAsset(const std::string& path) {
         std::filesystem::path file = Resolve(path);
-        std::string key = MakeCacheKey(file);
-        if (auto it = m_ModelCache.find(key); it != m_ModelCache.end() && m_Models.Contains(it->second)) {
-            return it->second;
+        const AssetEntry* entry = m_Catalog->FindByFile(file, true);
+        if (!entry) {
+            std::error_code ec;
+            if (!std::filesystem::exists(file, ec)) {
+                VKE_CORE_ERROR("AssetManager: '{}' doesn't exist", file.string());
+            } else {
+                VKE_CORE_ERROR("AssetManager: '{}' isn't an asset under '{}'", path, m_AssetRoot.string());
+            }
+            return {};
+        }
+        return entry->ID;
+    }
+
+    Handle<ModelData> AssetManager::LoadModel(AssetID id) {
+        if (auto it = m_LoadedModels.find(id); it != m_LoadedModels.end()) return it->second;
+
+        const AssetEntry* entry = m_Catalog->Find(id);
+        if (!entry || entry->Type != AssetType::Model) {
+            if (id.IsValid()) VKE_CORE_ERROR("AssetManager: no model has the ID {}", id.ToString());
+            return {};
         }
 
         ModelData model;
+        std::filesystem::path file = m_Catalog->GetFile(*entry);
         if (!Importers::ImportModel(*this, file, model)) {
-            VKE_CORE_ERROR("AssetManager: failed to load model '{}'", file.string());
+            VKE_CORE_ERROR("AssetManager: failed to load model '{}'", entry->Path);
             return {};
         }
 
@@ -71,52 +97,145 @@ namespace VKE::Assets {
                 vertexCount += mesh->Vertices.size();
             }
         }
-        VKE_CORE_INFO("Loaded model '{}': {} nodes, {} meshes on nodes, {} vertices", path, model.Nodes.size(),
+        VKE_CORE_INFO("Loaded model '{}': {} nodes, {} meshes on nodes, {} vertices", entry->Path, model.Nodes.size(),
                       meshCount, vertexCount);
 
+        AssignSubAssets(id, model);
+        model.ID = id;
         Handle<ModelData> handle = m_Models.Emplace(std::move(model));
-        m_ModelCache[key] = handle;
+        m_LoadedModels[id] = handle;
         return handle;
     }
 
-    Handle<TextureData> AssetManager::LoadTexture(const std::string& path, ColorSpace colorSpace) {
-        std::filesystem::path file = Resolve(path);
-        // The same image is a different texture in each color space.
-        std::string key = MakeCacheKey(file) + (colorSpace == ColorSpace::SRGB ? "|srgb" : "|linear");
-        if (auto it = m_TextureCache.find(key); it != m_TextureCache.end() && m_Textures.Contains(it->second)) {
-            return it->second;
+    void AssetManager::AssignSubAssets(AssetID id, const ModelData& model) {
+        // Each mesh once, in node order, and each material once, in the order the meshes use them.
+        std::vector<Handle<MeshData>> meshes;
+        std::vector<Handle<MaterialData>> materials;
+        std::unordered_set<Handle<MeshData>> seenMeshes;
+        std::unordered_set<Handle<MaterialData>> seenMaterials;
+        for (const ModelNode& node : model.Nodes) {
+            const MeshData* mesh = GetMesh(node.Mesh);
+            if (!mesh || !seenMeshes.insert(node.Mesh).second) continue;
+            meshes.push_back(node.Mesh);
+            for (Handle<MaterialData> material : mesh->Materials) {
+                if (seenMaterials.insert(material).second) materials.push_back(material);
+            }
         }
 
-        TextureData texture;
-        if (!Importers::ImportTexture(file, colorSpace, texture)) {
-            VKE_CORE_ERROR("AssetManager: failed to load texture '{}'", file.string());
+        std::vector<std::string> meshNames;
+        for (Handle<MeshData> mesh : meshes) {
+            meshNames.push_back(GetMesh(mesh)->Name);
+        }
+        std::vector<std::string> materialNames;
+        for (Handle<MaterialData> material : materials) {
+            const MaterialData* data = GetMaterial(material);
+            materialNames.push_back(data ? data->Name : std::string());
+        }
+
+        std::vector<AssetID> meshIDs;
+        std::vector<AssetID> materialIDs;
+        m_Catalog->AssignSubAssets(id, MakeUniqueNames(meshNames, "Mesh"), MakeUniqueNames(materialNames, "Material"),
+                                   meshIDs, materialIDs);
+        for (size_t i = 0; i < meshes.size(); ++i) {
+            m_LoadedMeshes[meshIDs[i]] = meshes[i];
+            m_Meshes.Get(meshes[i])->ID = meshIDs[i];
+        }
+        for (size_t i = 0; i < materials.size(); ++i) {
+            m_LoadedMaterials[materialIDs[i]] = materials[i];
+            if (MaterialData* material = m_Materials.Get(materials[i])) material->ID = materialIDs[i];
+        }
+    }
+
+    Handle<TextureData> AssetManager::LoadTexture(AssetID id, ColorSpace use) {
+        const AssetEntry* entry = m_Catalog->Find(id);
+        if (!entry || entry->Type != AssetType::Texture) {
+            if (id.IsValid()) VKE_CORE_ERROR("AssetManager: no texture has the ID {}", id.ToString());
             return {};
         }
 
-        Handle<TextureData> handle = AddTexture(std::move(texture));
-        m_TextureCache[key] = handle;
-        return handle;
+        ColorSpace colorSpace = entry->ColorSpace == TextureColorSpace::SRGB     ? ColorSpace::SRGB
+                                : entry->ColorSpace == TextureColorSpace::Linear ? ColorSpace::Linear
+                                                                                 : use;
+        // The same image is a different texture in each color space.
+        Handle<TextureData>& slot = m_LoadedTextures[id][colorSpace == ColorSpace::SRGB ? 1 : 0];
+        if (m_Textures.Contains(slot)) return slot;
+
+        TextureData texture;
+        if (!Importers::ImportTexture(m_Catalog->GetFile(*entry), colorSpace, texture)) {
+            VKE_CORE_ERROR("AssetManager: failed to load texture '{}'", entry->Path);
+            return {};
+        }
+
+        slot = AddTexture(std::move(texture));
+        m_Textures.Get(slot)->ID = id;
+        return slot;
     }
 
-    Handle<MaterialData> AssetManager::LoadMaterial(const std::string& path) {
-        std::filesystem::path file = Resolve(path);
-        std::string key = MakeCacheKey(file);
-        if (auto it = m_MaterialCache.find(key); it != m_MaterialCache.end() && m_Materials.Contains(it->second)) {
-            return it->second;
+    Handle<MaterialData> AssetManager::LoadMaterial(AssetID id) {
+        if (auto it = m_LoadedMaterials.find(id); it != m_LoadedMaterials.end()) return it->second;
+
+        // A material inside a model comes with the model.
+        if (const SubAssetEntry* subAsset = m_Catalog->FindSubAsset(id)) {
+            if (subAsset->Kind != SubAssetKind::Material) return {};
+            LoadModel(subAsset->Model);
+            auto it = m_LoadedMaterials.find(id);
+            return it != m_LoadedMaterials.end() ? it->second : Handle<MaterialData>{};
+        }
+
+        const AssetEntry* entry = m_Catalog->Find(id);
+        if (!entry || entry->Type != AssetType::Material) {
+            if (id.IsValid()) VKE_CORE_ERROR("AssetManager: no material has the ID {}", id.ToString());
+            return {};
         }
 
         MaterialData material;
-        if (!Importers::ImportMaterial(*this, file, material)) {
-            VKE_CORE_ERROR("AssetManager: failed to load material '{}'", file.string());
+        if (!Importers::ImportMaterial(*this, m_Catalog->GetFile(*entry), material)) {
+            VKE_CORE_ERROR("AssetManager: failed to load material '{}'", entry->Path);
             return {};
         }
 
         Handle<MaterialData> handle = AddMaterial(std::move(material));
-        m_MaterialCache[key] = handle;
+        m_Materials.Get(handle)->ID = id;
+        m_LoadedMaterials[id] = handle;
         return handle;
     }
 
+    Handle<MeshData> AssetManager::LoadMesh(AssetID id) {
+        if (auto it = m_LoadedMeshes.find(id); it != m_LoadedMeshes.end()) return it->second;
+
+        const SubAssetEntry* subAsset = m_Catalog->FindSubAsset(id);
+        if (!subAsset || subAsset->Kind != SubAssetKind::Mesh) {
+            if (id.IsValid()) VKE_CORE_ERROR("AssetManager: no mesh has the ID {}", id.ToString());
+            return {};
+        }
+
+        LoadModel(subAsset->Model);
+        auto it = m_LoadedMeshes.find(id);
+        return it != m_LoadedMeshes.end() ? it->second : Handle<MeshData>{};
+    }
+
+    AssetID AssetManager::GetID(Handle<ModelData> handle) const {
+        const ModelData* model = GetModel(handle);
+        return model ? model->ID : AssetID{};
+    }
+
+    AssetID AssetManager::GetID(Handle<MeshData> handle) const {
+        const MeshData* mesh = GetMesh(handle);
+        return mesh ? mesh->ID : AssetID{};
+    }
+
+    AssetID AssetManager::GetID(Handle<TextureData> handle) const {
+        const TextureData* texture = GetTexture(handle);
+        return texture ? texture->ID : AssetID{};
+    }
+
+    AssetID AssetManager::GetID(Handle<MaterialData> handle) const {
+        const MaterialData* material = GetMaterial(handle);
+        return material ? material->ID : AssetID{};
+    }
+
     Handle<MeshData> AssetManager::AddMesh(MeshData mesh) {
+        mesh.ID = {};
         // Geometry is only drawn through submeshes, so a mesh with none gets one covering it all.
         if (mesh.Submeshes.empty() && !mesh.Indices.empty()) {
             Submesh submesh;
@@ -127,10 +246,12 @@ namespace VKE::Assets {
     }
 
     Handle<TextureData> AssetManager::AddTexture(TextureData texture) {
+        texture.ID = {};
         return m_Textures.Emplace(std::move(texture));
     }
 
     Handle<MaterialData> AssetManager::AddMaterial(MaterialData material) {
+        material.ID = {};
         auto fill = [&](MaterialTexture slot, DefaultTexture fallback) {
             Handle<TextureData>& texture = material.Textures[static_cast<size_t>(slot)];
             if (!m_Textures.Contains(texture)) texture = GetDefaultTexture(fallback);
