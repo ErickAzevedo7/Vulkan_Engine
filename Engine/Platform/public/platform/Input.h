@@ -2,6 +2,7 @@
 
 #include <core/Types.h>
 #include "platform/KeyCode.h"
+#include <vector>
 
 namespace VKE::Platform {
 
@@ -29,6 +30,11 @@ namespace VKE::Platform {
         // Accumulated scroll delta since the last Update() call.
         virtual f32 GetScrollDeltaX() const = 0;
         virtual f32 GetScrollDeltaY() const = 0;
+
+        // Characters typed before the last Update() call, as Unicode code points in typing
+        // order. They follow the keyboard layout and repeat while a key is held, unlike the
+        // key state above, so text fields read these.
+        virtual const std::vector<u32>& GetTypedCharacters() const = 0;
 
         // Refreshes Down state and recomputes Pressed/Released against the
         // previous frame; clears the scroll accumulator. Call once per

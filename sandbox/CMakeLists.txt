@@ -18,3 +18,4 @@ target_compile_definitions(Sandbox PRIVATE
 set_target_properties(Sandbox PROPERTIES FOLDER "Apps")
 
 vke_stage_shaders(Sandbox RendererShaders)
+vke_stage_ui_fonts(Sandbox)

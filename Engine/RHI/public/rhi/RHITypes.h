@@ -216,6 +216,14 @@ namespace VKE::RHI {
     // Pipeline
     // -------------------------------------------------------------------------
 
+    enum class BlendMode {
+        // The output replaces what is in the attachment.
+        None,
+        // Mixes by the output's alpha: color = src * a + dst * (1 - a). The attachment's alpha
+        // accumulates coverage: a + dst.a * (1 - a).
+        Alpha,
+    };
+
     struct VertexAttribute {
         u32 Location = 0;
         Format Format = Format::R32G32B32_SFLOAT;
@@ -246,6 +254,9 @@ namespace VKE::RHI {
         PolygonMode PolygonMode = PolygonMode::Fill;
         CullMode CullMode = CullMode::Back;
         FrontFace FrontFace = FrontFace::CounterClockwise;
+
+        // Applied to every color attachment.
+        BlendMode Blend = BlendMode::None;
 
         bool DepthTestEnable = false;
         bool DepthWriteEnable = false;

@@ -5,6 +5,22 @@
 
 namespace VKE::Platform {
 
+    // Pointer shapes the window can show while the mouse is over it.
+    enum class CursorShape {
+        Arrow,
+        TextInput,
+        Hand,
+        ResizeAll,
+        ResizeHorizontal,
+        ResizeVertical,
+        // Top-right to bottom-left.
+        ResizeDiagonalUp,
+        // Top-left to bottom-right.
+        ResizeDiagonalDown,
+        NotAllowed,
+        Hidden,
+    };
+
     struct WindowDesc {
         std::string Title = "Vulkan Engine";
         u32 Width = 1280;
@@ -40,6 +56,12 @@ namespace VKE::Platform {
         // resets to false once read. Poll once per frame from the RHI
         // swapchain to know when to recreate it.
         virtual bool ConsumeResizedFlag() = 0;
+
+        virtual void SetCursorShape(CursorShape shape) = 0;
+
+        // Text is UTF-8. Empty when the clipboard holds no text.
+        virtual std::string GetClipboardText() const = 0;
+        virtual void SetClipboardText(const std::string& text) = 0;
 
         // Native handle for RHI surface creation (GLFWwindow* today).
         virtual void* GetNativeHandle() const = 0;

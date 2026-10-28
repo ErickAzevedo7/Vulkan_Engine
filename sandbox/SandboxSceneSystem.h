@@ -5,6 +5,7 @@
 #include <core/System.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
+#include <renderer/Overlay.h>
 
 #include <filesystem>
 #include <string>
@@ -20,6 +21,10 @@ namespace VKE::Assets {
 namespace VKE::Renderer {
     class Renderer;
 } // namespace VKE::Renderer
+
+namespace VKE::UI {
+    class UISystem;
+} // namespace VKE::UI
 
 namespace VKE::Scene {
     class GameObject;
@@ -38,9 +43,13 @@ namespace VKE {
     // and it turns green inside a trigger zone further down the atrium. F5 saves the scene
     // showing to sandbox/<Helmet|Sponza>.scene under the asset root, and F9 replaces it with
     // what that file holds. The average frame time is logged every few seconds.
+    // F1 shows and hides the UI test: a docked panel with the frame's numbers, text input, a
+    // file dialog and the design system's fonts and icons, and a Viewport panel that shows
+    // the scene through a view texture. Over the UI, the mouse and keys go to it.
     class SandboxSceneSystem : public System {
     public:
-        SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets, Renderer::Renderer& renderer);
+        SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets, Renderer::Renderer& renderer,
+                           UI::UISystem& ui);
         ~SandboxSceneSystem() override;
 
         void OnInitialize() override;
@@ -71,6 +80,7 @@ namespace VKE {
         void SaveActiveScene();
         void ReloadActiveScene();
         void SwitchScene();
+        void BuildUI();
 
         void CreateCamera(SandboxScene& scene, const Vec3& position, const Vec3& target);
         void CreateLight(Scene::Scene& scene, const std::string& name, const Vec3& position, const Vec3& direction,
@@ -79,6 +89,7 @@ namespace VKE {
         Platform::IInput& m_Input;
         Assets::AssetManager& m_Assets;
         Renderer::Renderer& m_Renderer;
+        UI::UISystem& m_UI;
 
         SandboxScene m_HelmetScene;
         SandboxScene m_SponzaScene;
@@ -107,6 +118,14 @@ namespace VKE {
         bool m_ShadowsEnabled = true;
         f32 m_FrameTimeSum = 0.0f;
         u32 m_FrameCount = 0;
+        f32 m_LastAverageFrameTime = 0.0f;
+
+        bool m_ShowUI = true;
+        bool m_ViewportVisible = false;
+        bool m_LayoutChecked = false;
+        Renderer::ViewTextureID m_ViewTexture;
+        std::string m_Note;
+        std::string m_ChosenFile;
     };
 
 } // namespace VKE

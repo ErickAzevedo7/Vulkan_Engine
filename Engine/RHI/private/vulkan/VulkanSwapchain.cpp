@@ -34,10 +34,15 @@ namespace VKE::RHI {
             return details;
         }
 
+        // Prefers a UNORM format: whoever draws to the swapchain writes sRGB-encoded values, so
+        // 2D drawing blends in the same space as the colors it was designed with. The renderer
+        // checks GetColorFormat() and lets the hardware encode when only an _SRGB one exists.
         VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
-            for (const auto& format : formats) {
-                if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                    return format;
+            for (VkFormat wanted : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM}) {
+                for (const auto& format : formats) {
+                    if (format.format == wanted && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                        return format;
+                    }
                 }
             }
             return formats[0];

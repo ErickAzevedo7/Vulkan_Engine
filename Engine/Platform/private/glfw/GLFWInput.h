@@ -25,12 +25,15 @@ namespace VKE::Platform {
         f32 GetMouseY() const override { return m_MouseY; }
         f32 GetScrollDeltaX() const override { return m_ScrollDeltaX; }
         f32 GetScrollDeltaY() const override { return m_ScrollDeltaY; }
+        const std::vector<u32>& GetTypedCharacters() const override { return m_TypedCharacters; }
 
         void Update() override;
 
         // Internal to the GLFW backend; invoked by GLFWWindow's scroll
         // callback. Not part of IInput.
         void _OnScroll(f32 xoffset, f32 yoffset);
+        // Invoked by GLFWWindow's character callback.
+        void _OnCharacter(u32 codepoint);
 
     private:
         static constexpr size_t kKeyCount = static_cast<size_t>(KeyCode::Count);
@@ -49,6 +52,8 @@ namespace VKE::Platform {
         f32 m_ScrollDeltaY = 0.0f;
         f32 m_ScrollAccumX = 0.0f;
         f32 m_ScrollAccumY = 0.0f;
+        std::vector<u32> m_TypedCharacters;
+        std::vector<u32> m_PendingCharacters;
     };
 
 } // namespace VKE::Platform

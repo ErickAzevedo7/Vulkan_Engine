@@ -2,6 +2,7 @@
 
 #include "platform/Window.h"
 #include <GLFW/glfw3.h>
+#include <array>
 
 namespace VKE::Platform {
 
@@ -21,11 +22,15 @@ namespace VKE::Platform {
 
         bool ConsumeResizedFlag() override;
 
+        void SetCursorShape(CursorShape shape) override;
+        std::string GetClipboardText() const override;
+        void SetClipboardText(const std::string& text) override;
+
         void* GetNativeHandle() const override { return m_Handle; }
 
         // Internal to the GLFW backend; not part of IWindow. GLFW allows
         // only one user pointer per window, so GLFWInput registers itself
-        // here to receive the scroll callback.
+        // here to receive the scroll and character callbacks.
         void _SetInputSink(GLFWInput* input) { m_UserData.InputSink = input; }
 
     private:
@@ -34,12 +39,17 @@ namespace VKE::Platform {
         };
 
         static void ScrollCallback(GLFWwindow* handle, double xoffset, double yoffset);
+        static void CharCallback(GLFWwindow* handle, unsigned int codepoint);
 
         GLFWwindow* m_Handle = nullptr;
         UserData m_UserData;
         u32 m_Width;
         u32 m_Height;
         bool m_Resized = false;
+        // Created the first time each shape is shown. Null for the arrow, and where the
+        // system has no such cursor.
+        std::array<GLFWcursor*, static_cast<size_t>(CursorShape::Hidden)> m_Cursors{};
+        CursorShape m_CursorShape = CursorShape::Arrow;
     };
 
 } // namespace VKE::Platform

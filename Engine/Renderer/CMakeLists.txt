@@ -2,6 +2,8 @@ add_library(VKE_Renderer STATIC)
 
 target_sources(VKE_Renderer PRIVATE
     private/Renderer.cpp
+    private/FrameRenderer.cpp
+    private/OverlayPass.cpp
     private/RenderScene.cpp
     private/Camera.cpp
     private/ForwardPath.cpp
@@ -43,6 +45,8 @@ vke_add_shaders(RendererShaders
         shaders/prefilter.frag
         shaders/brdf_lut.frag
         shaders/shadow.vert
+        shaders/overlay.vert
+        shaders/overlay.frag
     INCLUDE_DIRS
         shaders
 )

@@ -36,11 +36,15 @@ namespace VKE::Platform {
 
         glfwSetWindowUserPointer(m_Handle, &m_UserData);
         glfwSetScrollCallback(m_Handle, &GLFWWindow::ScrollCallback);
+        glfwSetCharCallback(m_Handle, &GLFWWindow::CharCallback);
 
         VKE_CORE_INFO("GLFWWindow created ({0}x{1})", desc.Width, desc.Height);
     }
 
     GLFWWindow::~GLFWWindow() {
+        for (GLFWcursor* cursor : m_Cursors) {
+            if (cursor) glfwDestroyCursor(cursor);
+        }
         if (m_Handle) {
             glfwDestroyWindow(m_Handle);
             --s_GLFWWindowCount;
@@ -72,10 +76,57 @@ namespace VKE::Platform {
         return resized;
     }
 
+    void GLFWWindow::SetCursorShape(CursorShape shape) {
+        if (shape == m_CursorShape) return;
+        m_CursorShape = shape;
+
+        if (shape == CursorShape::Hidden) {
+            glfwSetInputMode(m_Handle, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            return;
+        }
+        glfwSetInputMode(m_Handle, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+
+        GLFWcursor*& cursor = m_Cursors[static_cast<size_t>(shape)];
+        if (!cursor && shape != CursorShape::Arrow) {
+            int glfwShape = GLFW_ARROW_CURSOR;
+            switch (shape) {
+                case CursorShape::TextInput: glfwShape = GLFW_IBEAM_CURSOR; break;
+                case CursorShape::Hand: glfwShape = GLFW_POINTING_HAND_CURSOR; break;
+                case CursorShape::ResizeAll: glfwShape = GLFW_RESIZE_ALL_CURSOR; break;
+                case CursorShape::ResizeHorizontal: glfwShape = GLFW_RESIZE_EW_CURSOR; break;
+                case CursorShape::ResizeVertical: glfwShape = GLFW_RESIZE_NS_CURSOR; break;
+                case CursorShape::ResizeDiagonalUp: glfwShape = GLFW_RESIZE_NESW_CURSOR; break;
+                case CursorShape::ResizeDiagonalDown: glfwShape = GLFW_RESIZE_NWSE_CURSOR; break;
+                case CursorShape::NotAllowed: glfwShape = GLFW_NOT_ALLOWED_CURSOR; break;
+                default: break;
+            }
+            // Fails, logging an error, where the system lacks the shape; the arrow shows instead.
+            cursor = glfwCreateStandardCursor(glfwShape);
+        }
+        // A null cursor is the arrow.
+        glfwSetCursor(m_Handle, cursor);
+    }
+
+    std::string GLFWWindow::GetClipboardText() const {
+        const char* text = glfwGetClipboardString(m_Handle);
+        return text ? std::string(text) : std::string();
+    }
+
+    void GLFWWindow::SetClipboardText(const std::string& text) {
+        glfwSetClipboardString(m_Handle, text.c_str());
+    }
+
     void GLFWWindow::ScrollCallback(GLFWwindow* handle, double xoffset, double yoffset) {
         auto* data = static_cast<UserData*>(glfwGetWindowUserPointer(handle));
         if (data && data->InputSink) {
             data->InputSink->_OnScroll(static_cast<f32>(xoffset), static_cast<f32>(yoffset));
+        }
+    }
+
+    void GLFWWindow::CharCallback(GLFWwindow* handle, unsigned int codepoint) {
+        auto* data = static_cast<UserData*>(glfwGetWindowUserPointer(handle));
+        if (data && data->InputSink) {
+            data->InputSink->_OnCharacter(codepoint);
         }
     }
 

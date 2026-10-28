@@ -62,11 +62,18 @@ namespace VKE::Platform {
         m_ScrollDeltaY = m_ScrollAccumY;
         m_ScrollAccumX = 0.0f;
         m_ScrollAccumY = 0.0f;
+
+        m_TypedCharacters.swap(m_PendingCharacters);
+        m_PendingCharacters.clear();
     }
 
     void GLFWInput::_OnScroll(f32 xoffset, f32 yoffset) {
         m_ScrollAccumX += xoffset;
         m_ScrollAccumY += yoffset;
+    }
+
+    void GLFWInput::_OnCharacter(u32 codepoint) {
+        m_PendingCharacters.push_back(codepoint);
     }
 
     // Backend entry point for IInput::Create(); see Input.h. Safe to

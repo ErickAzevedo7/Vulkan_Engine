@@ -53,8 +53,10 @@ namespace VKE::Renderer {
         // asked for. An invalid handle, or one whose asset is gone, gives the stand-in sky.
         const GpuEnvironment& GetEnvironmentMaps(Handle<Assets::TextureData> source);
 
-    private:
+        // Uploaded the first time it is asked for. A handle whose asset is gone gives white.
         RHI::RHITexture& GetTexture(Handle<Assets::TextureData> handle);
+
+    private:
 
         RHI::RHIDevice& m_Device;
         Assets::AssetManager& m_Assets;

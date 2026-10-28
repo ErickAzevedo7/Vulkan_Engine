@@ -13,6 +13,15 @@
 #include <scene/components/ColliderComponent.h>
 #include <scene/components/LightComponent.h>
 #include <scene/components/MeshComponent.h>
+#include <platform/FileDialog.h>
+#include <platform/FileSystem.h>
+#include <ui/Icons.h>
+#include <ui/Style.h>
+#include <ui/UISystem.h>
+
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <imgui_stdlib.h>
 
 #include <cmath>
 #include <utility>
@@ -43,8 +52,8 @@ namespace VKE {
     } // namespace
 
     SandboxSceneSystem::SandboxSceneSystem(Platform::IInput& input, Assets::AssetManager& assets,
-                                           Renderer::Renderer& renderer)
-        : m_Input(input), m_Assets(assets), m_Renderer(renderer) {
+                                           Renderer::Renderer& renderer, UI::UISystem& ui)
+        : m_Input(input), m_Assets(assets), m_Renderer(renderer), m_UI(ui) {
     }
 
     SandboxSceneSystem::~SandboxSceneSystem() = default;
@@ -59,9 +68,13 @@ namespace VKE {
 
         CreateHelmetScene();
         m_ActiveScene = &m_HelmetScene;
+
+        m_ViewTexture = m_Renderer.CreateViewTexture(640, 360);
+        m_UI.SetLayoutFile(Platform::FileSystem::GetExecutableDirectory() / "sandbox_ui.ini");
     }
 
     void SandboxSceneSystem::OnShutdown() {
+        m_Renderer.DestroyViewTexture(m_ViewTexture);
         m_ActiveScene = nullptr;
         m_SponzaScene.Instance.reset();
         m_HelmetScene.Instance.reset();
@@ -268,7 +281,7 @@ namespace VKE {
         f32 mouseX = m_Input.GetMouseX();
         f32 mouseY = m_Input.GetMouseY();
 
-        if (m_Input.IsMouseButtonDown(Platform::MouseButton::Right)) {
+        if (m_Input.IsMouseButtonDown(Platform::MouseButton::Right) && (m_Looking || !m_UI.WantsMouse())) {
             if (m_Looking) {
                 constexpr f32 kSensitivity = 0.003f;
                 constexpr f32 kPitchLimit = 1.55f;
@@ -287,6 +300,8 @@ namespace VKE {
 
         Vec3 forward = transform.GetWorld().GetForward();
         Vec3 right = transform.GetWorld().GetRight();
+
+        if (m_UI.WantsKeyboard()) return;
 
         Vec3 move(0.0f);
         if (m_Input.IsKeyDown(KeyCode::W)) move += forward;
@@ -329,6 +344,7 @@ namespace VKE {
         m_FrameTimeSum += deltaTime;
         ++m_FrameCount;
         if (m_FrameTimeSum >= kLogInterval) {
+            m_LastAverageFrameTime = m_FrameTimeSum / static_cast<f32>(m_FrameCount);
             VKE_CORE_INFO("SandboxSceneSystem: {:.2f} ms per frame in the {} scene",
                           1000.0f * m_FrameTimeSum / static_cast<f32>(m_FrameCount),
                           m_ActiveScene == &m_HelmetScene ? "helmet" : "Sponza");
@@ -338,31 +354,35 @@ namespace VKE {
     }
 
     void SandboxSceneSystem::OnUpdate(FrameTime ft) {
-        if (m_Input.IsKeyPressed(Platform::KeyCode::Escape)) {
-            RequestExit();
-        }
+        // Keys typed into the UI are not shortcuts.
+        if (!m_UI.WantsKeyboard()) {
+            if (m_Input.IsKeyPressed(Platform::KeyCode::Escape)) {
+                RequestExit();
+            }
 
-        if (m_Input.IsKeyPressed(Platform::KeyCode::Tab)) {
-            SwitchScene();
+            if (m_Input.IsKeyPressed(Platform::KeyCode::Tab)) {
+                SwitchScene();
+            }
+            if (m_Input.IsKeyPressed(Platform::KeyCode::F1)) m_ShowUI = !m_ShowUI;
+            if (m_Input.IsKeyPressed(Platform::KeyCode::F5)) SaveActiveScene();
+            if (m_Input.IsKeyPressed(Platform::KeyCode::F9)) ReloadActiveScene();
+
+            f32 exposureStep = 0.0f;
+            if (m_Input.IsKeyDown(Platform::KeyCode::Minus)) exposureStep -= 1.0f;
+            if (m_Input.IsKeyDown(Platform::KeyCode::Equal)) exposureStep += 1.0f;
+            if (exposureStep != 0.0f) {
+                m_Exposure = glm::clamp(m_Exposure + exposureStep * ft.GetDeltaF(), 0.05f, 8.0f);
+                m_Renderer.SetExposure(m_Exposure);
+            }
+
+            if (m_Input.IsKeyPressed(Platform::KeyCode::T)) {
+                m_ShadowsEnabled = !m_ShadowsEnabled;
+                m_Renderer.SetShadowsEnabled(m_ShadowsEnabled);
+                VKE_CORE_INFO("SandboxSceneSystem: shadows {}", m_ShadowsEnabled ? "on" : "off");
+            }
         }
-        if (m_Input.IsKeyPressed(Platform::KeyCode::F5)) SaveActiveScene();
-        if (m_Input.IsKeyPressed(Platform::KeyCode::F9)) ReloadActiveScene();
 
         UpdateFrameTimeLog(ft.GetDeltaF());
-
-        f32 exposureStep = 0.0f;
-        if (m_Input.IsKeyDown(Platform::KeyCode::Minus)) exposureStep -= 1.0f;
-        if (m_Input.IsKeyDown(Platform::KeyCode::Equal)) exposureStep += 1.0f;
-        if (exposureStep != 0.0f) {
-            m_Exposure = glm::clamp(m_Exposure + exposureStep * ft.GetDeltaF(), 0.05f, 8.0f);
-            m_Renderer.SetExposure(m_Exposure);
-        }
-
-        if (m_Input.IsKeyPressed(Platform::KeyCode::T)) {
-            m_ShadowsEnabled = !m_ShadowsEnabled;
-            m_Renderer.SetShadowsEnabled(m_ShadowsEnabled);
-            VKE_CORE_INFO("SandboxSceneSystem: shadows {}", m_ShadowsEnabled ? "on" : "off");
-        }
 
         UpdateCamera(*m_ActiveScene, ft.GetDeltaF());
         UpdateHelmet(ft.GetTotalF());
@@ -371,7 +391,131 @@ namespace VKE {
         Scene::Scene& scene = *m_ActiveScene->Instance;
         scene.Update();
         ReportContacts(scene);
-        m_Renderer.Render(scene.GetRenderScene(), scene.GetView());
+
+        BuildUI();
+
+        if (m_Renderer.BeginFrame()) {
+            m_Renderer.DrawScene(scene.GetRenderScene(), scene.GetView());
+            if (m_ViewportVisible) {
+                m_Renderer.DrawScene(scene.GetRenderScene(), scene.GetView(), m_ViewTexture);
+            }
+            m_UI.Render();
+            m_Renderer.EndFrame();
+        } else {
+            m_UI.Render();
+        }
+    }
+
+    void SandboxSceneSystem::BuildUI() {
+        m_ViewportVisible = false;
+        if (!m_ShowUI) return;
+
+        // The scene keeps the middle of the window; panels dock around it.
+        ImGuiID dockspace = ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspace);
+        if (!m_LayoutChecked && node && node->IsLeafNode()) {
+            // No saved layout: the test panel left, the viewport bottom right.
+            ImGuiID left = 0;
+            ImGuiID rest = 0;
+            ImGui::DockBuilderSplitNode(dockspace, ImGuiDir_Left, 0.26f, &left, &rest);
+            ImGuiID bottomRight = ImGui::DockBuilderSplitNode(rest, ImGuiDir_Down, 0.42f, nullptr, &rest);
+            ImGuiID viewport = ImGui::DockBuilderSplitNode(bottomRight, ImGuiDir_Right, 0.55f, nullptr, nullptr);
+            ImGui::DockBuilderDockWindow("Sandbox", left);
+            ImGui::DockBuilderDockWindow("Viewport", viewport);
+            ImGui::DockBuilderFinish(dockspace);
+        }
+        m_LayoutChecked = true;
+
+        using UI::GetFont;
+        using UI::TextStyle;
+        if (ImGui::Begin("Sandbox")) {
+            ImGui::PushFont(GetFont(TextStyle::Heading));
+            ImGui::TextUnformatted(m_ActiveScene == &m_HelmetScene ? "Helmet scene" : "Sponza scene");
+            ImGui::PopFont();
+            ImGui::PushFont(GetFont(TextStyle::MonoSmall));
+            ImGui::TextDisabled("%.2f ms per frame", 1000.0f * m_LastAverageFrameTime);
+            ImGui::PopFont();
+            ImGui::Spacing();
+
+            if (ImGui::SliderFloat("Exposure", &m_Exposure, 0.05f, 8.0f, "%.2f")) {
+                m_Renderer.SetExposure(m_Exposure);
+            }
+            if (ImGui::Checkbox("Shadows", &m_ShadowsEnabled)) {
+                m_Renderer.SetShadowsEnabled(m_ShadowsEnabled);
+            }
+            ImGui::InputText("Note", &m_Note);
+
+            std::string openLabel = std::string(UI::Icons::FolderOpen) + "  Open file" + "\xe2\x80\xa6";
+            if (ImGui::Button(openLabel.c_str())) {
+                auto file = Platform::FileDialog::OpenFile({{"Scene", "*.scene"}, {"Any file", "*.*"}},
+                                                           m_Assets.GetAssetRoot());
+                m_ChosenFile = file ? file->u8string() : std::string("(cancelled)");
+            }
+            if (!m_ChosenFile.empty()) {
+                ImGui::PushFont(GetFont(TextStyle::Mono));
+                ImGui::TextWrapped("%s", m_ChosenFile.c_str());
+                ImGui::PopFont();
+            }
+
+            ImGui::SeparatorText("Text styles");
+            struct Sample {
+                TextStyle Style;
+                const char* Text;
+            };
+            const Sample samples[] = {
+                {TextStyle::Display, "VKE"},
+                {TextStyle::Title, "Recent projects"},
+                {TextStyle::Heading, "New project"},
+                {TextStyle::UIStrong, "LightComponent"},
+                {TextStyle::UIMedium, "Play"},
+                {TextStyle::UI, "Field of view \xc2\xb7 A\xc3\xa7\xc3\xa3o"},
+                {TextStyle::UISmall, "MESH \xc2\xb7 24 KB"},
+                {TextStyle::Mono, "-7.000  0.250  -0.400"},
+                {TextStyle::MonoSmall, "5.1 ms \xc2\xb7 196 fps"},
+            };
+            for (const Sample& sample : samples) {
+                ImGui::PushFont(GetFont(sample.Style));
+                ImGui::TextUnformatted(sample.Text);
+                ImGui::PopFont();
+            }
+
+            ImGui::SeparatorText("Icons");
+            std::string iconLine = std::string(UI::Icons::Box) + " Mesh  " + UI::Icons::Sun + " Light  " +
+                                   UI::Icons::Video + " Camera  " + UI::Icons::Scan + " Collider";
+            ImGui::TextUnformatted(iconLine.c_str());
+            ImGui::PushFont(GetFont(TextStyle::Icons16));
+            const char* toolbar[] = {UI::Icons::Move, UI::Icons::Rotate3D, UI::Icons::Scaling, UI::Icons::Play,
+                                     UI::Icons::Pause, UI::Icons::Square};
+            for (const char* icon : toolbar) {
+                ImGui::Button(icon, ImVec2(28.0f, 26.0f));
+                ImGui::SameLine();
+            }
+            ImGui::NewLine();
+            ImGui::PopFont();
+            // The icon-only fonts have no space, so each icon is its own item.
+            ImGui::PushFont(GetFont(TextStyle::Icons32));
+            const char* tiles[] = {UI::Icons::Boxes, UI::Icons::Palette, UI::Icons::Clapperboard, UI::Icons::Package};
+            for (const char* icon : tiles) {
+                ImGui::TextUnformatted(icon);
+                ImGui::SameLine(0.0f, 12.0f);
+            }
+            ImGui::NewLine();
+            ImGui::PopFont();
+        }
+        ImGui::End();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        if (ImGui::Begin("Viewport")) {
+            ImVec2 size = ImGui::GetContentRegionAvail();
+            u32 width = static_cast<u32>(std::max(size.x, 1.0f));
+            u32 height = static_cast<u32>(std::max(size.y, 1.0f));
+            m_Renderer.ResizeViewTexture(m_ViewTexture, width, height);
+            ImTextureID texture = m_UI.GetTextureID(Renderer::OverlayTexture::FromView(m_ViewTexture));
+            ImGui::Image(texture, ImVec2(static_cast<f32>(width), static_cast<f32>(height)));
+            m_ViewportVisible = true;
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
     }
 
     void SandboxSceneSystem::CreateFloor() {

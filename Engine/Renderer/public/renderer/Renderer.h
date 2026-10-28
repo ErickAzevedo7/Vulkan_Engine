@@ -2,6 +2,7 @@
 
 #include <core/System.h>
 #include <core/Types.h>
+#include <renderer/Overlay.h>
 #include <renderer/RenderTypes.h>
 
 namespace VKE::Platform {
@@ -14,10 +15,17 @@ namespace VKE::Assets {
 
 namespace VKE::Renderer {
 
-    class ForwardPath;
+    class FrameRenderer;
     class RenderScene;
 
-    // Owns the graphics device and draws render scenes to the window.
+    // Owns the graphics device and builds each frame from parts: scenes drawn to the window
+    // or into view textures, then a 2D layer over the window.
+    //
+    //   if (renderer.BeginFrame()) {
+    //       renderer.DrawScene(scene, view, viewport);   // into a view texture
+    //       renderer.DrawOverlay(uiList);                // the UI shows that texture
+    //       renderer.EndFrame();
+    //   }
     class Renderer : public System {
     public:
         Renderer(Platform::IWindow& window, Assets::AssetManager& assets);
@@ -28,8 +36,32 @@ namespace VKE::Renderer {
 
         std::string_view GetName() const override { return "Renderer"; }
 
-        // Draws `scene` as seen from `view` and presents the frame.
+        // Starts recording a frame. False when there is nothing to draw to (a minimized
+        // window, or a swapchain that had to be rebuilt): skip this frame's drawing then.
+        bool BeginFrame();
+
+        // Draws `scene` as seen from `view`. Without a target it fills the window, under
+        // the 2D layer; the projection uses the target's aspect ratio. A scene can be
+        // drawn several times a frame, into different targets.
+        void DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target = {});
+
+        // Adds a list to the 2D layer, drawn over the window after any earlier list.
+        void DrawOverlay(const OverlayDrawList& list);
+
+        // Draws the 2D layer and presents the frame.
+        void EndFrame();
+
+        // Draws one frame with just `scene` in the window.
         void Render(const RenderScene& scene, const RenderView& view);
+
+        // Starts out black. Changing the size keeps the ID; the contents are cleared.
+        ViewTextureID CreateViewTexture(u32 width, u32 height);
+        void ResizeViewTexture(ViewTextureID id, u32 width, u32 height);
+        void DestroyViewTexture(ViewTextureID id);
+
+        // `pixels` holds width * height RGBA bytes, top row first, sRGB-encoded like CSS colors.
+        OverlayImageID CreateOverlayImage(u32 width, u32 height, const void* pixels);
+        void DestroyOverlayImage(OverlayImageID id);
 
         // Scales the scene's color before it is mapped to displayable range.
         void SetExposure(f32 exposure);
@@ -42,7 +74,7 @@ namespace VKE::Renderer {
         Assets::AssetManager& m_Assets;
         f32 m_Exposure = 1.0f;
         bool m_ShadowsEnabled = true;
-        Iunique<ForwardPath> m_ForwardPath;
+        Iunique<FrameRenderer> m_Frame;
     };
 
 } // namespace VKE::Renderer

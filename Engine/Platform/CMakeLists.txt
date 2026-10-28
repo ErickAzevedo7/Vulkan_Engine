@@ -5,12 +5,19 @@ find_package(glfw3 CONFIG REQUIRED)
 target_sources(VKE_Platform PRIVATE
     private/FileSystem.cpp
     private/Timer.cpp
-    private/FileDialog.cpp
     private/PlatformGlobals.cpp
     private/PlatformSystem.cpp
     private/glfw/GLFWWindow.cpp
     private/glfw/GLFWInput.cpp
 )
+
+# Native file dialogs where the system has them; the others get stubs that log a warning.
+if(WIN32)
+    target_sources(VKE_Platform PRIVATE private/windows/WindowsFileDialog.cpp)
+    target_link_libraries(VKE_Platform PRIVATE ole32 shell32)
+else()
+    target_sources(VKE_Platform PRIVATE private/FileDialog.cpp)
+endif()
 
 target_include_directories(VKE_Platform
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/public
