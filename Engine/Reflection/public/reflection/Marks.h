@@ -24,6 +24,8 @@
 //   std::vector<Handle<Assets::MaterialData>>, a marked enum or a marked struct.
 // - VKE_PROPERTY takes `Name = "Saved"` to save the property under another name, and
 //   `Min = <number>` / `Max = <number>` on f32 properties, for editors.
+// - VKE_PROPERTY also takes `Display = Color` on a Vec3 holding a color and `Display = Angle` on an
+//   f32 holding an angle in radians, so editors show a color picker or degrees.
 
 #define VKE_ENUM(...)
 #define VKE_STRUCT(...)

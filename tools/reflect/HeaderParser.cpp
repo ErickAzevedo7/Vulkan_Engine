@@ -538,6 +538,11 @@ namespace Reflect {
                     } else if (key.Text == "Min" || key.Text == "Max") {
                         if (literal.Kind != TokenKind::Number) Fail(literal, key.Text + " takes a number");
                         (key.Text == "Min" ? property.Min : property.Max) = value;
+                    } else if (key.Text == "Display") {
+                        if (literal.Text != "Color" && literal.Text != "Angle") {
+                            Fail(literal, "Display is Color or Angle");
+                        }
+                        property.Display = literal.Text;
                     } else {
                         Fail(key, "unknown VKE_PROPERTY option '" + key.Text + "'");
                     }

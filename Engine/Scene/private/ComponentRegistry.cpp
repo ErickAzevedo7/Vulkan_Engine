@@ -13,6 +13,10 @@ namespace VKE::Scene {
         }
     } // namespace
 
+    u32 ComponentRegistry::GetCount() {
+        return static_cast<u32>(GetTypes().size());
+    }
+
     const ComponentTypeInfo* ComponentRegistry::Find(ComponentTypeID id) {
         const std::vector<ComponentTypeInfo>& types = GetTypes();
         return id < types.size() ? &types[id] : nullptr;

@@ -1,4 +1,5 @@
 #include "EditorSystem.h"
+#include "ObjectMenus.h"
 #include "RecentProjects.h"
 #include "Widgets.h"
 
@@ -22,6 +23,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 
@@ -49,6 +51,8 @@ namespace VKE::Editor {
           m_Renderer(renderer),
           m_UI(ui),
           m_Scene(assets),
+          m_Hierarchy(m_Scene),
+          m_Inspector(m_Scene, assets),
           m_Viewport(renderer, ui) {
     }
 
@@ -126,6 +130,8 @@ namespace VKE::Editor {
         std::snprintf(stats, sizeof(stats), "%.1f ms \xc2\xb7 %.0f fps \xc2\xb7 %zu objects", 1000.0f * m_AverageFrameTime,
                       m_AverageFrameTime > 0.0f ? 1.0f / m_AverageFrameTime : 0.0f,
                       m_Scene.GetScene().GetObjectCount());
+        if (m_ShowHierarchy) m_Hierarchy.Draw(&m_ShowHierarchy);
+        if (m_ShowInspector) m_Inspector.Draw(&m_ShowInspector);
         if (m_ShowViewport) m_Viewport.Draw(&m_ShowViewport, stats, m_Scene.GetScene().GetMainCamera() != nullptr);
         if (m_ShowConsole) m_Console.Draw(&m_ShowConsole);
         DrawUnsavedDialog();
@@ -267,38 +273,19 @@ namespace VKE::Editor {
         }
 
         if (ImGui::BeginMenu("GameObject")) {
-            auto created = [](Scene::GameObject* object) {
-                if (object) VKE_CORE_INFO("Editor: created '{}'", object->GetName());
-            };
-            if (ImGui::MenuItem(WithIcon(Icons::CircleDashed, "Create empty").c_str())) created(&m_Scene.CreateEmpty());
-            if (ImGui::BeginMenu(WithIcon(Icons::Box, "3D object").c_str())) {
-                if (ImGui::MenuItem("Cube")) created(m_Scene.CreateShape(Shape::Cube));
-                if (ImGui::MenuItem("Sphere")) created(m_Scene.CreateShape(Shape::Sphere));
-                if (ImGui::MenuItem("Plane")) created(m_Scene.CreateShape(Shape::Plane));
-                if (ImGui::MenuItem("Cylinder")) created(m_Scene.CreateShape(Shape::Cylinder));
-                ImGui::EndMenu();
-            }
-            if (ImGui::MenuItem(WithIcon(Icons::Video, "Camera").c_str())) created(&m_Scene.CreateCamera());
-            if (ImGui::BeginMenu(WithIcon(Icons::Lightbulb, "Light").c_str())) {
-                if (ImGui::MenuItem(WithIcon(Icons::Sun, "Directional").c_str())) {
-                    created(&m_Scene.CreateLight(Renderer::LightType::Directional));
-                }
-                if (ImGui::MenuItem(WithIcon(Icons::Lightbulb, "Point").c_str())) {
-                    created(&m_Scene.CreateLight(Renderer::LightType::Point));
-                }
-                if (ImGui::MenuItem(WithIcon(Icons::Flashlight, "Spot").c_str())) {
-                    created(&m_Scene.CreateLight(Renderer::LightType::Spot));
-                }
-                ImGui::EndMenu();
-            }
+            DrawCreateObjectItems(m_Scene, nullptr);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Window")) {
+            ImGui::MenuItem(WithIcon(Icons::ListTree, "Hierarchy").c_str(), nullptr, &m_ShowHierarchy);
+            ImGui::MenuItem(WithIcon(Icons::SlidersHorizontal, "Inspector").c_str(), nullptr, &m_ShowInspector);
             ImGui::MenuItem(WithIcon(Icons::Box, "Viewport").c_str(), nullptr, &m_ShowViewport);
             ImGui::MenuItem(WithIcon(Icons::Terminal, "Console").c_str(), nullptr, &m_ShowConsole);
             ImGui::Separator();
             if (ImGui::MenuItem(WithIcon(Icons::LayoutGrid, "Reset layout").c_str())) {
+                m_ShowHierarchy = true;
+                m_ShowInspector = true;
                 m_ShowViewport = true;
                 m_ShowConsole = true;
                 m_ResetLayout = true;
@@ -386,16 +373,30 @@ namespace VKE::Editor {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGuiID dockspace = ImHashStr("EditorDockSpace");
 
-        // No saved layout yet, or a reset: the Viewport in the middle, the Console under it.
-        bool build = m_ResetLayout || (!m_LayoutChecked && !ImGui::DockBuilderGetNode(dockspace));
+        // No saved layout yet, or a reset: the Hierarchy on the left, the Inspector on the right,
+        // the Viewport in the middle and the Console under it.
+        // A layout saved before a panel existed is built again too.
+        bool missing = !ImGui::DockBuilderGetNode(dockspace) ||
+                       !ImGui::FindWindowSettingsByID(ImHashStr(HierarchyPanel::GetWindowName())) ||
+                       !ImGui::FindWindowSettingsByID(ImHashStr(InspectorPanel::GetWindowName()));
+        bool build = m_ResetLayout || (!m_LayoutChecked && missing);
         m_LayoutChecked = true;
         m_ResetLayout = false;
         if (build) {
             ImGui::DockBuilderRemoveNode(dockspace);
             ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace);
             ImGui::DockBuilderSetNodeSize(dockspace, viewport->WorkSize);
+            // Side panels as wide as in the mockup: 280 and 340 pixels.
             ImGuiID center = dockspace;
+            f32 width = std::max(viewport->WorkSize.x, 1.0f);
+            ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, std::min(280.0f / width, 0.3f), nullptr,
+                                                       &center);
+            ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right,
+                                                        std::min(340.0f / std::max(width - 280.0f, 1.0f), 0.4f),
+                                                        nullptr, &center);
             ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.3f, nullptr, &center);
+            ImGui::DockBuilderDockWindow(HierarchyPanel::GetWindowName(), left);
+            ImGui::DockBuilderDockWindow(InspectorPanel::GetWindowName(), right);
             ImGui::DockBuilderDockWindow(ViewportPanel::GetWindowName(), center);
             ImGui::DockBuilderDockWindow(ConsolePanel::GetWindowName(), bottom);
             ImGui::DockBuilderFinish(dockspace);

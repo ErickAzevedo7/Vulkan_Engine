@@ -12,13 +12,13 @@ namespace VKE::Scene {
     VKE_STRUCT()
     struct LightSettings {
         VKE_PROPERTY() Renderer::LightType Type = Renderer::LightType::Directional;
-        VKE_PROPERTY() Vec3 Color{1.0f};
+        VKE_PROPERTY(Display = Color) Vec3 Color{1.0f};
         VKE_PROPERTY(Min = 0) f32 Intensity = 1.0f;
         // Point and spot lights.
         VKE_PROPERTY(Min = 0) f32 Range = 10.0f;
         // Spot lights, in radians from the center of the cone.
-        VKE_PROPERTY(Min = 0, Max = 3.14159265) f32 InnerConeAngle = glm::radians(20.0f);
-        VKE_PROPERTY(Min = 0, Max = 3.14159265) f32 OuterConeAngle = glm::radians(30.0f);
+        VKE_PROPERTY(Min = 0, Max = 3.14159265, Display = Angle) f32 InnerConeAngle = glm::radians(20.0f);
+        VKE_PROPERTY(Min = 0, Max = 3.14159265, Display = Angle) f32 OuterConeAngle = glm::radians(30.0f);
         VKE_PROPERTY() bool CastsShadow = false;
     };
 

@@ -69,10 +69,15 @@ namespace VKE::Scene {
         // it is in the world; otherwise its local transform is kept. Fails if `parent` is this
         // object, one of its descendants, or in another scene.
         GameObject* GetParent() const { return m_Parent; }
-        // In the order they were added.
+        // In the order they were added, unless moved with SetIndexInParent.
         const std::vector<GameObject*>& GetChildren() const { return m_Children; }
         bool SetParent(GameObject* parent, bool keepWorldTransform = true);
         bool IsChildOf(const GameObject* ancestor) const;
+
+        // The object's place among its parent's children, or among the scene's roots for a root.
+        // Setting it moves the object there, shifting the others; past the end means last.
+        size_t GetIndexInParent() const;
+        void SetIndexInParent(size_t index);
 
         // An inactive object, and everything under it, is not drawn.
         bool IsActive() const { return m_Active; }
@@ -85,6 +90,8 @@ namespace VKE::Scene {
         // one if the object already has that type, or null if the type can't be added by name.
         Component* AddComponent(ComponentTypeID type);
         Component* GetComponent(ComponentTypeID type) const;
+        // False if the object has no component of that type, or the type is the transform.
+        bool RemoveComponent(ComponentTypeID type);
 
         // Returns the existing component if the object already has one of this type.
         template<typename T, typename... Args>

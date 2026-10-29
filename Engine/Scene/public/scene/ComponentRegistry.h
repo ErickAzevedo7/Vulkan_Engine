@@ -90,6 +90,8 @@ private:                                                                        
             return T::s_ComponentTypeID;
         }
 
+        // IDs go from 0 to GetCount() - 1, in the order the types were registered.
+        static u32 GetCount();
         // Null if no type has that ID or name.
         static const ComponentTypeInfo* Find(ComponentTypeID id);
         static const ComponentTypeInfo* Find(std::string_view name);

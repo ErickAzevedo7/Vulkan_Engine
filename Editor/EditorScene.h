@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assets/AssetTypes.h>
+#include <core/Handle.h>
 #include <core/Types.h>
 #include <renderer/RenderTypes.h>
 
@@ -27,7 +28,7 @@ namespace VKE::Editor {
     };
 
     // The scene open in the editor: its objects, the scene asset it was opened from and is
-    // saved to, and whether it changed since.
+    // saved to, whether it changed since, and the selected object.
     class EditorScene {
     public:
         explicit EditorScene(Assets::AssetManager& assets);
@@ -55,12 +56,18 @@ namespace VKE::Editor {
         bool IsDirty() const { return m_Dirty; }
         void MarkDirty() { m_Dirty = true; }
 
-        // New objects go at the root of the scene and mark it changed.
-        Scene::GameObject& CreateEmpty();
+        // The selected object, or null. Nothing is selected after New and Open.
+        Scene::GameObject* GetSelected() const;
+        void Select(Scene::GameObject* object);
+
+        // New objects go last under `parent`, or at the root of the scene, and mark it changed.
+        Scene::GameObject& CreateEmpty(Scene::GameObject* parent = nullptr);
         // Null, logged, if the engine's content is missing the shape.
-        Scene::GameObject* CreateShape(Shape shape);
-        Scene::GameObject& CreateCamera();
-        Scene::GameObject& CreateLight(Renderer::LightType type);
+        Scene::GameObject* CreateShape(Shape shape, Scene::GameObject* parent = nullptr);
+        Scene::GameObject& CreateCamera(Scene::GameObject* parent = nullptr);
+        Scene::GameObject& CreateLight(Renderer::LightType type, Scene::GameObject* parent = nullptr);
+        // Destroys the object and its children, and marks the scene changed.
+        void Destroy(Scene::GameObject& object);
 
     private:
         Assets::AssetManager& m_Assets;
@@ -68,6 +75,7 @@ namespace VKE::Editor {
         Assets::AssetID m_ID;
         std::filesystem::path m_File;
         bool m_Dirty = false;
+        Handle<Scene::GameObject> m_Selected;
     };
 
 } // namespace VKE::Editor

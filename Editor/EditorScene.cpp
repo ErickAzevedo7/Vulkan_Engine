@@ -53,6 +53,7 @@ namespace VKE::Editor {
         m_ID = {};
         m_File.clear();
         m_Dirty = false;
+        m_Selected = {};
 
         Scene::GameObject& camera = m_Scene->CreateObject("Main camera");
         Vec3 position(0.0f, 1.5f, 5.0f);
@@ -83,6 +84,7 @@ namespace VKE::Editor {
         m_ID = scene;
         m_File = file;
         m_Dirty = false;
+        m_Selected = {};
         return true;
     }
 
@@ -114,12 +116,20 @@ namespace VKE::Editor {
         return m_File.empty() ? std::string("Untitled") : m_File.filename().u8string();
     }
 
-    Scene::GameObject& EditorScene::CreateEmpty() {
-        m_Dirty = true;
-        return m_Scene->CreateObject("GameObject");
+    Scene::GameObject* EditorScene::GetSelected() const {
+        return m_Scene->Get(m_Selected);
     }
 
-    Scene::GameObject* EditorScene::CreateShape(Shape shape) {
+    void EditorScene::Select(Scene::GameObject* object) {
+        m_Selected = object ? object->GetHandle() : Handle<Scene::GameObject>();
+    }
+
+    Scene::GameObject& EditorScene::CreateEmpty(Scene::GameObject* parent) {
+        m_Dirty = true;
+        return m_Scene->CreateObject("GameObject", parent);
+    }
+
+    Scene::GameObject* EditorScene::CreateShape(Shape shape, Scene::GameObject* parent) {
         const char* name = GetShapeName(shape);
         std::filesystem::path content = Platform::FileSystem::GetEngineContentDirectory();
         Handle<Assets::ModelData> model =
@@ -134,7 +144,7 @@ namespace VKE::Editor {
             return nullptr;
         }
 
-        Scene::GameObject& object = m_Scene->CreateObject(name);
+        Scene::GameObject& object = m_Scene->CreateObject(name, parent);
         auto* component = object.AddComponent<Scene::MeshComponent>(mesh);
         Handle<Assets::MaterialData> material = m_Assets.LoadMaterial((content / "Materials" / "Default.mat").u8string());
         if (material.IsValid()) component->SetMaterials({material});
@@ -142,15 +152,15 @@ namespace VKE::Editor {
         return &object;
     }
 
-    Scene::GameObject& EditorScene::CreateCamera() {
-        Scene::GameObject& camera = m_Scene->CreateObject("Camera");
+    Scene::GameObject& EditorScene::CreateCamera(Scene::GameObject* parent) {
+        Scene::GameObject& camera = m_Scene->CreateObject("Camera", parent);
         camera.GetTransform().SetLocalPosition(Vec3(0.0f, 1.0f, 5.0f));
         camera.AddComponent<Scene::CameraComponent>();
         m_Dirty = true;
         return camera;
     }
 
-    Scene::GameObject& EditorScene::CreateLight(Renderer::LightType type) {
+    Scene::GameObject& EditorScene::CreateLight(Renderer::LightType type, Scene::GameObject* parent) {
         Scene::LightSettings settings;
         settings.Type = type;
         const char* name = "Directional light";
@@ -167,12 +177,17 @@ namespace VKE::Editor {
             settings.Intensity = 40.0f;
         }
 
-        Scene::GameObject& light = m_Scene->CreateObject(name);
+        Scene::GameObject& light = m_Scene->CreateObject(name, parent);
         light.GetTransform().SetLocalPosition(position);
         light.GetTransform().SetLocalRotation(RotationTowards(direction));
         light.AddComponent<Scene::LightComponent>(settings);
         m_Dirty = true;
         return light;
+    }
+
+    void EditorScene::Destroy(Scene::GameObject& object) {
+        m_Scene->Destroy(object);
+        m_Dirty = true;
     }
 
 } // namespace VKE::Editor

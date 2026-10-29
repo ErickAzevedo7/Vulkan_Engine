@@ -2,12 +2,17 @@ add_executable(Editor
     EditorApp.cpp
     EditorSystem.cpp
     EditorScene.cpp
+    Display.cpp
+    Fields.cpp
     LogCapture.cpp
+    ObjectMenus.cpp
     ProjectHub.cpp
     ProjectTemplates.cpp
     RecentProjects.cpp
     Widgets.cpp
     Panels/ConsolePanel.cpp
+    Panels/HierarchyPanel.cpp
+    Panels/InspectorPanel.cpp
     Panels/ViewportPanel.cpp
 )
 

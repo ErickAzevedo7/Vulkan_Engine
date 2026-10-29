@@ -29,6 +29,8 @@ namespace Reflect {
         // Number literals as written, or empty.
         std::string Min;
         std::string Max;
+        // "Color", "Angle" or empty.
+        std::string Display;
         SourceLocation Location;
     };
 

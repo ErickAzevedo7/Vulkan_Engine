@@ -135,6 +135,12 @@ namespace Reflect {
                 if ((!property.Min.empty() || !property.Max.empty()) && std::string(resolved.Kind) != "F32") {
                     Fail(property.Location, "Min and Max only apply to f32 properties");
                 }
+                if (property.Display == "Color" && std::string(resolved.Kind) != "Vec3") {
+                    Fail(property.Location, "Display = Color only applies to Vec3 properties");
+                }
+                if (property.Display == "Angle" && std::string(resolved.Kind) != "F32") {
+                    Fail(property.Location, "Display = Angle only applies to f32 properties");
+                }
                 m_Resolved[&property] = resolved;
                 return resolved;
             }
@@ -183,6 +189,7 @@ namespace Reflect {
                               << (property.Min.empty() ? "kNoMinimum" : "static_cast<f32>(" + property.Min + ")")
                               << ", "
                               << (property.Max.empty() ? "kNoMaximum" : "static_cast<f32>(" + property.Max + ")")
+                              << ", PropertyDisplay::" << (property.Display.empty() ? "Default" : property.Display)
                               << "},\n";
                     }
                     m_Out << "        };\n";

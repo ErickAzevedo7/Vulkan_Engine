@@ -2,6 +2,8 @@
 
 #include "EditorScene.h"
 #include "Panels/ConsolePanel.h"
+#include "Panels/HierarchyPanel.h"
+#include "Panels/InspectorPanel.h"
 #include "Panels/ViewportPanel.h"
 
 #include <assets/AssetTypes.h>
@@ -83,8 +85,12 @@ namespace VKE::Editor {
         UI::UISystem& m_UI;
 
         EditorScene m_Scene;
+        HierarchyPanel m_Hierarchy;
+        InspectorPanel m_Inspector;
         ConsolePanel m_Console;
         ViewportPanel m_Viewport;
+        bool m_ShowHierarchy = true;
+        bool m_ShowInspector = true;
         bool m_ShowViewport = true;
         bool m_ShowConsole = true;
         bool m_ResetLayout = false;

@@ -52,6 +52,17 @@ namespace VKE::Scene {
         return false;
     }
 
+    size_t GameObject::GetIndexInParent() const {
+        const std::vector<GameObject*>& siblings = m_Parent ? m_Parent->m_Children : m_Scene.m_Roots;
+        return static_cast<size_t>(std::find(siblings.begin(), siblings.end(), this) - siblings.begin());
+    }
+
+    void GameObject::SetIndexInParent(size_t index) {
+        std::vector<GameObject*>& siblings = m_Parent ? m_Parent->m_Children : m_Scene.m_Roots;
+        siblings.erase(std::find(siblings.begin(), siblings.end(), this));
+        siblings.insert(siblings.begin() + static_cast<std::ptrdiff_t>(std::min(index, siblings.size())), this);
+    }
+
     void GameObject::SetActive(bool active) {
         if (m_Active == active) return;
         m_Active = active;
@@ -81,6 +92,14 @@ namespace VKE::Scene {
             if (entry.Type == type) return entry.Instance.get();
         }
         return nullptr;
+    }
+
+    bool GameObject::RemoveComponent(ComponentTypeID type) {
+        if (type == ComponentRegistry::GetID<TransformComponent>()) return false;
+        Component* component = GetComponent(type);
+        if (!component) return false;
+        RemoveComponent(*component);
+        return true;
     }
 
     void GameObject::RemoveComponent(Component& component) {

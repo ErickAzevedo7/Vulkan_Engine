@@ -14,7 +14,7 @@ namespace VKE::Scene {
 
     public:
         // Vertical, in radians.
-        VKE_PROPERTY(Min = 0.01, Max = 3.1) f32 FieldOfView = Renderer::kDefaultFieldOfView;
+        VKE_PROPERTY(Min = 0.01, Max = 3.1, Display = Angle) f32 FieldOfView = Renderer::kDefaultFieldOfView;
         VKE_PROPERTY(Min = 0) f32 NearPlane = 0.1f;
         VKE_PROPERTY(Min = 0) f32 FarPlane = 1000.0f;
 

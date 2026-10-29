@@ -66,6 +66,15 @@ namespace VKE::Scene {
         const PropertyInfo* end() const;
     };
 
+    // How editors show a property, beyond its type.
+    enum class PropertyDisplay : u8 {
+        Default,
+        // A Vec3 holding a linear RGB color.
+        Color,
+        // An f32 holding an angle in radians, shown in degrees.
+        Angle,
+    };
+
     constexpr f32 kNoMinimum = -FLT_MAX;
     constexpr f32 kNoMaximum = FLT_MAX;
 
@@ -80,6 +89,7 @@ namespace VKE::Scene {
         // For editors: f32 properties are kept between these. Loading doesn't clamp.
         f32 Min;
         f32 Max;
+        PropertyDisplay Display;
 
         void* Get(void* object) const { return Access(object); }
         // Access only takes writable objects; reading through it leaves them as they are.
