@@ -25,6 +25,8 @@ namespace VKE::Assets {
                 outType = AssetType::Texture;
             } else if (extension == ".mat") {
                 outType = AssetType::Material;
+            } else if (extension == ".scene") {
+                outType = AssetType::Scene;
             } else {
                 return false;
             }
@@ -42,6 +44,7 @@ namespace VKE::Assets {
             case AssetType::Model: return "Model";
             case AssetType::Texture: return "Texture";
             case AssetType::Material: return "Material";
+            case AssetType::Scene: return "Scene";
             }
             return "";
         }
@@ -82,24 +85,34 @@ namespace VKE::Assets {
         }
     } // namespace
 
-    AssetCatalog::AssetCatalog(std::filesystem::path root) {
-        std::error_code ec;
-        m_Root = std::filesystem::weakly_canonical(root, ec);
-        if (ec) m_Root = std::move(root);
+    AssetCatalog::AssetCatalog(std::vector<AssetRoot> roots) : m_Roots(std::move(roots)) {
+        for (AssetRoot& root : m_Roots) {
+            std::error_code ec;
+            std::filesystem::path canonical = std::filesystem::weakly_canonical(root.Folder, ec);
+            if (!ec) root.Folder = std::move(canonical);
+        }
     }
 
     void AssetCatalog::Scan() {
-        std::error_code ec;
         auto options = std::filesystem::directory_options::skip_permission_denied;
-        size_t created = m_Entries.size();
-        for (auto it = std::filesystem::recursive_directory_iterator(m_Root, options, ec);
-             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-            AssetType type;
-            if (!it->is_regular_file(ec) || !FindType(it->path(), type)) continue;
-            if (m_ByPath.count(MakePathKey(it->path()))) continue;
-            Add(it->path(), type);
+        for (const AssetRoot& root : m_Roots) {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(root.Folder, ec)) {
+                VKE_CORE_WARN("AssetCatalog: asset root '{}' does not exist", root.Folder.string());
+                continue;
+            }
+
+            size_t created = m_Entries.size();
+            for (auto it = std::filesystem::recursive_directory_iterator(root.Folder, options, ec);
+                 !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+                AssetType type;
+                if (!it->is_regular_file(ec) || !FindType(it->path(), type)) continue;
+                if (m_ByPath.count(MakePathKey(it->path()))) continue;
+                Add(it->path(), type);
+            }
+            VKE_CORE_INFO("AssetCatalog: {} assets under '{}'{}", m_Entries.size() - created, root.Folder.string(),
+                          root.ReadOnly ? " (read-only)" : "");
         }
-        VKE_CORE_INFO("AssetCatalog: {} assets under '{}'", m_Entries.size() - created, m_Root.string());
     }
 
     const AssetEntry* AssetCatalog::FindByFile(const std::filesystem::path& file, bool addIfMissing) {
@@ -150,7 +163,16 @@ namespace VKE::Assets {
 
         bool meshesChanged = assign(SubAssetKind::Mesh, meshNames, entry.Meshes, outMeshIDs);
         bool materialsChanged = assign(SubAssetKind::Material, materialNames, entry.Materials, outMaterialIDs);
-        if (meshesChanged || materialsChanged) WriteMetadata(entry);
+        if (!meshesChanged && !materialsChanged) return;
+
+        const AssetRoot& root = m_Roots[entry.Root];
+        if (root.ReadOnly) {
+            VKE_CORE_WARN("AssetCatalog: the .vkasset of '{}' in '{}' doesn't list the meshes and materials the file "
+                          "has; the ones it misses get IDs that only last this run",
+                          entry.Path, root.Name);
+            return;
+        }
+        WriteMetadata(entry);
     }
 
     const AssetEntry* AssetCatalog::Add(const std::filesystem::path& file, AssetType type) {
@@ -160,10 +182,19 @@ namespace VKE::Assets {
         AssetEntry entry;
         entry.Type = type;
         // Not the key, which is lowercased on Windows: the entry keeps the name as it is on disk.
-        std::error_code ec;
-        entry.Path = std::filesystem::weakly_canonical(file, ec).lexically_relative(m_Root).generic_string();
+        FindRoot(file, entry.Root, entry.Path);
+        const AssetRoot& root = m_Roots[entry.Root];
 
-        bool write = !ReadMetadata(GetMetadataFile(file), entry);
+        bool hasMetadata = ReadMetadata(GetMetadataFile(file), entry);
+        // A read-only root can't be given new IDs, and an ID that changed every run would break
+        // whatever refers to the asset.
+        if (root.ReadOnly && (!entry.ID.IsValid() || IsTaken(entry.ID))) {
+            VKE_CORE_WARN("AssetCatalog: '{}' in '{}' is left out: {}", entry.Path, root.Name,
+                          entry.ID.IsValid() ? "its ID is another asset's" : "it has no ID in a .vkasset");
+            return nullptr;
+        }
+
+        bool write = !hasMetadata;
         if (!entry.ID.IsValid() || IsTaken(entry.ID)) {
             // A copied file brings its copy of the original's .vkasset, with the same ID.
             if (entry.ID.IsValid()) {
@@ -177,6 +208,11 @@ namespace VKE::Assets {
             SubAssetKind kind = subAssets == &entry.Meshes ? SubAssetKind::Mesh : SubAssetKind::Material;
             for (auto& [name, id] : *subAssets) {
                 if (IsTaken(id)) {
+                    if (root.ReadOnly) {
+                        VKE_CORE_WARN("AssetCatalog: '{}' in '{}' of '{}' has another asset's ID; its new one only "
+                                      "lasts this run",
+                                      name, entry.Path, root.Name);
+                    }
                     id = MakeUnique(AssetID::Generate());
                     write = true;
                 }
@@ -184,7 +220,7 @@ namespace VKE::Assets {
             }
         }
 
-        if (write) WriteMetadata(entry);
+        if (write && !root.ReadOnly) WriteMetadata(entry);
 
         AssetID id = entry.ID;
         m_ByPath[key] = id;
@@ -245,12 +281,27 @@ namespace VKE::Assets {
         return m_Entries.count(id) || m_SubAssets.count(id);
     }
 
-    std::string AssetCatalog::MakePathKey(const std::filesystem::path& file) const {
+    bool AssetCatalog::FindRoot(const std::filesystem::path& file, u32& outRoot, std::string& outPath) const {
         std::error_code ec;
-        std::filesystem::path relative = std::filesystem::weakly_canonical(file, ec).lexically_relative(m_Root);
-        std::string key = relative.generic_string();
-        // Outside the root.
-        if (ec || key.empty() || key.rfind("..", 0) == 0) return {};
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(file, ec);
+        if (ec) return false;
+        for (u32 i = 0; i < m_Roots.size(); ++i) {
+            std::string relative = canonical.lexically_relative(m_Roots[i].Folder).generic_string();
+            // Empty on another drive; starts with ".." outside the folder.
+            if (relative.empty() || relative == "." || relative.rfind("..", 0) == 0) continue;
+            outRoot = i;
+            outPath = std::move(relative);
+            return true;
+        }
+        return false;
+    }
+
+    std::string AssetCatalog::MakePathKey(const std::filesystem::path& file) const {
+        u32 root = 0;
+        std::string path;
+        if (!FindRoot(file, root, path)) return {};
+        // The same relative path can be in two roots.
+        std::string key = std::to_string(root) + ":" + path;
 #ifdef _WIN32
         std::transform(key.begin(), key.end(), key.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

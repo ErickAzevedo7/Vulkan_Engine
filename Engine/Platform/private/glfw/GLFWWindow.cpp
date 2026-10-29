@@ -70,6 +70,14 @@ namespace VKE::Platform {
         return glfwWindowShouldClose(m_Handle) != 0;
     }
 
+    void GLFWWindow::CancelClose() {
+        glfwSetWindowShouldClose(m_Handle, GLFW_FALSE);
+    }
+
+    void GLFWWindow::SetTitle(const std::string& title) {
+        glfwSetWindowTitle(m_Handle, title.c_str());
+    }
+
     bool GLFWWindow::ConsumeResizedFlag() {
         bool resized = m_Resized;
         m_Resized = false;

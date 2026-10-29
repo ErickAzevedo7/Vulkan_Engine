@@ -9,8 +9,19 @@
 
 namespace VKE::Platform::FileSystem {
 
-    // Directory containing the running executable.
+    // The running executable's file, and the directory containing it.
+    std::filesystem::path GetExecutablePath();
     std::filesystem::path GetExecutableDirectory();
+
+    // The engine's own assets and fonts: a "Content" folder next to the executable.
+    std::filesystem::path GetEngineContentDirectory();
+
+    // Where the engine keeps the user's settings, like the recent projects: a "VKE" folder in
+    // the system's per-user data folder (%APPDATA% on Windows), created if missing.
+    std::filesystem::path GetUserDataDirectory();
+
+    // The user's documents folder.
+    std::filesystem::path GetDocumentsDirectory();
 
     // Reads an entire binary file into memory.
     // Returns an empty vector and logs an error if the file cannot be opened.

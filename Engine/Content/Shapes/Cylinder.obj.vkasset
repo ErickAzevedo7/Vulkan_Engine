@@ -1,0 +1,7 @@
+# Engine content. Its IDs are fixed: scenes in every project refer to them.
+ID: "41ddb26010dcbfef"
+Type: Model
+Meshes:
+  "Cylinder": "d387500e45a1d5ed"
+Materials:
+  "DefaultMaterial": "f380572458edb712"

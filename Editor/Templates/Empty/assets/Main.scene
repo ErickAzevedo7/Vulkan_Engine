@@ -1,0 +1,34 @@
+# Written by the engine.
+MainCamera: "ef659ffba7f2f4b1"
+Objects:
+  - ID: "ef659ffba7f2f4b1"
+    Name: "Main camera"
+    Active: true
+    Components:
+      TransformComponent:
+        Local:
+          Position: [0, 2, 6]
+          Rotation: [-0.122183263, 0, 0, 0.992507577]
+      CameraComponent:
+        {}
+  - ID: "f08af21960ab2ad8"
+    Name: "Sun"
+    Active: true
+    Components:
+      TransformComponent:
+        Local:
+          Rotation: [-0.436029941, 0.257964671, 0.132019237, 0.851999462]
+      LightComponent:
+        Settings:
+          Color: [1, 0.959999979, 0.899999976]
+          Intensity: 3
+          CastsShadow: true
+  - ID: "ae1d1eb5a9bdb130"
+    Name: "Floor"
+    Active: true
+    Components:
+      TransformComponent:
+        {}
+      MeshComponent:
+        Mesh: "a4b5db83ce2c1525"
+        Materials: ["a36b5110163d331f"]

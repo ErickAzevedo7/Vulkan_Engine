@@ -6,6 +6,7 @@
 #include <core/System.h>
 #include <array>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -20,27 +21,34 @@ namespace VKE::Assets {
         Count,
     };
 
-    // Loads assets from disk into memory and hands out handles to them. Asset files live under the
-    // asset root, each with a .vkasset next to it that holds its ID; the root is scanned when the
-    // manager starts, and files without a .vkasset get one. Loading the same asset again returns
-    // the existing handle.
+    // Loads assets from disk into memory and hands out handles to them. Asset files live under
+    // asset roots (the project's assets, the engine's content), each with a .vkasset next to it
+    // that holds its ID; the roots are scanned when the manager starts, and files without a
+    // .vkasset in a writable root get one. Loading the same asset again returns the existing handle.
     class AssetManager : public System {
     public:
-        // Relative asset paths are resolved against `assetRoot`.
-        explicit AssetManager(std::filesystem::path assetRoot);
+        // Relative asset paths are resolved against the first root.
+        explicit AssetManager(std::vector<AssetRoot> roots);
         ~AssetManager() override;
 
         void OnInitialize() override;
         std::string_view GetName() const override { return "AssetManager"; }
 
-        const std::filesystem::path& GetAssetRoot() const { return m_AssetRoot; }
+        const std::vector<AssetRoot>& GetRoots() const;
+        // The first root's folder, where relative paths point.
+        const std::filesystem::path& GetAssetRoot() const;
 
         // File path for an asset path. Absolute paths are returned unchanged.
         std::filesystem::path Resolve(const std::string& path) const;
 
-        // The ID of the asset file at `path`, relative to the root or absolute inside it. A file
-        // created since the scan is added. Invalid if the file isn't an asset under the root.
+        // The ID of the asset file at `path`, relative to the first root or absolute inside any.
+        // A file created since the scan is added. Invalid if the file isn't an asset under a root.
         AssetID FindAsset(const std::string& path);
+
+        // The file and type of an asset; empty and nothing for IDs that aren't asset files (the
+        // meshes and materials inside a model have no file of their own).
+        std::filesystem::path GetFile(AssetID id) const;
+        std::optional<AssetType> GetType(AssetID id) const;
 
         // Each returns an invalid handle if the asset can't be loaded.
         // A model brings the meshes and materials inside it.
@@ -87,7 +95,6 @@ namespace VKE::Assets {
         // Gives IDs to the meshes and materials of a model just imported from the asset `id`.
         void AssignSubAssets(AssetID id, const ModelData& model);
 
-        std::filesystem::path m_AssetRoot;
         Iunique<AssetCatalog> m_Catalog;
 
         SlotMap<ModelData> m_Models;

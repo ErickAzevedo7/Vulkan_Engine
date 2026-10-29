@@ -27,7 +27,7 @@ namespace VKE::Platform {
         m_Window->PollEvents();
         m_Input->Update();
 
-        if (m_Window->ShouldClose()) {
+        if (m_ExitOnClose && m_Window->ShouldClose()) {
             VKE::RequestExit();
         }
     }

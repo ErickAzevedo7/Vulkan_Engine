@@ -57,6 +57,7 @@ namespace VKE::Scene {
         // The object with this ID, or null. Looks through every object.
         GameObject* FindByID(ObjectID id) const;
         const std::vector<GameObject*>& GetRootObjects() const { return m_Roots; }
+        size_t GetObjectCount() const { return m_Objects.Size(); }
 
         // Sends the changes made since the last update to the physics world, pushes movable
         // colliders out of solid ones (moving their objects), and sends the result to the render

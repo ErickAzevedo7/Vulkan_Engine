@@ -23,16 +23,3 @@ target_link_libraries(VKE_UI
 )
 
 set_target_properties(VKE_UI PROPERTIES FOLDER "Engine")
-
-set(VKE_UI_FONT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fonts" CACHE INTERNAL "")
-
-# vke_stage_ui_fonts(<executable>)
-#
-# Copies the UI's fonts and their licenses to a "fonts" folder next to the executable.
-function(vke_stage_ui_fonts executable)
-    add_custom_command(TARGET ${executable} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${VKE_UI_FONT_DIR}" "$<TARGET_FILE_DIR:${executable}>/fonts"
-        COMMENT "Staging UI fonts for ${executable}"
-        VERBATIM
-    )
-endfunction()

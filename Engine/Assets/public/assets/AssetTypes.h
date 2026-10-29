@@ -5,6 +5,7 @@
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <array>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -27,6 +28,24 @@ namespace VKE::Assets {
         // FormatID wouldn't write.
         std::string ToString() const { return FormatID(Value); }
         static AssetID Parse(const std::string& text) { return {ParseID(text)}; }
+    };
+
+    // What kind of file an asset is. Scenes are only listed: the scene module reads them.
+    enum class AssetType : u8 {
+        Model,
+        Texture,
+        Material,
+        Scene,
+    };
+
+    // A folder of asset files. A read-only root, like the engine's content, is never written
+    // to: its files keep the IDs their .vkasset files ship with, and a file without one is
+    // left out.
+    struct AssetRoot {
+        // How tools show it, like "assets" or "Engine".
+        std::string Name;
+        std::filesystem::path Folder;
+        bool ReadOnly = false;
     };
 
     struct Vertex {

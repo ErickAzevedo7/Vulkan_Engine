@@ -15,6 +15,8 @@ namespace VKE::Platform {
 
         void PollEvents() override;
         bool ShouldClose() const override;
+        void CancelClose() override;
+        void SetTitle(const std::string& title) override;
 
         u32 GetWidth() const override { return m_Width; }
         u32 GetHeight() const override { return m_Height; }

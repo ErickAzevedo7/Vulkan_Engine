@@ -11,12 +11,18 @@ target_sources(VKE_Platform PRIVATE
     private/glfw/GLFWInput.cpp
 )
 
-# Native file dialogs where the system has them; the others get stubs that log a warning.
+# Native file dialogs and processes where the system has them; the others get stubs that log a warning.
 if(WIN32)
-    target_sources(VKE_Platform PRIVATE private/windows/WindowsFileDialog.cpp)
+    target_sources(VKE_Platform PRIVATE
+        private/windows/WindowsFileDialog.cpp
+        private/windows/WindowsProcess.cpp
+    )
     target_link_libraries(VKE_Platform PRIVATE ole32 shell32)
 else()
-    target_sources(VKE_Platform PRIVATE private/FileDialog.cpp)
+    target_sources(VKE_Platform PRIVATE
+        private/FileDialog.cpp
+        private/Process.cpp
+    )
 endif()
 
 target_include_directories(VKE_Platform

@@ -37,25 +37,29 @@ namespace VKE::Assets {
         }
     } // namespace
 
-    AssetManager::AssetManager(std::filesystem::path assetRoot)
-        : m_AssetRoot(std::move(assetRoot)), m_Catalog(MakeIunique<AssetCatalog>(m_AssetRoot)) {
+    AssetManager::AssetManager(std::vector<AssetRoot> roots)
+        : m_Catalog(MakeIunique<AssetCatalog>(std::move(roots))) {
         CreateDefaultTextures();
     }
 
     AssetManager::~AssetManager() = default;
 
     void AssetManager::OnInitialize() {
-        std::error_code ec;
-        if (!std::filesystem::is_directory(m_AssetRoot, ec)) {
-            VKE_CORE_WARN("AssetManager: asset root '{}' does not exist", m_AssetRoot.string());
-            return;
-        }
         m_Catalog->Scan();
     }
 
+    const std::vector<AssetRoot>& AssetManager::GetRoots() const {
+        return m_Catalog->GetRoots();
+    }
+
+    const std::filesystem::path& AssetManager::GetAssetRoot() const {
+        static const std::filesystem::path kNone;
+        return GetRoots().empty() ? kNone : GetRoots().front().Folder;
+    }
+
     std::filesystem::path AssetManager::Resolve(const std::string& path) const {
-        std::filesystem::path asPath(path);
-        return asPath.is_absolute() ? asPath : m_AssetRoot / asPath;
+        std::filesystem::path asPath = std::filesystem::u8path(path);
+        return asPath.is_absolute() ? asPath : GetAssetRoot() / asPath;
     }
 
     AssetID AssetManager::FindAsset(const std::string& path) {
@@ -64,13 +68,23 @@ namespace VKE::Assets {
         if (!entry) {
             std::error_code ec;
             if (!std::filesystem::exists(file, ec)) {
-                VKE_CORE_ERROR("AssetManager: '{}' doesn't exist", file.string());
+                VKE_CORE_ERROR("AssetManager: '{}' doesn't exist", file.u8string());
             } else {
-                VKE_CORE_ERROR("AssetManager: '{}' isn't an asset under '{}'", path, m_AssetRoot.string());
+                VKE_CORE_ERROR("AssetManager: '{}' isn't an asset under an asset root", path);
             }
             return {};
         }
         return entry->ID;
+    }
+
+    std::filesystem::path AssetManager::GetFile(AssetID id) const {
+        const AssetEntry* entry = m_Catalog->Find(id);
+        return entry ? m_Catalog->GetFile(*entry) : std::filesystem::path();
+    }
+
+    std::optional<AssetType> AssetManager::GetType(AssetID id) const {
+        const AssetEntry* entry = m_Catalog->Find(id);
+        return entry ? std::optional<AssetType>(entry->Type) : std::nullopt;
     }
 
     Handle<ModelData> AssetManager::LoadModel(AssetID id) {

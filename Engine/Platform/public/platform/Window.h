@@ -45,6 +45,12 @@ namespace VKE::Platform {
         // True once the OS/user has requested the window to close
         // (close button, Alt+F4, ...). Does not close the window itself.
         virtual bool ShouldClose() const = 0;
+        // Takes the request back, so ShouldClose() is false again: for asking first, e.g.
+        // about unsaved changes.
+        virtual void CancelClose() = 0;
+
+        // Text is UTF-8.
+        virtual void SetTitle(const std::string& title) = 0;
 
         virtual u32 GetWidth() const = 0;
         virtual u32 GetHeight() const = 0;

@@ -22,6 +22,7 @@ add_subdirectory(scene)
 
 # Phase 6 modules
 add_subdirectory(ui)
+add_subdirectory(project)
 
 # The parent aggregates all modules — modules do NOT link to VKE_Engine themselves
 target_link_libraries(VKE_Engine INTERFACE
@@ -36,6 +37,7 @@ target_link_libraries(VKE_Engine INTERFACE
     VKE_Physics
     VKE_Scene
     VKE_UI
+    VKE_Project
 )
 
 # Later modules — uncomment as implemented

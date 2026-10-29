@@ -45,6 +45,32 @@ namespace VKE::UI {
         constexpr u32 Scrim = 0x000000A6;
     } // namespace Colors
 
+    // Sizes from the design system's spacing, radius and size tokens, in pixels at 100% scale.
+    namespace Sizes {
+        constexpr f32 Space1 = 2.0f;
+        constexpr f32 Space2 = 4.0f;
+        constexpr f32 Space3 = 6.0f;
+        constexpr f32 Space4 = 8.0f;
+        constexpr f32 Space5 = 12.0f;
+        constexpr f32 Space6 = 16.0f;
+        constexpr f32 Space7 = 24.0f;
+        constexpr f32 Space8 = 32.0f;
+        constexpr f32 RadiusSm = 3.0f;
+        constexpr f32 RadiusMd = 5.0f;
+        constexpr f32 RadiusLg = 8.0f;
+        constexpr f32 ControlHeight = 22.0f;
+        constexpr f32 RowHeight = 22.0f;
+        constexpr f32 ConsoleRowHeight = 20.0f;
+        constexpr f32 TabHeight = 26.0f;
+        constexpr f32 MenuBarHeight = 24.0f;
+        constexpr f32 ToolbarHeight = 34.0f;
+        constexpr f32 StatusBarHeight = 22.0f;
+        constexpr f32 LabelWidth = 112.0f;
+        constexpr f32 Indent = 14.0f;
+        constexpr f32 IconLarge = 32.0f;
+        constexpr f32 Border = 1.0f;
+    } // namespace Sizes
+
     // An 0xRRGGBBAA color in ImGui's packed order (ImU32).
     constexpr u32 ToImColor(u32 rgba) {
         return ((rgba >> 24) & 0xFF) | (((rgba >> 16) & 0xFF) << 8) | (((rgba >> 8) & 0xFF) << 16) |

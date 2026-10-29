@@ -151,7 +151,7 @@ namespace VKE::UI {
     }
 
     void UISystem::BuildFonts() {
-        const auto fontDir = Platform::FileSystem::GetExecutableDirectory() / "fonts";
+        const auto fontDir = Platform::FileSystem::GetEngineContentDirectory() / "Fonts";
         ImFontAtlas& atlas = *ImGui::GetIO().Fonts;
 
         // Latin-1 covers Portuguese; a few punctuation marks the interface uses come on top.

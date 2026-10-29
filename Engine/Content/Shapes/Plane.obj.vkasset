@@ -1,0 +1,7 @@
+# Engine content. Its IDs are fixed: scenes in every project refer to them.
+ID: "00e6eec6c21797d8"
+Type: Model
+Meshes:
+  "Plane": "a4b5db83ce2c1525"
+Materials:
+  "DefaultMaterial": "c4298e80366a654d"

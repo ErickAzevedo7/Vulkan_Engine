@@ -25,8 +25,13 @@ namespace VKE::Platform {
         IWindow& GetWindow() { return *m_Window; }
         IInput& GetInput() { return *m_Input; }
 
+        // Whether closing the window ends the application, on by default. With it off,
+        // the application reads IWindow::ShouldClose() and decides.
+        void SetExitOnClose(bool exitOnClose) { m_ExitOnClose = exitOnClose; }
+
     private:
         WindowDesc m_Desc;
+        bool m_ExitOnClose = true;
         Iunique<IWindow> m_Window;
         Iunique<IInput> m_Input;
     };

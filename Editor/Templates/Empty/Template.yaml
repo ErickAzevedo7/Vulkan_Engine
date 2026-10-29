@@ -1,0 +1,4 @@
+# A project template: a scene with a camera, a light and a floor.
+Name: "Empty"
+Description: "A scene with a camera, a light and a floor."
+StartScene: "97a562a2d8704619"

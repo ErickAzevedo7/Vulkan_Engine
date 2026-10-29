@@ -20,16 +20,15 @@ namespace VKE::UI {
             return color;
         }
 
-        // Sizes from the design system's spacing, radius and size tokens, in pixels.
-        constexpr f32 kControlHeight = 22.0f;  // control-h
-        constexpr f32 kSpace1 = 2.0f;
-        constexpr f32 kSpace2 = 4.0f;
-        constexpr f32 kSpace3 = 6.0f;
-        constexpr f32 kSpace4 = 8.0f;
-        constexpr f32 kRadiusSm = 3.0f;
-        constexpr f32 kRadiusMd = 5.0f;
-        constexpr f32 kIndent = 14.0f;
-        constexpr f32 kBorder = 1.0f;          // border-w
+        constexpr f32 kControlHeight = Sizes::ControlHeight;
+        constexpr f32 kSpace1 = Sizes::Space1;
+        constexpr f32 kSpace2 = Sizes::Space2;
+        constexpr f32 kSpace3 = Sizes::Space3;
+        constexpr f32 kSpace4 = Sizes::Space4;
+        constexpr f32 kRadiusSm = Sizes::RadiusSm;
+        constexpr f32 kRadiusMd = Sizes::RadiusMd;
+        constexpr f32 kIndent = Sizes::Indent;
+        constexpr f32 kBorder = Sizes::Border;
     } // namespace
 
     void ApplyTheme(ImGuiStyle& style, f32 uiFontSize) {
