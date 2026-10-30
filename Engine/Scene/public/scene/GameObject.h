@@ -3,6 +3,7 @@
 #include <scene/Component.h>
 #include <scene/components/TransformComponent.h>
 
+#include <assets/AssetTypes.h>
 #include <core/Handle.h>
 #include <core/ObjectID.h>
 #include <core/Types.h>
@@ -84,6 +85,17 @@ namespace VKE::Scene {
         bool IsActiveInHierarchy() const { return m_ActiveInHierarchy; }
         void SetActive(bool active);
 
+        // The prefab this object is an instance's copy of a part of; invalid for other objects.
+        // Set by PrefabLibrary.
+        Assets::AssetID GetPrefab() const { return m_Prefab; }
+        // The ID of the object this one copies, inside the prefab.
+        ObjectID GetPrefabPart() const { return m_PrefabPart; }
+        bool IsPrefabPart() const { return m_Prefab.IsValid(); }
+        // The top object of a prefab's instance.
+        bool IsPrefabRoot() const { return IsPrefabPart() && !(m_Parent && m_Parent->IsPrefabPart()); }
+        // The top object of the instance this object is in, or null.
+        GameObject* GetPrefabRoot();
+
         ComponentRange GetComponents() const { return ComponentRange(m_Components); }
 
         // Adds a component of a registered type, as a scene file names it. Returns the existing
@@ -135,6 +147,7 @@ namespace VKE::Scene {
 
     private:
         friend class Component;
+        friend class PrefabLibrary;
         friend class Scene;
 
         struct ComponentEntry {
@@ -161,6 +174,8 @@ namespace VKE::Scene {
         Scene& m_Scene;
         Handle<GameObject> m_Handle;
         ObjectID m_ID;
+        Assets::AssetID m_Prefab;
+        ObjectID m_PrefabPart;
         std::string m_Name;
         bool m_Active = true;
         // Cached from the parents, so per-frame checks don't walk up the hierarchy.

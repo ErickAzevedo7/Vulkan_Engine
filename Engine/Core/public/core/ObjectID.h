@@ -16,6 +16,9 @@ namespace VKE {
         // A new random ID, never zero (see GenerateID).
         static ObjectID Generate();
         static ObjectID Invalid() { return ObjectID(); }
+        // The same two IDs always give the same result, valid, and different ones a different
+        // result, for an ID that follows from others without being saved.
+        static ObjectID Combine(ObjectID first, ObjectID second);
 
         bool operator==(const ObjectID& other) const { return m_ID == other.m_ID; }
         bool operator!=(const ObjectID& other) const { return m_ID != other.m_ID; }

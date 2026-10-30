@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 
+#include <functional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -35,7 +36,8 @@ namespace VKE::Editor {
     // The selected object: its name, whether it is on, and a block per component with the
     // properties the reflection generator describes, in their order. Components are added from
     // the registry and reset or removed from their block's menu. Every edit is applied to the
-    // component as it happens.
+    // component as it happens. An object of a prefab instance also shows its prefab, with a mark
+    // on the properties that differ from it; a right click on them reverts or applies them.
     //
     // Or the selected asset: a material's values and textures, applied as they are edited and
     // saved to its .mat with Save; a texture's image and color space; what a model holds.
@@ -50,11 +52,16 @@ namespace VKE::Editor {
 
     private:
         void DrawObjectHeader(Scene::GameObject& object);
+        void DrawPrefabBar(Scene::GameObject& object);
         // A block's header, which opens and closes it. Returns its bottom right corner.
         ImVec2 DrawBlockHeader(const char* icon, const std::string& label, bool& open);
         void DrawComponent(Scene::Component& component);
-        // Nested structs are listed inline. True if a value changed.
-        bool DrawProperties(const Scene::StructInfo& type, void* object);
+        // Nested structs are listed inline. True if a value changed. `pristine` is the same
+        // object in the prefab of `component`'s instance, or null.
+        bool DrawProperties(Scene::Component& component, const Scene::StructInfo& type, void* object, void* pristine);
+        // The mark on an overridden row that started at `top`, and its menu.
+        bool DrawOverride(Scene::Component& component, const Scene::PropertyInfo& property, void* value, void* pristine,
+                          f32 top);
         bool DrawProperty(const Scene::PropertyInfo& property, void* value);
         bool DrawRotation(const char* label, const Scene::PropertyInfo& property, Quat& rotation);
         bool DrawMaterials(std::vector<Handle<Assets::MaterialData>>& materials);
@@ -98,6 +105,8 @@ namespace VKE::Editor {
         // Changes to the components wait until they are drawn.
         Scene::ComponentTypeID m_ToRemove = Scene::kInvalidComponentType;
         Scene::ComponentTypeID m_ToReset = Scene::kInvalidComponentType;
+        // What changes a prefab waits too: it replaces the scene's objects.
+        std::function<void()> m_PrefabChange;
     };
 
 } // namespace VKE::Editor

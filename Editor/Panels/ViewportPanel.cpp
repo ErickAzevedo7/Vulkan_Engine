@@ -111,6 +111,22 @@ namespace VKE::Editor {
     void ViewportPanel::PlaceCamera() {
         const Scene::Scene& scene = m_Scene.GetScene();
         m_PlacedFor = m_Scene.GetOpenCount();
+
+        // A prefab is seen from up close, and the camera goes back to where it was in the scene.
+        bool editingPrefab = m_Scene.IsEditingPrefab();
+        bool wasEditingPrefab = m_EditingPrefab;
+        m_EditingPrefab = editingPrefab;
+        if (editingPrefab && !wasEditingPrefab) m_SceneCamera = m_Camera;
+        if (editingPrefab) {
+            m_Camera.LookAt(Vec3(3.0f, 2.0f, 4.0f), Vec3(0.0f));
+            FocusSelected();
+            return;
+        }
+        if (wasEditingPrefab) {
+            m_Camera = m_SceneCamera;
+            return;
+        }
+
         if (const Scene::CameraComponent* camera = scene.GetMainCamera()) {
             const Transform& world = camera->GetOwner().GetTransform().GetWorld();
             m_Camera.LookAt(world.Position, world.Position + world.GetForward() * 8.0f);
@@ -158,14 +174,12 @@ namespace VKE::Editor {
                                    ImGuiButtonFlags_MouseButtonMiddle);
         bool hovered = ImGui::IsItemHovered();
         m_Visible = true;
-        Assets::AssetID droppedModel;
+        Assets::AssetID droppedAsset;
         if (ImGui::BeginDragDropTarget()) {
             ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery;
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
                 Assets::AssetID asset = *static_cast<const Assets::AssetID*>(payload->Data);
-                if (payload->IsDelivery() && m_Scene.GetAssets().GetType(asset) == Assets::AssetType::Model) {
-                    droppedModel = asset;
-                }
+                if (payload->IsDelivery() && m_Scene.CanPlace(asset)) droppedAsset = asset;
             }
             ImGui::EndDragDropTarget();
         }
@@ -178,8 +192,8 @@ namespace VKE::Editor {
         bool gizmoBusy = HandleGizmo(view, mouse, hovered);
         HandleClick(view, mouse, hovered, gizmoBusy);
 
-        // A dropped model goes where the mouse's ray meets the ground, or a few meters ahead.
-        if (droppedModel.IsValid()) {
+        // A dropped asset goes where the mouse's ray meets the ground, or a few meters ahead.
+        if (droppedAsset.IsValid()) {
             Ray ray = view.GetRay(mouse);
             f32 distance = 0.0f;
             constexpr f32 kAhead = 5.0f;
@@ -187,9 +201,7 @@ namespace VKE::Editor {
                 distance = kAhead;
             }
             Vec3 position = ray.Origin + ray.Direction * distance;
-            if (Scene::GameObject* model = m_Scene.InstantiateModel(droppedModel, nullptr, position)) {
-                m_Scene.Select(model);
-            }
+            if (Scene::GameObject* placed = m_Scene.Place(droppedAsset, nullptr, position)) m_Scene.Select(placed);
         }
 
         Scene::GameObject* selected = m_Scene.GetSelected();

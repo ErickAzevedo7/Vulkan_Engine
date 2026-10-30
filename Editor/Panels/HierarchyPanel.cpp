@@ -30,8 +30,6 @@ namespace VKE::Editor {
     namespace Sizes = UI::Sizes;
 
     namespace {
-        // Drag-and-drop payload of a row, carrying the object's handle.
-        constexpr const char* kObjectPayload = "VKE_OBJECT";
         // The chevron's and the icon's columns.
         constexpr f32 kIconWidth = 14.0f;
 
@@ -103,18 +101,20 @@ namespace VKE::Editor {
             Scene::GameObject* target = scene.Get(m_DropTarget);
             if (dragged && (target || !m_DropTarget.IsValid())) Move(*dragged, target, m_DropPlace);
         }
-        if (m_ModelToPlace.IsValid()) {
-            Scene::GameObject* parent = scene.Get(m_ModelParent);
-            if (parent || !m_ModelParent.IsValid()) {
-                if (Scene::GameObject* model = m_Scene.InstantiateModel(m_ModelToPlace, parent)) m_Scene.Select(model);
+        if (m_AssetToPlace.IsValid()) {
+            Scene::GameObject* parent = scene.Get(m_PlaceParent);
+            if (parent || !m_PlaceParent.IsValid()) {
+                if (Scene::GameObject* placed = m_Scene.Place(m_AssetToPlace, parent)) m_Scene.Select(placed);
             }
-            m_ModelToPlace = {};
+            m_AssetToPlace = {};
         }
         if (Scene::GameObject* doomed = scene.Get(m_ToDestroy)) {
             VKE_CORE_INFO("Editor: destroyed '{}'", doomed->GetName());
             m_Scene.Destroy(*doomed);
         }
         m_ToDestroy = {};
+        if (Scene::GameObject* instance = scene.Get(m_ToUnpack)) m_Scene.Unpack(*instance);
+        m_ToUnpack = {};
     }
 
     void HierarchyPanel::DrawToolbar() {
@@ -157,16 +157,16 @@ namespace VKE::Editor {
         ImGui::InvisibleButton("##Empty", ImVec2(std::max(rest.x, 1.0f), std::max(rest.y, Sizes::RowHeight)));
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) m_Scene.Select(nullptr);
         if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kObjectPayload)) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload)) {
                 m_Dragged = *static_cast<const Handle<Scene::GameObject>*>(payload->Data);
                 m_DropTarget = {};
                 m_DropPending = true;
             } else if (const ImGuiPayload* asset =
                            ImGui::AcceptDragDropPayload(Fields::kAssetPayload, ImGuiDragDropFlags_AcceptBeforeDelivery)) {
-                Assets::AssetID model = *static_cast<const Assets::AssetID*>(asset->Data);
-                if (m_Scene.GetAssets().GetType(model) == Assets::AssetType::Model && asset->IsDelivery()) {
-                    m_ModelToPlace = model;
-                    m_ModelParent = {};
+                Assets::AssetID dropped = *static_cast<const Assets::AssetID*>(asset->Data);
+                if (m_Scene.CanPlace(dropped) && asset->IsDelivery()) {
+                    m_AssetToPlace = dropped;
+                    m_PlaceParent = {};
                 }
             }
             ImGui::EndDragDropTarget();
@@ -213,7 +213,7 @@ namespace VKE::Editor {
         }
 
         if (canDrag && !renaming && ImGui::BeginDragDropSource()) {
-            ImGui::SetDragDropPayload(kObjectPayload, &handle, sizeof(handle));
+            ImGui::SetDragDropPayload(Fields::kObjectPayload, &handle, sizeof(handle));
             ImGui::Text("%s  %s", Display::GetObjectIcon(object), object.GetName().c_str());
             ImGui::EndDragDropSource();
         }
@@ -225,14 +225,15 @@ namespace VKE::Editor {
         if (canDrag && ImGui::BeginDragDropTarget()) {
             ImGuiDragDropFlags flags =
                 ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kObjectPayload, flags)) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload, flags)) {
                 Handle<Scene::GameObject> draggedHandle = *static_cast<const Handle<Scene::GameObject>*>(payload->Data);
                 Scene::GameObject* dragged = scene.Get(draggedHandle);
                 f32 y = ImGui::GetMousePos().y - min.y;
                 place = y < Sizes::RowHeight * 0.25f   ? DropPlace::Before
                         : y > Sizes::RowHeight * 0.75f ? DropPlace::After
                                                        : DropPlace::Inside;
-                dropping = dragged && dragged != &object && !object.IsChildOf(dragged);
+                dropping = dragged && dragged != &object && !object.IsChildOf(dragged) && !m_Scene.IsFixed(*dragged) &&
+                           m_Scene.AcceptsChildren(place == DropPlace::Inside ? &object : object.GetParent());
                 if (dropping && payload->IsDelivery()) {
                     m_Dragged = draggedHandle;
                     m_DropTarget = handle;
@@ -240,12 +241,12 @@ namespace VKE::Editor {
                     m_DropPending = true;
                 }
             } else if (const ImGuiPayload* asset = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
-                // A model goes inside the row's object.
-                Assets::AssetID model = *static_cast<const Assets::AssetID*>(asset->Data);
-                dropping = m_Scene.GetAssets().GetType(model) == Assets::AssetType::Model;
+                // Goes inside the row's object.
+                Assets::AssetID dropped = *static_cast<const Assets::AssetID*>(asset->Data);
+                dropping = m_Scene.CanPlace(dropped) && m_Scene.AcceptsChildren(&object);
                 if (dropping && asset->IsDelivery()) {
-                    m_ModelToPlace = model;
-                    m_ModelParent = handle;
+                    m_AssetToPlace = dropped;
+                    m_PlaceParent = handle;
                 }
             }
             ImGui::EndDragDropTarget();
@@ -287,8 +288,13 @@ namespace VKE::Editor {
         // Inactive objects, and everything under them, are faint.
         bool active = object.IsActiveInHierarchy();
         f32 iconX = x + kIconWidth + Sizes::Space3;
-        DrawRowText(iconX, min.y, !active ? Colors::TextFaint : selected ? Colors::Text : Colors::TextMuted,
-                    Display::GetObjectIcon(object));
+        bool isInstance = object.IsPrefabPart();
+        DrawRowText(iconX, min.y,
+                    !active      ? Colors::TextFaint
+                    : isInstance ? Colors::Info
+                    : selected   ? Colors::Text
+                                 : Colors::TextMuted,
+                    object.IsPrefabRoot() ? Icons::Package : Display::GetObjectIcon(object));
 
         // The eye: always shown on an object turned off, on hover for the others.
         f32 eyeX = max.x - Sizes::Space4 - kIconWidth;
@@ -333,7 +339,7 @@ namespace VKE::Editor {
             ImGui::PopStyleColor();
             ImGui::PopStyleVar();
         } else {
-            u32 color = active ? Colors::Text : Colors::TextFaint;
+            u32 color = !active ? Colors::TextFaint : isInstance ? Colors::Info : Colors::Text;
             DrawRowText(nameX, min.y, color, object.GetName().c_str(), eyeX - Sizes::Space3);
         }
 
@@ -349,9 +355,16 @@ namespace VKE::Editor {
     }
 
     void HierarchyPanel::DrawRowMenu(Scene::GameObject& object) {
-        if (ImGui::BeginMenu(WithIcon(Icons::Plus, "Create child").c_str())) {
+        if (ImGui::BeginMenu(WithIcon(Icons::Plus, "Create child").c_str(), m_Scene.AcceptsChildren(&object))) {
             DrawCreateObjectItems(m_Scene, &object);
             ImGui::EndMenu();
+        }
+        if (Scene::GameObject* instance = object.GetPrefabRoot()) {
+            ImGui::Separator();
+            if (ImGui::MenuItem(WithIcon(Icons::Package, "Open prefab").c_str())) {
+                m_Scene.AskToOpenPrefab(instance->GetPrefab());
+            }
+            if (ImGui::MenuItem(WithIcon(Icons::Unlink, "Unpack prefab").c_str())) m_ToUnpack = instance->GetHandle();
         }
         ImGui::Separator();
         if (ImGui::MenuItem(WithIcon(Icons::Pencil, "Rename").c_str(), "F2")) StartRename(object);
@@ -362,19 +375,24 @@ namespace VKE::Editor {
             m_Scene.MarkDirty();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(WithIcon(Icons::Trash2, "Delete").c_str(), "Del")) m_ToDestroy = object.GetHandle();
+        if (ImGui::MenuItem(WithIcon(Icons::Trash2, "Delete").c_str(), "Del", false, !m_Scene.IsFixed(object))) {
+            m_ToDestroy = object.GetHandle();
+        }
     }
 
     void HierarchyPanel::HandleShortcuts() {
         Scene::GameObject* selected = m_Scene.GetSelected();
         if (!m_Focused || !selected || ImGui::GetIO().WantTextInput) return;
         if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) StartRename(*selected);
-        if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) m_ToDestroy = selected->GetHandle();
+        if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !m_Scene.IsFixed(*selected)) {
+            m_ToDestroy = selected->GetHandle();
+        }
     }
 
     void HierarchyPanel::Move(Scene::GameObject& dragged, Scene::GameObject* target, DropPlace place) {
+        if (m_Scene.IsFixed(dragged)) return;
         if (!target) {
-            dragged.SetParent(nullptr);
+            dragged.SetParent(m_Scene.GetDefaultParent());
             dragged.SetIndexInParent(SIZE_MAX);
         } else if (place == DropPlace::Inside) {
             dragged.SetParent(target);

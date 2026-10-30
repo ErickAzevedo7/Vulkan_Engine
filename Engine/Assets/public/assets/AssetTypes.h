@@ -30,14 +30,15 @@ namespace VKE::Assets {
         static AssetID Parse(const std::string& text) { return {ParseID(text)}; }
     };
 
-    // What kind of file an asset is. Scenes are only listed: the scene module reads them.
-    // Meshes are only inside models, like some materials.
+    // What kind of file an asset is. Scenes and prefabs are only listed: the scene module reads
+    // them. Meshes are only inside models, like some materials.
     enum class AssetType : u8 {
         Model,
         Texture,
         Material,
         Scene,
         Mesh,
+        Prefab,
     };
 
     // A folder of asset files. A read-only root, like the engine's content, is never written

@@ -7,6 +7,7 @@
 #include <renderer/Renderer.h>
 #include <scene/GameObject.h>
 #include <scene/ModelInstantiation.h>
+#include <scene/Prefab.h>
 #include <scene/Scene.h>
 #include <scene/SceneSerializer.h>
 #include <scene/components/CameraComponent.h>
@@ -538,12 +539,14 @@ namespace VKE {
     }
 
     void SandboxSceneSystem::SaveActiveScene() {
-        Scene::SceneSerializer::Save(*m_ActiveScene->Instance, m_Assets, GetSceneFile());
+        Scene::PrefabLibrary prefabs(m_Assets);
+        Scene::SceneSerializer::Save(*m_ActiveScene->Instance, prefabs, GetSceneFile());
     }
 
     void SandboxSceneSystem::ReloadActiveScene() {
         auto scene = MakeIunique<Scene::Scene>();
-        if (!Scene::SceneSerializer::Load(*scene, m_Assets, GetSceneFile())) return;
+        Scene::PrefabLibrary prefabs(m_Assets);
+        if (!Scene::SceneSerializer::Load(*scene, prefabs, GetSceneFile())) return;
 
         SandboxScene& active = *m_ActiveScene;
         active.Instance = std::move(scene);

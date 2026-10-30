@@ -20,6 +20,8 @@ namespace VKE::Editor::Fields {
 
     // Drag-and-drop payload of an asset, carrying its AssetID. The AssetBrowser drags it.
     inline constexpr const char* kAssetPayload = "VKE_ASSET";
+    // Drag-and-drop payload of an object, carrying its handle. The Hierarchy drags it.
+    inline constexpr const char* kObjectPayload = "VKE_OBJECT";
 
     // Starts a property row: the label in the first `labelWidth` pixels, cut with an ellipsis
     // if it doesn't fit, and the rest of the line for the field that follows.

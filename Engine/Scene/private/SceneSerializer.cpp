@@ -1,6 +1,7 @@
 #include "scene/SceneSerializer.h"
 #include "scene/ComponentRegistry.h"
 #include "scene/GameObject.h"
+#include "scene/Prefab.h"
 #include "scene/Properties.h"
 #include "scene/Scene.h"
 #include "scene/components/CameraComponent.h"
@@ -10,6 +11,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -39,31 +41,9 @@ namespace VKE::Scene {
             return *static_cast<T*>(value);
         }
 
-        bool IsEqual(const StructInfo& type, const void* a, const void* b);
-
-        bool IsEqual(const PropertyInfo& property, const void* a, const void* b) {
-            switch (property.Type) {
-            case PropertyType::Bool: return As<bool>(a) == As<bool>(b);
-            case PropertyType::F32: return As<f32>(a) == As<f32>(b);
-            case PropertyType::Vec3: return As<Vec3>(a) == As<Vec3>(b);
-            case PropertyType::Quat: return As<Quat>(a) == As<Quat>(b);
-            case PropertyType::Enum: return property.Enum->Read(a) == property.Enum->Read(b);
-            case PropertyType::Struct: return IsEqual(*property.Struct, a, b);
-            case PropertyType::Mesh: return As<Handle<Assets::MeshData>>(a) == As<Handle<Assets::MeshData>>(b);
-            case PropertyType::Materials: return As<MaterialList>(a) == As<MaterialList>(b);
-            }
-            return false;
-        }
-
-        bool IsEqual(const StructInfo& type, const void* a, const void* b) {
-            for (const PropertyInfo& property : type) {
-                if (!IsEqual(property, property.Get(a), property.Get(b))) return false;
-            }
-            return true;
-        }
-
         // Writes the properties of `object` that differ from `defaults` as one YAML map. Loading
-        // starts from a default-constructed component, so what's left out comes back as it was.
+        // starts from the same values, a new component's or a prefab's, so what's left out comes
+        // back as it was.
         class PropertyWriter {
         public:
             PropertyWriter(YAML::Emitter& out, const Assets::AssetManager& assets, const std::string& owner)
@@ -71,14 +51,14 @@ namespace VKE::Scene {
 
             void Write(const StructInfo& type, const void* object, const void* defaults) {
                 // Nothing to write fits on the key's line, as {}.
-                if (IsEqual(type, object, defaults)) {
+                if (AreEqual(type, object, defaults)) {
                     m_Out << YAML::Flow << YAML::BeginMap << YAML::EndMap;
                     return;
                 }
                 m_Out << YAML::BeginMap;
                 for (const PropertyInfo& property : type) {
                     const void* value = property.Get(object);
-                    if (IsEqual(property, value, property.Get(defaults))) continue;
+                    if (AreEqual(property, value, property.Get(defaults))) continue;
                     WriteProperty(property, value, property.Get(defaults));
                 }
                 m_Out << YAML::EndMap;
@@ -122,12 +102,14 @@ namespace VKE::Scene {
                     Write(*property.Struct, value, defaults);
                     break;
                 case PropertyType::Mesh: {
-                    Assets::AssetID id = m_Assets.GetID(As<Handle<Assets::MeshData>>(value));
-                    if (!id.IsValid()) {
+                    // No mesh is an empty string: the values compared with can have one.
+                    Handle<Assets::MeshData> mesh = As<Handle<Assets::MeshData>>(value);
+                    Assets::AssetID id = m_Assets.GetID(mesh);
+                    if (mesh.IsValid() && !id.IsValid()) {
                         WarnMadeInCode(property);
                         break;
                     }
-                    Key(property) << YAML::DoubleQuoted << id.ToString();
+                    Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
                     break;
                 }
                 case PropertyType::Materials: {
@@ -226,6 +208,8 @@ namespace VKE::Scene {
                 case PropertyType::Mesh: {
                     std::string text;
                     if (!ReadScalar(node, text, path)) break;
+                    As<Handle<Assets::MeshData>>(value) = {};
+                    if (text.empty()) break;
                     As<Handle<Assets::MeshData>>(value) = m_Assets.LoadMesh(Assets::AssetID::Parse(text));
                     if (!As<Handle<Assets::MeshData>>(value).IsValid()) Warn(path, "refers to a mesh that can't be loaded");
                     break;
@@ -292,9 +276,150 @@ namespace VKE::Scene {
             YAML::Node value = node[key];
             return value && value.IsScalar() ? ObjectID::Parse(value.Scalar()) : ObjectID();
         }
+
+        void ReadActive(const YAML::Node& node, GameObject& object) {
+            YAML::Node active = node["Active"];
+            if (!active || !active.IsScalar()) return;
+            try {
+                object.SetActive(active.as<bool>());
+            } catch (const YAML::Exception&) {
+            }
+        }
+
+        void WriteObject(YAML::Emitter& out, const GameObject& object, const Assets::AssetManager& assets,
+                         bool writeParent) {
+            out << YAML::BeginMap;
+            out << YAML::Key << "ID" << YAML::Value << YAML::DoubleQuoted << object.GetID().ToString();
+            out << YAML::Key << "Name" << YAML::Value << YAML::DoubleQuoted << object.GetName();
+            if (GameObject* parent = object.GetParent(); parent && writeParent) {
+                out << YAML::Key << "Parent" << YAML::Value << YAML::DoubleQuoted << parent->GetID().ToString();
+            }
+            out << YAML::Key << "Active" << YAML::Value << object.IsActive();
+
+            out << YAML::Key << "Components" << YAML::Value << YAML::BeginMap;
+            for (Component* component : object.GetComponents()) {
+                const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
+                out << YAML::Key << type->Name << YAML::Value;
+                PropertyWriter writer(out, assets, object.GetName());
+                writer.Write(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
+            }
+            out << YAML::EndMap;
+            out << YAML::EndMap;
+        }
+
+        // An instance: its prefab and what differs from it, by the part's ID in the prefab.
+        void WriteInstance(YAML::Emitter& out, GameObject& root, PrefabLibrary& prefabs) {
+            out << YAML::BeginMap;
+            out << YAML::Key << "ID" << YAML::Value << YAML::DoubleQuoted << root.GetID().ToString();
+            out << YAML::Key << "Name" << YAML::Value << YAML::DoubleQuoted << root.GetName();
+            out << YAML::Key << "Prefab" << YAML::Value << YAML::DoubleQuoted << root.GetPrefab().ToString();
+            if (GameObject* parent = root.GetParent()) {
+                out << YAML::Key << "Parent" << YAML::Value << YAML::DoubleQuoted << parent->GetID().ToString();
+            }
+
+            std::vector<GameObject*> parts;
+            CollectPreOrder(root, parts);
+            bool opened = false;
+            for (GameObject* part : parts) {
+                GameObject* pristine = prefabs.GetPart(*part);
+                if (!pristine) continue;
+
+                std::vector<std::pair<Component*, Component*>> changed;
+                for (Component* component : part->GetComponents()) {
+                    const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
+                    Component* original = pristine->GetComponent(component->GetTypeID());
+                    if (!original) continue;
+                    if (!AreEqual(*type->Properties, type->ToObject(component), type->ToObject(original))) {
+                        changed.emplace_back(component, original);
+                    }
+                }
+                bool renamed = part != &root && part->GetName() != pristine->GetName();
+                bool switched = part->IsActive() != pristine->IsActive();
+                if (changed.empty() && !renamed && !switched) continue;
+
+                if (!opened) out << YAML::Key << "Overrides" << YAML::Value << YAML::BeginSeq;
+                opened = true;
+                out << YAML::BeginMap;
+                out << YAML::Key << "Part" << YAML::Value << YAML::DoubleQuoted << part->GetPrefabPart().ToString();
+                if (renamed) out << YAML::Key << "Name" << YAML::Value << YAML::DoubleQuoted << part->GetName();
+                if (switched) out << YAML::Key << "Active" << YAML::Value << part->IsActive();
+                if (!changed.empty()) {
+                    out << YAML::Key << "Components" << YAML::Value << YAML::BeginMap;
+                    for (auto [component, original] : changed) {
+                        const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
+                        out << YAML::Key << type->Name << YAML::Value;
+                        PropertyWriter writer(out, prefabs.GetAssets(), part->GetName());
+                        writer.Write(*type->Properties, type->ToObject(component), type->ToObject(original));
+                    }
+                    out << YAML::EndMap;
+                }
+                out << YAML::EndMap;
+            }
+            if (opened) out << YAML::EndSeq;
+            out << YAML::EndMap;
+        }
+
+        void ReadOverrides(const YAML::Node& overrides, GameObject& root, Assets::AssetManager& assets) {
+            if (!overrides || !overrides.IsSequence()) return;
+            std::vector<GameObject*> parts;
+            CollectPreOrder(root, parts);
+
+            for (const YAML::Node& node : overrides) {
+                if (!node.IsMap()) continue;
+                ObjectID partID = ReadID(node, "Part");
+                auto found = std::find_if(parts.begin(), parts.end(),
+                                          [&](GameObject* part) { return part->GetPrefabPart() == partID; });
+                if (found == parts.end()) {
+                    VKE_CORE_WARN("SceneSerializer: an override of '{}' is for a part its prefab doesn't have anymore "
+                                  "and is ignored",
+                                  root.GetName());
+                    continue;
+                }
+
+                GameObject& object = **found;
+                if (node["Name"] && node["Name"].IsScalar()) object.SetName(node["Name"].Scalar());
+                ReadActive(node, object);
+
+                YAML::Node components = node["Components"];
+                if (!components || !components.IsMap()) continue;
+                for (const auto& item : components) {
+                    std::string typeName = item.first.Scalar();
+                    const ComponentTypeInfo* type = ComponentRegistry::Find(typeName);
+                    Component* component = type ? object.GetComponent(type->ID) : nullptr;
+                    if (!component) {
+                        VKE_CORE_WARN("SceneSerializer: an override of '{}' is for a component '{}' it doesn't have "
+                                      "and is ignored",
+                                      object.GetName(), typeName);
+                        continue;
+                    }
+                    PropertyReader reader(assets, object.GetName());
+                    reader.Read(*type->Properties, item.second, type->ToObject(component),
+                                std::string(type->Name) + ".");
+                    component->ApplyPropertyChanges(assets);
+                }
+            }
+        }
+
+        bool WriteFile(const std::string& text, const std::filesystem::path& file) {
+            std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+            stream << text;
+            if (!stream) {
+                VKE_CORE_ERROR("SceneSerializer: couldn't write '{}'", file.string());
+                return false;
+            }
+            return true;
+        }
+
+        std::string ToFileText(const YAML::Emitter& out) {
+            if (!out.good()) {
+                VKE_CORE_ERROR("SceneSerializer: couldn't write the objects: {}", out.GetLastError());
+                return {};
+            }
+            return std::string(out.c_str()) + '\n';
+        }
     } // namespace
 
-    std::string SceneSerializer::ToText(const Scene& scene, const Assets::AssetManager& assets) {
+    std::string SceneSerializer::ToText(const Scene& scene, PrefabLibrary& prefabs) {
         std::vector<GameObject*> objects;
         for (GameObject* root : scene.GetRootObjects()) {
             CollectPreOrder(*root, objects);
@@ -310,50 +435,26 @@ namespace VKE::Scene {
 
         out << YAML::Key << "Objects" << YAML::Value << YAML::BeginSeq;
         for (GameObject* object : objects) {
-            out << YAML::BeginMap;
-            out << YAML::Key << "ID" << YAML::Value << YAML::DoubleQuoted << object->GetID().ToString();
-            out << YAML::Key << "Name" << YAML::Value << YAML::DoubleQuoted << object->GetName();
-            if (GameObject* parent = object->GetParent()) {
-                out << YAML::Key << "Parent" << YAML::Value << YAML::DoubleQuoted << parent->GetID().ToString();
+            // An instance whose prefab is gone is kept as plain objects.
+            if (object->IsPrefabPart() && prefabs.GetRoot(object->GetPrefab())) {
+                if (object->IsPrefabRoot()) WriteInstance(out, *object, prefabs);
+            } else {
+                WriteObject(out, *object, prefabs.GetAssets(), true);
             }
-            out << YAML::Key << "Active" << YAML::Value << object->IsActive();
-
-            out << YAML::Key << "Components" << YAML::Value << YAML::BeginMap;
-            for (Component* component : object->GetComponents()) {
-                const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
-                out << YAML::Key << type->Name << YAML::Value;
-                PropertyWriter writer(out, assets, object->GetName());
-                writer.Write(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
-            }
-            out << YAML::EndMap;
-            out << YAML::EndMap;
         }
         out << YAML::EndSeq;
         out << YAML::EndMap;
-
-        if (!out.good()) {
-            VKE_CORE_ERROR("SceneSerializer: couldn't write the scene: {}", out.GetLastError());
-            return {};
-        }
-        return std::string(out.c_str()) + '\n';
+        return ToFileText(out);
     }
 
-    bool SceneSerializer::Save(const Scene& scene, const Assets::AssetManager& assets,
-                               const std::filesystem::path& file) {
-        std::string text = ToText(scene, assets);
-        if (text.empty()) return false;
-        std::ofstream stream(file, std::ios::binary | std::ios::trunc);
-        stream << text;
-        if (!stream) {
-            VKE_CORE_ERROR("SceneSerializer: couldn't write '{}'", file.string());
-            return false;
-        }
-
+    bool SceneSerializer::Save(const Scene& scene, PrefabLibrary& prefabs, const std::filesystem::path& file) {
+        std::string text = ToText(scene, prefabs);
+        if (text.empty() || !WriteFile(text, file)) return false;
         VKE_CORE_INFO("SceneSerializer: saved {} objects to '{}'", scene.GetObjectCount(), file.string());
         return true;
     }
 
-    bool SceneSerializer::Load(Scene& scene, Assets::AssetManager& assets, const std::filesystem::path& file) {
+    bool SceneSerializer::Load(Scene& scene, PrefabLibrary& prefabs, const std::filesystem::path& file) {
         YAML::Node root;
         try {
             root = YAML::LoadFile(file.string());
@@ -361,10 +462,10 @@ namespace VKE::Scene {
             VKE_CORE_ERROR("SceneSerializer: '{}': {}", file.string(), error.what());
             return false;
         }
-        return LoadObjects(scene, assets, root, file.string());
+        return LoadObjects(scene, prefabs.GetAssets(), &prefabs, root, file.string());
     }
 
-    bool SceneSerializer::LoadText(Scene& scene, Assets::AssetManager& assets, const std::string& text,
+    bool SceneSerializer::LoadText(Scene& scene, PrefabLibrary& prefabs, const std::string& text,
                                    const std::string& name) {
         YAML::Node root;
         try {
@@ -373,11 +474,43 @@ namespace VKE::Scene {
             VKE_CORE_ERROR("SceneSerializer: '{}': {}", name, error.what());
             return false;
         }
-        return LoadObjects(scene, assets, root, name);
+        return LoadObjects(scene, prefabs.GetAssets(), &prefabs, root, name);
     }
 
-    bool SceneSerializer::LoadObjects(Scene& scene, Assets::AssetManager& assets, const YAML::Node& root,
-                                      const std::string& sourceName) {
+    bool SceneSerializer::SavePrefab(GameObject& root, const Assets::AssetManager& assets,
+                                     const std::filesystem::path& file) {
+        std::vector<GameObject*> objects;
+        CollectPreOrder(root, objects);
+
+        YAML::Emitter out;
+        out << YAML::Comment("Written by the engine.");
+        out << YAML::BeginMap;
+        out << YAML::Key << "Objects" << YAML::Value << YAML::BeginSeq;
+        for (const GameObject* object : objects) {
+            WriteObject(out, *object, assets, object != &root);
+        }
+        out << YAML::EndSeq;
+        out << YAML::EndMap;
+
+        std::string text = ToFileText(out);
+        if (text.empty() || !WriteFile(text, file)) return false;
+        VKE_CORE_INFO("SceneSerializer: saved {} objects to '{}'", objects.size(), file.string());
+        return true;
+    }
+
+    bool SceneSerializer::LoadPrefab(Scene& scene, Assets::AssetManager& assets, const std::filesystem::path& file) {
+        YAML::Node root;
+        try {
+            root = YAML::LoadFile(file.string());
+        } catch (const YAML::Exception& error) {
+            VKE_CORE_ERROR("SceneSerializer: '{}': {}", file.string(), error.what());
+            return false;
+        }
+        return LoadObjects(scene, assets, nullptr, root, file.string());
+    }
+
+    bool SceneSerializer::LoadObjects(Scene& scene, Assets::AssetManager& assets, PrefabLibrary* prefabs,
+                                      const YAML::Node& root, const std::string& sourceName) {
         YAML::Node objectNodes = root["Objects"];
         if (!root.IsMap() || !objectNodes || !objectNodes.IsSequence()) {
             VKE_CORE_ERROR("SceneSerializer: '{}' is not a scene file", sourceName);
@@ -390,6 +523,7 @@ namespace VKE::Scene {
         struct Loaded {
             YAML::Node Node;
             GameObject* Object;
+            bool IsInstance;
         };
         std::vector<Loaded> loaded;
         std::unordered_map<ObjectID, GameObject*> byID;
@@ -411,9 +545,34 @@ namespace VKE::Scene {
                 continue;
             }
 
+            YAML::Node prefabNode = node["Prefab"];
+            if (prefabNode && prefabNode.IsScalar()) {
+                GameObject* instance = nullptr;
+                if (prefabs) {
+                    instance = prefabs->Instantiate(scene, Assets::AssetID::Parse(prefabNode.Scalar()), nullptr, id);
+                } else {
+                    VKE_CORE_WARN("SceneSerializer: prefabs can't go inside prefabs; '{}' in '{}' is left empty", name,
+                                  sourceName);
+                }
+                if (instance) {
+                    instance->SetName(name);
+                    std::vector<GameObject*> parts;
+                    CollectPreOrder(*instance, parts);
+                    for (GameObject* part : parts) {
+                        byID[part->GetID()] = part;
+                    }
+                    loaded.push_back({node, instance, true});
+                    continue;
+                }
+                if (prefabs) {
+                    VKE_CORE_WARN("SceneSerializer: '{}' in '{}' uses a prefab that can't be loaded and is left empty",
+                                  name, sourceName);
+                }
+            }
+
             GameObject& object = scene.CreateObject(name, id);
             byID[id] = &object;
-            loaded.push_back({node, &object});
+            loaded.push_back({node, &object, false});
         }
 
         // Then the hierarchy, in file order so siblings keep their order.
@@ -430,12 +589,11 @@ namespace VKE::Scene {
 
         for (const Loaded& entry : loaded) {
             GameObject& object = *entry.Object;
-            if (YAML::Node active = entry.Node["Active"]; active && active.IsScalar()) {
-                try {
-                    object.SetActive(active.as<bool>());
-                } catch (const YAML::Exception&) {
-                }
+            if (entry.IsInstance) {
+                ReadOverrides(entry.Node["Overrides"], object, assets);
+                continue;
             }
+            ReadActive(entry.Node, object);
 
             YAML::Node components = entry.Node["Components"];
             if (!components || !components.IsMap()) continue;

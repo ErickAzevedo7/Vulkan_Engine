@@ -10,6 +10,7 @@
 #include <ui/UISystem.h>
 #include <scene/Component.h>
 #include <scene/GameObject.h>
+#include <scene/Prefab.h>
 #include <scene/Properties.h>
 #include <scene/Scene.h>
 #include <ui/Icons.h>
@@ -55,30 +56,6 @@ namespace VKE::Editor {
             constexpr f32 kEpsilon = 1e-5f;
             return std::abs(a.x - b.x) < kEpsilon && std::abs(a.y - b.y) < kEpsilon && std::abs(a.z - b.z) < kEpsilon &&
                    std::abs(a.w - b.w) < kEpsilon;
-        }
-
-        // Copies a property's value from one object of its type to another.
-        void CopyValue(const Scene::PropertyInfo& property, void* to, const void* from) {
-            using Scene::PropertyType;
-            switch (property.Type) {
-            case PropertyType::Bool: *static_cast<bool*>(to) = *static_cast<const bool*>(from); break;
-            case PropertyType::F32: *static_cast<f32*>(to) = *static_cast<const f32*>(from); break;
-            case PropertyType::Vec3: *static_cast<Vec3*>(to) = *static_cast<const Vec3*>(from); break;
-            case PropertyType::Quat: *static_cast<Quat*>(to) = *static_cast<const Quat*>(from); break;
-            case PropertyType::Enum: property.Enum->Write(to, property.Enum->Read(from)); break;
-            case PropertyType::Struct:
-                for (const Scene::PropertyInfo& inner : *property.Struct) {
-                    CopyValue(inner, inner.Get(to), inner.Get(from));
-                }
-                break;
-            case PropertyType::Mesh:
-                *static_cast<Handle<Assets::MeshData>*>(to) = *static_cast<const Handle<Assets::MeshData>*>(from);
-                break;
-            case PropertyType::Materials:
-                *static_cast<std::vector<Handle<Assets::MaterialData>>*>(to) =
-                    *static_cast<const std::vector<Handle<Assets::MaterialData>>*>(from);
-                break;
-            }
         }
 
         // A row's height, centered text in the UI font.
@@ -148,6 +125,7 @@ namespace VKE::Editor {
             ImGui::Dummy(ImVec2(0.0f, Sizes::Space4 + Sizes::TabHeight));
         }
         DrawObjectHeader(*object);
+        if (object->IsPrefabPart()) DrawPrefabBar(*object);
 
         // Copied: the add menu can add a component while the blocks are drawn.
         std::vector<Scene::Component*> components;
@@ -164,11 +142,7 @@ namespace VKE::Editor {
         if (m_ToReset != Scene::kInvalidComponentType) {
             const Scene::ComponentTypeInfo* type = Scene::ComponentRegistry::Find(m_ToReset);
             if (Scene::Component* component = object->GetComponent(m_ToReset); component && type) {
-                void* target = type->ToObject(component);
-                const void* defaults = type->ToObject(type->Defaults.get());
-                for (const Scene::PropertyInfo& property : *type->Properties) {
-                    CopyValue(property, property.Get(target), property.Get(defaults));
-                }
+                Scene::CopyValues(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
                 component->ApplyPropertyChanges(m_Assets);
                 m_Scene.MarkDirty();
             }
@@ -178,6 +152,66 @@ namespace VKE::Editor {
             if (object->RemoveComponent(m_ToRemove)) m_Scene.MarkDirty();
             m_ToRemove = Scene::kInvalidComponentType;
         }
+        if (m_PrefabChange) {
+            std::function<void()> change = std::move(m_PrefabChange);
+            m_PrefabChange = nullptr;
+            change();
+        }
+    }
+
+    void InspectorPanel::DrawPrefabBar(Scene::GameObject& object) {
+        Scene::GameObject* root = object.GetPrefabRoot();
+        Assets::AssetID prefab = object.GetPrefab();
+        Scene::PrefabLibrary& prefabs = m_Scene.GetPrefabs();
+        std::filesystem::path file = m_Assets.GetFile(prefab);
+        bool known = !file.empty();
+        bool writable = known && m_Assets.IsWritable(prefab) && !m_Scene.IsPlaying();
+        u32 overrides = prefabs.CountOverrides(*root);
+
+        // The prefab's name, which selects it in Assets, and how far the instance is from it.
+        ImGui::SetCursorPosX(Sizes::Space4);
+        ImGui::AlignTextToFramePadding();
+        Widgets::Text(Icons::Package, known ? Colors::Info : Colors::Danger);
+        ImGui::SameLine(0.0f, Sizes::Space3);
+        ImGui::AlignTextToFramePadding();
+        std::string name = known ? file.stem().u8string() : std::string("Missing prefab");
+        Widgets::Text(name.c_str(), known ? Colors::Info : Colors::Danger, TextStyle::UIMedium);
+        if (known && ImGui::IsItemClicked()) m_Scene.SelectAsset(prefab);
+        if (known && ImGui::IsItemHovered()) ImGui::SetTooltip("Select the prefab in Assets");
+
+        std::string count = std::to_string(overrides) + (overrides == 1 ? " override" : " overrides");
+        ImFont* small = GetFont(TextStyle::UISmall);
+        f32 countWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, count.c_str()).x;
+        f32 countX = ImGui::GetWindowContentRegionMax().x - Sizes::Space4 - countWidth;
+        ImGui::SameLine(std::max(countX, ImGui::GetCursorPosX()));
+        ImGui::AlignTextToFramePadding();
+        Widgets::Text(count.c_str(), Colors::TextMuted, TextStyle::UISmall);
+
+        ImGui::SetCursorPosX(Sizes::Space4);
+        ImGui::PushFont(GetFont(TextStyle::UIMedium));
+        ImGui::BeginDisabled(!known);
+        if (ImGui::Button("Open")) m_Scene.AskToOpenPrefab(prefab);
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, Sizes::Space3);
+        ImGui::BeginDisabled(overrides == 0);
+        if (ImGui::Button("Revert all")) {
+            prefabs.RevertOverrides(*root);
+            m_Scene.MarkDirty();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, Sizes::Space3);
+        ImGui::BeginDisabled(overrides == 0 || !writable);
+        if (ImGui::Button("Apply all")) {
+            m_PrefabChange = [this, root, prefab] {
+                m_Scene.ChangePrefab(prefab, [&](Scene::GameObject&) { m_Scene.GetPrefabs().ApplyOverrides(*root); });
+            };
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, Sizes::Space3);
+        if (ImGui::Button("Unpack")) m_Scene.Unpack(*root);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Make the instance plain objects, no longer linked to the prefab");
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
     }
 
     void InspectorPanel::DrawObjectHeader(Scene::GameObject& object) {
@@ -274,10 +308,13 @@ namespace VKE::Editor {
         }
         if (ImGui::BeginPopup("##ComponentMenu")) {
             if (ImGui::MenuItem(WithIcon(Icons::RefreshCw, "Reset").c_str())) m_ToReset = type->ID;
-            // Every object keeps its transform.
+            // Every object keeps its transform, and an instance the components of its prefab.
             if (!isTransform) {
                 ImGui::Separator();
-                if (ImGui::MenuItem(WithIcon(Icons::Trash2, "Remove component").c_str())) m_ToRemove = type->ID;
+                if (ImGui::MenuItem(WithIcon(Icons::Trash2, "Remove component").c_str(), nullptr, false,
+                                    !component.GetOwner().IsPrefabPart())) {
+                    m_ToRemove = type->ID;
+                }
             }
             ImGui::EndPopup();
         }
@@ -287,7 +324,9 @@ namespace VKE::Editor {
             ImGui::Dummy(ImVec2(0.0f, Sizes::Space3 - Sizes::Space2));
             ImGui::Indent(kBodyIndent);
             ImGui::PushItemWidth(-Sizes::Space4);
-            bool changed = DrawProperties(*type->Properties, type->ToObject(&component));
+            Scene::Component* original = m_Scene.GetPrefabs().GetPart(component);
+            bool changed = DrawProperties(component, *type->Properties, type->ToObject(&component),
+                                          original ? type->ToObject(original) : nullptr);
             ImGui::PopItemWidth();
             ImGui::Unindent(kBodyIndent);
             ImGui::Dummy(ImVec2(0.0f, Sizes::Space4 - Sizes::Space2));
@@ -299,16 +338,65 @@ namespace VKE::Editor {
         ImGui::PopID();
     }
 
-    bool InspectorPanel::DrawProperties(const Scene::StructInfo& type, void* object) {
+    bool InspectorPanel::DrawProperties(Scene::Component& component, const Scene::StructInfo& type, void* object,
+                                        void* pristine) {
         bool changed = false;
         for (const Scene::PropertyInfo& property : type) {
             ImGui::PushID(property.Name);
+            void* value = property.Get(object);
+            void* original = pristine ? property.Get(pristine) : nullptr;
             if (property.Type == Scene::PropertyType::Struct) {
-                changed |= DrawProperties(*property.Struct, property.Get(object));
+                changed |= DrawProperties(component, *property.Struct, value, original);
             } else {
-                changed |= DrawProperty(property, property.Get(object));
+                f32 top = ImGui::GetCursorScreenPos().y;
+                changed |= DrawProperty(property, value);
+                if (original) changed |= DrawOverride(component, property, value, original, top);
             }
             ImGui::PopID();
+        }
+        return changed;
+    }
+
+    bool InspectorPanel::DrawOverride(Scene::Component& component, const Scene::PropertyInfo& property, void* value,
+                                      void* pristine, f32 top) {
+        if (Scene::AreEqual(property, value, pristine) || Scene::PrefabLibrary::IsPlacement(component, property)) {
+            return false;
+        }
+
+        // A blue mark in the margin, along the rows of the property.
+        f32 left = ImGui::GetWindowPos().x + Sizes::Space5;
+        f32 bottom = ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
+        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(left, top), ImVec2(left + 2.0f, bottom),
+                                                  ToImColor(Colors::Info));
+
+        ImVec2 rowMin(ImGui::GetWindowPos().x, top);
+        ImVec2 rowMax(rowMin.x + ImGui::GetWindowWidth(), bottom);
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            ImGui::IsMouseHoveringRect(rowMin, rowMax) && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+            ImGui::OpenPopup("##Override");
+        }
+
+        bool changed = false;
+        if (ImGui::BeginPopup("##Override")) {
+            Assets::AssetID prefab = component.GetOwner().GetPrefab();
+            if (ImGui::MenuItem(WithIcon(Icons::RefreshCw, "Revert to prefab").c_str())) {
+                Scene::CopyValue(property, value, pristine);
+                changed = true;
+            }
+            bool writable = m_Assets.IsWritable(prefab) && !m_Scene.IsPlaying();
+            if (ImGui::MenuItem(WithIcon(Icons::Package, "Apply to prefab").c_str(), nullptr, false, writable)) {
+                const Scene::PropertyInfo* applied = &property;
+                Scene::Component* source = &component;
+                m_PrefabChange = [this, prefab, applied, value, pristine, source] {
+                    m_Scene.ChangePrefab(prefab, [&](Scene::GameObject&) {
+                        Scene::CopyValue(*applied, pristine, value);
+                        if (Scene::Component* original = m_Scene.GetPrefabs().GetPart(*source)) {
+                            original->ApplyPropertyChanges(m_Assets);
+                        }
+                    });
+                };
+            }
+            ImGui::EndPopup();
         }
         return changed;
     }
@@ -448,9 +536,15 @@ namespace VKE::Editor {
         f32 buttonWidth = std::min(kAddButtonWidth, width - 2.0f * Sizes::Space4);
         ImGui::SetCursorScreenPos(ImVec2(min.x + std::floor((width - buttonWidth) * 0.5f), min.y + Sizes::Space5));
         ImGui::PushFont(GetFont(TextStyle::UIMedium));
+        // An instance has the components of its prefab.
+        ImGui::BeginDisabled(object.IsPrefabPart());
         bool clicked = ImGui::Button(WithIcon(Icons::Plus, "Add component").c_str(),
                                      ImVec2(buttonWidth, Sizes::ControlHeight));
+        ImGui::EndDisabled();
         ImGui::PopFont();
+        if (object.IsPrefabPart() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("Open the prefab, or unpack the instance, to add components");
+        }
         ImVec2 below(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y + Sizes::Space1);
         if (clicked) {
             m_AddFilter.clear();
@@ -502,13 +596,25 @@ namespace VKE::Editor {
             ImGui::SetCursorPosX(Sizes::Space4);
             Widgets::Text("Double-click the scene in Assets to open it.", Colors::TextMuted);
             break;
+        case Assets::AssetType::Prefab:
+            ImGui::SetCursorPosX(Sizes::Space4);
+            ImGui::PushFont(GetFont(TextStyle::UIMedium));
+            if (ImGui::Button(WithIcon(Icons::Package, "Open prefab").c_str())) m_Scene.AskToOpenPrefab(asset);
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
+            ImGui::SetCursorPosX(Sizes::Space4);
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
+            Widgets::Text("Drag the prefab into the Hierarchy or the Viewport to place it.", Colors::TextFaint,
+                          TextStyle::UISmall);
+            ImGui::PopTextWrapPos();
+            break;
         }
         ImGui::PopID();
     }
 
     void InspectorPanel::DrawAssetHeader(Assets::AssetID asset, Assets::AssetType type) {
         static constexpr const char* kIcons[] = {Icons::Boxes, Icons::Image, Icons::Palette, Icons::Clapperboard,
-                                                 Icons::Box};
+                                                 Icons::Box,   Icons::Package};
         std::filesystem::path file = m_Assets.GetFile(asset);
         std::string name = file.empty() ? std::string() : file.stem().u8string();
         if (name.empty()) {

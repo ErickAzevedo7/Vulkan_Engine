@@ -151,6 +151,9 @@ namespace VKE::Editor {
         if (Assets::AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
             Request(Action::OpenScene, scene);
         }
+        if (Assets::AssetID prefab = m_Scene.TakePrefabToOpen(); prefab.IsValid()) {
+            Request(Action::OpenPrefab, prefab);
+        }
         DrawUnsavedDialog();
         UpdateTitle();
 
@@ -185,12 +188,14 @@ namespace VKE::Editor {
     }
 
     bool EditorSystem::HasUnsavedChanges(Action action) const {
+        // The scene waits in memory while a prefab is open.
+        if (action == Action::OpenPrefab) return false;
         bool closing = action == Action::CloseProject || action == Action::Quit;
         return m_Scene.IsDirty() || (closing && m_MaterialEdits.GetUnsavedCount() > 0);
     }
 
     void EditorSystem::StartPlay() {
-        if (!m_Scene.Play()) return;
+        if (m_Scene.IsEditingPrefab() || !m_Scene.Play()) return;
         m_ShowGame = true;
         ImGui::SetWindowFocus(GamePanel::GetWindowName());
     }
@@ -200,23 +205,38 @@ namespace VKE::Editor {
         if (m_ShowViewport) ImGui::SetWindowFocus(ViewportPanel::GetWindowName());
     }
 
-    void EditorSystem::Request(Action action, Assets::AssetID scene) {
+    void EditorSystem::Request(Action action, Assets::AssetID asset) {
         // What the action asks about is the scene as it was before Play.
         if (m_Scene.IsPlaying()) StopPlay();
+        m_AfterPrefab = Action::None;
+        if (m_Scene.IsEditingPrefab() && action != Action::ClosePrefab) {
+            if (action == Action::OpenPrefab && asset == m_Scene.GetID()) return;
+            m_AfterPrefab = action;
+            m_AfterPrefabAsset = asset;
+            action = Action::ClosePrefab;
+            asset = {};
+        }
         if (HasUnsavedChanges(action)) {
             m_PendingAction = action;
-            m_PendingScene = scene;
+            m_PendingAsset = asset;
             m_OpenUnsavedDialog = true;
             return;
         }
-        Perform(action, scene);
+        Perform(action, asset);
     }
 
-    void EditorSystem::Perform(Action action, Assets::AssetID scene) {
+    void EditorSystem::Perform(Action action, Assets::AssetID asset) {
         switch (action) {
         case Action::None: break;
         case Action::NewScene: m_Scene.New(); break;
-        case Action::OpenScene: OpenScene(scene); break;
+        case Action::OpenScene: OpenScene(asset); break;
+        case Action::OpenPrefab:
+            if (m_Scene.OpenPrefab(asset) && m_ShowViewport) ImGui::SetWindowFocus(ViewportPanel::GetWindowName());
+            break;
+        case Action::ClosePrefab:
+            m_Scene.ClosePrefab();
+            if (m_AfterPrefab != Action::None) Request(m_AfterPrefab, m_AfterPrefabAsset);
+            break;
         case Action::CloseProject:
             // Back to the project screen, which is the editor started without a project.
             if (!Platform::Process::Launch(Platform::FileSystem::GetExecutablePath(), {})) return;
@@ -284,7 +304,9 @@ namespace VKE::Editor {
         }
         if (m_Scene.IsPlaying()) return;
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, flags)) SaveScene();
-        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, flags)) SaveSceneAs();
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, flags) && !m_Scene.IsEditingPrefab()) {
+            SaveSceneAs();
+        }
     }
 
     void EditorSystem::DrawMenuBar() {
@@ -305,14 +327,18 @@ namespace VKE::Editor {
             }
             ImGui::Separator();
             bool editing = !m_Scene.IsPlaying();
-            if (ImGui::MenuItem(WithIcon(Icons::Save, "Save scene").c_str(), "Ctrl+S", false, editing)) SaveScene();
-            if (ImGui::MenuItem(WithIcon(Icons::Copy, "Save scene as\xe2\x80\xa6").c_str(), "Ctrl+Shift+S", false,
+            bool prefab = m_Scene.IsEditingPrefab();
+            if (ImGui::MenuItem(WithIcon(Icons::Save, prefab ? "Save prefab" : "Save scene").c_str(), "Ctrl+S", false,
                                 editing)) {
+                SaveScene();
+            }
+            if (ImGui::MenuItem(WithIcon(Icons::Copy, "Save scene as\xe2\x80\xa6").c_str(), "Ctrl+Shift+S", false,
+                                editing && !prefab)) {
                 SaveSceneAs();
             }
             bool isStart = m_Scene.GetID().IsValid() && m_Scene.GetID() == m_Project.GetStartScene();
             if (ImGui::MenuItem(WithIcon(Icons::Play, "Start scene").c_str(), nullptr, isStart,
-                                m_Scene.GetID().IsValid() && !isStart)) {
+                                m_Scene.GetID().IsValid() && !isStart && !prefab)) {
                 SetStartScene();
             }
             ImGui::Separator();
@@ -384,9 +410,23 @@ namespace VKE::Editor {
         ImVec2 min = ImGui::GetWindowPos();
         f32 width = ImGui::GetWindowWidth();
         // The bar's lower edge turns green while playing, so the mode can't be missed.
+        bool editingPrefab = m_Scene.IsEditingPrefab();
         ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, min.y + Sizes::ToolbarHeight - 1.0f),
                                             ImVec2(min.x + width, min.y + Sizes::ToolbarHeight - 1.0f),
-                                            UI::ToImColor(playing ? Colors::Live : Colors::Line));
+                                            UI::ToImColor(playing         ? Colors::Live
+                                                          : editingPrefab ? Colors::Info
+                                                                          : Colors::Line));
+
+        // With a prefab open, the way back to the scene on the left.
+        if (editingPrefab) {
+            ImGui::SetCursorPos(ImVec2(Sizes::Space4, std::floor((Sizes::ToolbarHeight - Sizes::ControlHeight) * 0.5f)));
+            std::string back = WithIcon(Icons::ChevronLeft, m_Scene.GetWaitingFileName().c_str());
+            if (Widgets::GhostButton(back.c_str())) Request(Action::ClosePrefab);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Back to the scene");
+            ImGui::SameLine(0.0f, Sizes::Space3);
+            ImGui::AlignTextToFramePadding();
+            Widgets::Text(WithIcon(Icons::Package, m_Scene.GetFileName().c_str()).c_str(), Colors::Info);
+        }
 
         // Play, Pause and Stop in the middle.
         constexpr f32 kButtonWidth = 30.0f;
@@ -396,7 +436,9 @@ namespace VKE::Editor {
 
         bool playLit = mode == PlayMode::Playing;
         if (playLit) ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::Live));
+        ImGui::BeginDisabled(editingPrefab);
         if (Widgets::GhostButton(Icons::Play, size) && !playing) StartPlay();
+        ImGui::EndDisabled();
         if (playLit) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play (Ctrl+P)");
 
@@ -574,7 +616,7 @@ namespace VKE::Editor {
         bool save = Widgets::PrimaryButton("Save") || ImGui::IsKeyPressed(ImGuiKey_Enter);
 
         Action action = m_PendingAction;
-        Assets::AssetID scene = m_PendingScene;
+        Assets::AssetID asset = m_PendingAsset;
         if (cancel || discard || save) {
             ImGui::CloseCurrentPopup();
             m_PendingAction = Action::None;
@@ -584,7 +626,7 @@ namespace VKE::Editor {
         // A save that didn't happen, like a cancelled file dialog, cancels the action too.
         if (save && m_Scene.IsDirty() && !SaveScene()) return;
         if (save && materials > 0 && !m_MaterialEdits.SaveAll()) return;
-        if (save || discard) Perform(action, scene);
+        if (save || discard) Perform(action, asset);
     }
 
     void EditorSystem::UpdateTitle() {

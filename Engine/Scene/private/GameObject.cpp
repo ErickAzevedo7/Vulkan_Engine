@@ -69,6 +69,15 @@ namespace VKE::Scene {
         RefreshActiveInHierarchy();
     }
 
+    GameObject* GameObject::GetPrefabRoot() {
+        if (!IsPrefabPart()) return nullptr;
+        GameObject* object = this;
+        while (!object->IsPrefabRoot()) {
+            object = object->m_Parent;
+        }
+        return object;
+    }
+
     Component* GameObject::AddComponent(ComponentTypeID type) {
         if (Component* existing = GetComponent(type)) return existing;
 

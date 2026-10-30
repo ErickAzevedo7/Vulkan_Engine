@@ -55,16 +55,19 @@ namespace VKE::Editor {
             None,
             NewScene,
             OpenScene,
+            OpenPrefab,
+            ClosePrefab,
             CloseProject,
             Quit,
         };
 
         // Does `action`, asking first to save the scene if it has unsaved changes, and the
-        // materials too when the project closes.
-        void Request(Action action, Assets::AssetID scene = {});
+        // materials too when the project closes. `asset` is the scene or prefab to open. With a
+        // prefab open, it is closed first, the same way.
+        void Request(Action action, Assets::AssetID asset = {});
         // Whether `action` would lose changes: the scene's, and for closing, the materials'.
         bool HasUnsavedChanges(Action action) const;
-        void Perform(Action action, Assets::AssetID scene);
+        void Perform(Action action, Assets::AssetID asset);
 
         // Saves to the scene's file, or asks for one; false if it wasn't saved.
         bool SaveScene();
@@ -114,8 +117,11 @@ namespace VKE::Editor {
         bool m_LayoutChecked = false;
 
         Action m_PendingAction = Action::None;
-        Assets::AssetID m_PendingScene;
+        Assets::AssetID m_PendingAsset;
         bool m_OpenUnsavedDialog = false;
+        // What goes on once the open prefab is closed.
+        Action m_AfterPrefab = Action::None;
+        Assets::AssetID m_AfterPrefabAsset;
         // Read from the editor's settings: the scene to open first.
         Assets::AssetID m_LastScene;
 

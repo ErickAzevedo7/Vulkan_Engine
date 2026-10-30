@@ -6,8 +6,10 @@
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <renderer/RenderTypes.h>
+#include <scene/Prefab.h>
 
 #include <filesystem>
+#include <functional>
 #include <string>
 
 namespace VKE::Assets {
@@ -42,6 +44,9 @@ namespace VKE::Editor {
     //
     // Play keeps the scene as text in memory and runs it; Stop puts that text back, so everything
     // that happened in between is lost.
+    //
+    // A prefab can be opened in place of the scene, which waits in memory: the objects are then
+    // the prefab's, and Save writes the prefab and remakes the scene's instances from it.
     class EditorScene {
     public:
         explicit EditorScene(Assets::AssetManager& assets);
@@ -60,8 +65,9 @@ namespace VKE::Editor {
         Scene::Scene& GetScene() { return *m_Scene; }
         const Scene::Scene& GetScene() const { return *m_Scene; }
         Assets::AssetManager& GetAssets() { return m_Assets; }
+        Scene::PrefabLibrary& GetPrefabs() { return m_Prefabs; }
 
-        // Invalid until the scene is saved.
+        // Invalid until the scene is saved. While a prefab is open, these are the prefab's.
         Assets::AssetID GetID() const { return m_ID; }
         // Where the scene asset is now, which follows it when it is moved; empty until saved, or
         // once its file is deleted.
@@ -88,6 +94,40 @@ namespace VKE::Editor {
         // Changes when another scene is opened, but not when Stop restores this one.
         u32 GetOpenCount() const { return m_OpenCount; }
 
+        bool IsEditingPrefab() const { return m_Waiting.Objects != nullptr; }
+        // The name of the scene waiting while a prefab is open.
+        std::string GetWaitingFileName() const;
+        // False, logged, if the asset isn't a prefab or can't be read; the scene stays.
+        bool OpenPrefab(Assets::AssetID prefab);
+        // Back to the scene, dropping what wasn't saved of the prefab.
+        void ClosePrefab();
+
+        // Asks for a prefab to be opened, for what can't replace the scene while drawing it.
+        void AskToOpenPrefab(Assets::AssetID prefab) { m_PrefabToOpen = prefab; }
+        // The prefab asked for since the last call; invalid if none.
+        Assets::AssetID TakePrefabToOpen();
+
+        // Whether `object` could become a prefab: prefabs don't go inside prefabs.
+        bool CanCreatePrefab(const Scene::GameObject& object) const;
+        // Writes `object` and everything below it to `file`, and puts an instance of the new
+        // prefab in their place. Invalid, logged, if it can't.
+        Assets::AssetID CreatePrefab(Scene::GameObject& object, const std::filesystem::path& file);
+        // Has `change` edit the prefab's objects, given by their root, writes the file and remakes
+        // the scene's instances, which keep their overrides. Replaces every object of the scene.
+        // False, logged, if the prefab can't be written.
+        bool ChangePrefab(Assets::AssetID prefab, const std::function<void(Scene::GameObject&)>& change);
+        // Makes an instance plain objects, which stay as they are, and marks the scene changed.
+        void Unpack(Scene::GameObject& instance);
+
+        // The hierarchy's rules. Prefab instances keep the shape of their prefab: only a whole
+        // instance moves or goes away, and nothing goes inside one. A prefab has one root.
+        // Whether `object` has to stay where it is and can't be destroyed.
+        bool IsFixed(const Scene::GameObject& object) const;
+        // Whether objects can go under `parent`, or at the root of the scene for null.
+        bool AcceptsChildren(const Scene::GameObject* parent) const;
+        // Where new objects go when no parent is given: the open prefab's root, or the scene's root.
+        Scene::GameObject* GetDefaultParent() const;
+
         // The selected object, or null. Nothing is selected after New and Open.
         Scene::GameObject* GetSelected() const;
         // Selecting anything, or nothing, deselects the asset.
@@ -106,11 +146,30 @@ namespace VKE::Editor {
         // root at `position` in its parent's space. Null, logged, if it isn't a model or can't load.
         Scene::GameObject* InstantiateModel(Assets::AssetID model, Scene::GameObject* parent = nullptr,
                                             const Vec3& position = Vec3(0.0f));
+        // Whether the asset can go in the scene with Place: a model, or a prefab outside a prefab.
+        bool CanPlace(Assets::AssetID asset) const;
+        // The objects of a model or a new instance of a prefab, as InstantiateModel does.
+        Scene::GameObject* Place(Assets::AssetID asset, Scene::GameObject* parent = nullptr,
+                                 const Vec3& position = Vec3(0.0f));
         // Destroys the object and its children, and marks the scene changed.
         void Destroy(Scene::GameObject& object);
 
     private:
+        // The scene while a prefab is open in its place.
+        struct WaitingScene {
+            Iunique<Scene::Scene> Objects;
+            Assets::AssetID ID;
+            bool Dirty = false;
+            Handle<Scene::GameObject> Selected;
+        };
+
+        // Replaces `scene` with the one `text` holds, with the same object selected if it's there.
+        bool Reload(Iunique<Scene::Scene>& scene, Handle<Scene::GameObject>& selected, const std::string& text,
+                    const std::string& name);
+        bool SavePrefab();
+
         Assets::AssetManager& m_Assets;
+        Scene::PrefabLibrary m_Prefabs;
         Iunique<Scene::Scene> m_Scene;
         Assets::AssetID m_ID;
         u32 m_OpenCount = 0;
@@ -120,6 +179,8 @@ namespace VKE::Editor {
         bool m_DirtyAtPlay = false;
         Handle<Scene::GameObject> m_Selected;
         Assets::AssetID m_SelectedAsset;
+        WaitingScene m_Waiting;
+        Assets::AssetID m_PrefabToOpen;
     };
 
 } // namespace VKE::Editor

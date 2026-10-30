@@ -5,10 +5,13 @@
 #include <cctype>
 #include <cmath>
 #include <core/Log.h>
+#include <cstring>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <renderer/Overlay.h>
+#include <scene/GameObject.h>
+#include <scene/Scene.h>
 #include <ui/Icons.h>
 #include <ui/Style.h>
 #include <ui/UISystem.h>
@@ -62,6 +65,7 @@ namespace VKE::Editor {
             case Assets::AssetType::Material: return Icons::Palette;
             case Assets::AssetType::Scene: return Icons::Clapperboard;
             case Assets::AssetType::Mesh: return Icons::Box;
+            case Assets::AssetType::Prefab: return Icons::Package;
             }
             return Icons::File;
         }
@@ -73,6 +77,7 @@ namespace VKE::Editor {
             case Assets::AssetType::Material: return "MATERIAL";
             case Assets::AssetType::Scene: return "SCENE";
             case Assets::AssetType::Mesh: return "MESH";
+            case Assets::AssetType::Prefab: return "PREFAB";
             }
             return "";
         }
@@ -498,13 +503,18 @@ namespace VKE::Editor {
             m_SelectedPath.clear();
             if (m_Scene.GetSelectedAsset().IsValid()) m_Scene.SelectAsset({});
         }
-        if (!IsReadOnly(m_Folder)) AcceptMove(m_Folder);
         if (ImGui::BeginPopupContextItem("##EmptyMenu")) {
             DrawEmptyMenu();
             ImGui::EndPopup();
         }
         ImGui::PopStyleVar();
         ImGui::EndChild();
+
+        // Anything dropped in the content lands in the open folder.
+        if (!IsReadOnly(m_Folder) && AcceptMove(m_Folder)) {
+            ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                                ToImColor(Colors::Accent));
+        }
     }
 
     void AssetBrowserPanel::DrawTile(const Item& item, f32 width) {
@@ -706,6 +716,8 @@ namespace VKE::Editor {
                 m_Filter.clear();
             } else if (!item.IsSubAsset && item.Type == Assets::AssetType::Scene) {
                 m_SceneToOpen = item.ID;
+            } else if (!item.IsSubAsset && item.Type == Assets::AssetType::Prefab) {
+                m_Scene.AskToOpenPrefab(item.ID);
             } else if (!item.IsSubAsset && item.Type == Assets::AssetType::Model) {
                 if (!m_OpenModels.erase(item.ID)) {
                     m_OpenModels.insert(item.ID);
@@ -739,6 +751,10 @@ namespace VKE::Editor {
         if (!item.IsSubAsset && item.Type == Assets::AssetType::Scene && !item.IsFolder &&
             ImGui::MenuItem(WithIcon(Icons::Clapperboard, "Open scene").c_str())) {
             m_SceneToOpen = item.ID;
+        }
+        if (!item.IsSubAsset && item.Type == Assets::AssetType::Prefab && !item.IsFolder &&
+            ImGui::MenuItem(WithIcon(Icons::Package, "Open prefab").c_str())) {
+            m_Scene.AskToOpenPrefab(item.ID);
         }
         if (ImGui::MenuItem(WithIcon(Icons::Copy, "Copy ID").c_str(), nullptr, false, !item.IsFolder)) {
             ImGui::SetClipboardText(item.ID.ToString().c_str());
@@ -801,7 +817,34 @@ namespace VKE::Editor {
             if (over && folderPayload->IsDelivery()) Move(dragged, folder);
         }
         ImGui::EndDragDropTarget();
+        return AcceptObject(folder) || over;
+    }
+
+    bool AssetBrowserPanel::AcceptObject(const std::filesystem::path& folder) {
+        bool over = false;
+        if (!ImGui::BeginDragDropTarget()) return false;
+        ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload, flags)) {
+            auto handle = *static_cast<const Handle<Scene::GameObject>*>(payload->Data);
+            Scene::GameObject* object = m_Scene.GetScene().Get(handle);
+            over = object && m_Scene.CanCreatePrefab(*object);
+            if (over && payload->IsDelivery()) CreatePrefab(*object, folder);
+        }
+        ImGui::EndDragDropTarget();
         return over;
+    }
+
+    void AssetBrowserPanel::CreatePrefab(Scene::GameObject& object, const std::filesystem::path& folder) {
+        // Named after the object, with what a file name can't have replaced.
+        std::string name = object.GetName();
+        for (char& c : name) {
+            if (std::strchr("\\/:*?\"<>|", c)) c = '_';
+        }
+        std::filesystem::path file = MakeUniquePath(folder, name.empty() ? "Prefab" : name, ".prefab");
+        Assets::AssetID prefab = m_Scene.CreatePrefab(object, file);
+        if (!prefab.IsValid()) return;
+        Refresh();
+        m_SelectedPath = file;
     }
 
     void AssetBrowserPanel::Move(const std::filesystem::path& from, const std::filesystem::path& folder) {

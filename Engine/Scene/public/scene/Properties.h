@@ -104,4 +104,11 @@ namespace VKE::Scene {
         return Properties + Count;
     }
 
+    // Compare and copy the values of properties, given as what PropertyInfo::Get returns for
+    // two objects of the same type, or whole objects of a type.
+    bool AreEqual(const PropertyInfo& property, const void* a, const void* b);
+    bool AreEqual(const StructInfo& type, const void* a, const void* b);
+    void CopyValue(const PropertyInfo& property, void* to, const void* from);
+    void CopyValues(const StructInfo& type, void* to, const void* from);
+
 } // namespace VKE::Scene

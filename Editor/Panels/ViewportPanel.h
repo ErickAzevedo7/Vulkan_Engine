@@ -87,6 +87,9 @@ namespace VKE::Editor {
         bool m_Visible = false;
 
         EditorCamera m_Camera;
+        // Where the camera was in the scene, while a prefab is open.
+        EditorCamera m_SceneCamera;
+        bool m_EditingPrefab = false;
         TransformGizmo m_Gizmo;
         SceneMarkers m_Markers;
         Renderer::WorldDrawList m_World;

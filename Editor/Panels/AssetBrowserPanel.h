@@ -7,6 +7,10 @@
 #include <unordered_set>
 #include <vector>
 
+namespace VKE::Scene {
+    class GameObject;
+} // namespace VKE::Scene
+
 namespace VKE::UI {
     class UISystem;
 } // namespace VKE::UI
@@ -17,10 +21,11 @@ namespace VKE::Editor {
     class MaterialEdits;
 
     // The asset roots' folders as a tree, and the files of the open folder as tiles or a list.
-    // A click selects an asset for the Inspector and a double click opens a folder or a scene;
-    // a model's tile opens to show the meshes and materials inside it. Assets are dragged onto
-    // asset fields, the Hierarchy and the Viewport, and files and folders onto folders to move
-    // them. The context menu creates folders and materials, renames and deletes, always with the
+    // A click selects an asset for the Inspector and a double click opens a folder, a scene or
+    // a prefab's opens it. A model's tile opens to show the meshes and materials inside it. Assets
+    // are dragged onto asset fields, the Hierarchy and the Viewport, and files and folders onto
+    // folders to move them; an object dragged from the Hierarchy becomes a prefab where it lands.
+    // The context menu creates folders and materials, renames and deletes, always with the
     // .vkasset files, so assets keep their IDs. Read-only roots only show their files.
     class AssetBrowserPanel {
     public:
@@ -64,10 +69,12 @@ namespace VKE::Editor {
         void DrawDeleteDialog();
         void HandleShortcuts();
 
-        // Takes files and folders dropped on the last item, to move them into `folder`.
-        // Returns whether one is over it now.
+        // Takes files and folders dropped on the last item, to move them into `folder`, and
+        // objects, to make prefabs there. Returns whether one is over it now.
         bool AcceptMove(const std::filesystem::path& folder);
+        bool AcceptObject(const std::filesystem::path& folder);
         void Move(const std::filesystem::path& from, const std::filesystem::path& folder);
+        void CreatePrefab(Scene::GameObject& object, const std::filesystem::path& folder);
 
         void UpdateListing();
         void CreateFolder();

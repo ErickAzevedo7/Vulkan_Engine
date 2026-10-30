@@ -82,6 +82,7 @@ namespace VKE::Scene {
 
     private:
         friend class GameObject;
+        friend class PrefabLibrary;
         friend class SceneSerializer;
 
         // For loading: the object keeps the ID it was saved with.

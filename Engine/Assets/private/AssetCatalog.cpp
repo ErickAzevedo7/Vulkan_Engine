@@ -27,6 +27,8 @@ namespace VKE::Assets {
                 outType = AssetType::Material;
             } else if (extension == ".scene") {
                 outType = AssetType::Scene;
+            } else if (extension == ".prefab") {
+                outType = AssetType::Prefab;
             } else {
                 return false;
             }
@@ -46,6 +48,7 @@ namespace VKE::Assets {
             case AssetType::Material: return "Material";
             case AssetType::Scene: return "Scene";
             case AssetType::Mesh: return "Mesh";
+            case AssetType::Prefab: return "Prefab";
             }
             return "";
         }

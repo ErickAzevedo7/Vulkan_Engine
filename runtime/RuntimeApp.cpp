@@ -9,6 +9,7 @@
 #include <project/Project.h>
 #include <renderer/Renderer.h>
 #include <scene/ComponentRegistry.h>
+#include <scene/Prefab.h>
 #include <scene/Scene.h>
 #include <scene/SceneSerializer.h>
 
@@ -28,7 +29,8 @@ namespace {
                 VKE::RequestExit();
                 return;
             }
-            if (!VKE::Scene::SceneSerializer::Load(m_Scene, m_Assets, m_Assets.GetFile(m_StartScene))) {
+            VKE::Scene::PrefabLibrary prefabs(m_Assets);
+            if (!VKE::Scene::SceneSerializer::Load(m_Scene, prefabs, m_Assets.GetFile(m_StartScene))) {
                 VKE::RequestExit();
             }
         }
