@@ -63,6 +63,9 @@ namespace VKE::Scene {
         // colliders out of solid ones (moving their objects), and sends the result to the render
         // scene. Call it once per frame, before rendering.
         void Update();
+        // Only sends the changes on, with no physics step: nothing moves by itself. For a scene
+        // being edited or paused. Call it instead of Update.
+        void Sync();
 
         // What touched what during the last Update, each pair once.
         const std::vector<Contact>& GetContacts() const { return m_Contacts; }

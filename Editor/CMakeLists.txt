@@ -14,6 +14,7 @@ add_executable(Editor
     Panels/HierarchyPanel.cpp
     Panels/InspectorPanel.cpp
     Panels/ViewportPanel.cpp
+    Panels/GamePanel.cpp
     Panels/AssetBrowserPanel.cpp
     MaterialEdits.cpp
     Gizmo/GizmoMath.cpp

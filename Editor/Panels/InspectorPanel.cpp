@@ -133,6 +133,20 @@ namespace VKE::Editor {
         }
 
         ImGui::BeginChild("##Components");
+        if (m_Scene.IsPlaying()) {
+            // The note above the object, in the color of the Play mode.
+            const char* note = "Playing. Changes made now are lost on Stop.";
+            ImVec2 min(ImGui::GetCursorScreenPos().x + Sizes::Space4, ImGui::GetCursorScreenPos().y + Sizes::Space4);
+            ImVec2 max(min.x + ImGui::GetContentRegionAvail().x - 2.0f * Sizes::Space4, min.y + Sizes::TabHeight);
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(min, max, ToImColor(Colors::LiveSoft), Sizes::RadiusSm);
+            ImFont* small = GetFont(TextStyle::UISmall);
+            draw->AddText(small, small->FontSize,
+                          ImVec2(min.x + Sizes::Space4,
+                                 std::floor(min.y + (Sizes::TabHeight - small->FontSize) * 0.5f)),
+                          ToImColor(Colors::Text), note);
+            ImGui::Dummy(ImVec2(0.0f, Sizes::Space4 + Sizes::TabHeight));
+        }
         DrawObjectHeader(*object);
 
         // Copied: the add menu can add a component while the blocks are drawn.

@@ -2,6 +2,7 @@
 
 #include <assets/AssetTypes.h>
 #include <core/Handle.h>
+#include <core/ObjectID.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <renderer/RenderTypes.h>
@@ -28,8 +29,19 @@ namespace VKE::Editor {
         Cylinder,
     };
 
+    // What the scene in the editor is doing.
+    enum class PlayMode {
+        Edit,
+        Playing,
+        // Playing, stopped in time.
+        Paused,
+    };
+
     // The scene open in the editor: its objects, the scene asset it was opened from and is
     // saved to, whether it changed since, and what is selected: an object or an asset.
+    //
+    // Play keeps the scene as text in memory and runs it; Stop puts that text back, so everything
+    // that happened in between is lost.
     class EditorScene {
     public:
         explicit EditorScene(Assets::AssetManager& assets);
@@ -57,8 +69,24 @@ namespace VKE::Editor {
         // "Sponza.scene", or "Untitled" until saved.
         std::string GetFileName() const;
 
-        bool IsDirty() const { return m_Dirty; }
+        // While playing, whether it had changed when Play was pressed: nothing done since counts.
+        bool IsDirty() const { return IsPlaying() ? m_DirtyAtPlay : m_Dirty; }
         void MarkDirty() { m_Dirty = true; }
+
+        PlayMode GetPlayMode() const { return m_PlayMode; }
+        // True while playing or paused.
+        bool IsPlaying() const { return m_PlayMode != PlayMode::Edit; }
+        // False, logged, if the scene can't be kept.
+        bool Play();
+        // Between playing and paused.
+        void TogglePause();
+        // Back to the scene as it was at Play, with the same object selected if it was there.
+        void Stop();
+        // Runs the frame's update for the mode. Call it once per frame, before rendering.
+        void Update();
+
+        // Changes when another scene is opened, but not when Stop restores this one.
+        u32 GetOpenCount() const { return m_OpenCount; }
 
         // The selected object, or null. Nothing is selected after New and Open.
         Scene::GameObject* GetSelected() const;
@@ -85,7 +113,11 @@ namespace VKE::Editor {
         Assets::AssetManager& m_Assets;
         Iunique<Scene::Scene> m_Scene;
         Assets::AssetID m_ID;
+        u32 m_OpenCount = 0;
         bool m_Dirty = false;
+        PlayMode m_PlayMode = PlayMode::Edit;
+        std::string m_PlaySnapshot;
+        bool m_DirtyAtPlay = false;
         Handle<Scene::GameObject> m_Selected;
         Assets::AssetID m_SelectedAsset;
     };

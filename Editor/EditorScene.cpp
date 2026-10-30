@@ -52,6 +52,8 @@ namespace VKE::Editor {
     void EditorScene::New() {
         m_Scene = MakeIunique<Scene::Scene>();
         m_ID = {};
+        ++m_OpenCount;
+        m_PlayMode = PlayMode::Edit;
         m_Dirty = false;
         m_Selected = {};
 
@@ -82,6 +84,8 @@ namespace VKE::Editor {
 
         m_Scene = std::move(loaded);
         m_ID = scene;
+        ++m_OpenCount;
+        m_PlayMode = PlayMode::Edit;
         m_Dirty = false;
         m_Selected = {};
         return true;
@@ -109,6 +113,48 @@ namespace VKE::Editor {
         m_ID = id;
         m_Dirty = false;
         return true;
+    }
+
+    bool EditorScene::Play() {
+        if (IsPlaying()) return true;
+        m_PlaySnapshot = Scene::SceneSerializer::ToText(*m_Scene, m_Assets);
+        if (m_PlaySnapshot.empty()) return false;
+        m_DirtyAtPlay = m_Dirty;
+        m_PlayMode = PlayMode::Playing;
+        VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
+        return true;
+    }
+
+    void EditorScene::TogglePause() {
+        if (!IsPlaying()) return;
+        m_PlayMode = m_PlayMode == PlayMode::Playing ? PlayMode::Paused : PlayMode::Playing;
+    }
+
+    void EditorScene::Stop() {
+        if (!IsPlaying()) return;
+        Scene::GameObject* selected = GetSelected();
+        ObjectID selectedID = selected ? selected->GetID() : ObjectID();
+
+        auto restored = MakeIunique<Scene::Scene>();
+        if (!Scene::SceneSerializer::LoadText(*restored, m_Assets, m_PlaySnapshot, "the scene kept at Play")) {
+            VKE_CORE_ERROR("Editor: the scene kept at Play can't be restored; what is open stays");
+            return;
+        }
+        m_Scene = std::move(restored);
+        m_PlaySnapshot.clear();
+        m_PlayMode = PlayMode::Edit;
+        m_Dirty = m_DirtyAtPlay;
+        Scene::GameObject* same = selectedID.IsValid() ? m_Scene->FindByID(selectedID) : nullptr;
+        m_Selected = same ? same->GetHandle() : Handle<Scene::GameObject>();
+        VKE_CORE_INFO("Editor: Stop: scene restored");
+    }
+
+    void EditorScene::Update() {
+        if (m_PlayMode == PlayMode::Playing) {
+            m_Scene->Update();
+        } else {
+            m_Scene->Sync();
+        }
     }
 
     std::filesystem::path EditorScene::GetFile() const {

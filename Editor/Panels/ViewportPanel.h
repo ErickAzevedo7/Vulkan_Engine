@@ -94,9 +94,9 @@ namespace VKE::Editor {
         bool m_IconsLoaded = false;
         bool m_Snap = false;
 
-        // The scene the camera was placed for, and the one the last pick was asked in: a new
-        // scene places the camera again, and drops picks from the old one.
-        const Scene::Scene* m_PlacedFor = nullptr;
+        // The scene the camera was placed for (EditorScene::GetOpenCount), and the one the last
+        // pick was asked in: a new scene places the camera again, and drops picks from the old one.
+        u32 m_PlacedFor = ~0u;
         const Scene::Scene* m_PickedIn = nullptr;
         // A left press that becomes a click if the mouse hardly moves before it is released.
         bool m_ClickPending = false;

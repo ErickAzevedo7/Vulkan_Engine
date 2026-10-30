@@ -4,6 +4,7 @@
 #include "MaterialEdits.h"
 #include "Panels/AssetBrowserPanel.h"
 #include "Panels/ConsolePanel.h"
+#include "Panels/GamePanel.h"
 #include "Panels/HierarchyPanel.h"
 #include "Panels/InspectorPanel.h"
 #include "Panels/ViewportPanel.h"
@@ -74,6 +75,9 @@ namespace VKE::Editor {
 
         void HandleShortcuts();
         void DrawMenuBar();
+        void DrawPlayBar();
+        void StartPlay();
+        void StopPlay();
         void DrawStatusBar();
         void DrawDockSpace();
         void DrawUnsavedDialog();
@@ -96,11 +100,13 @@ namespace VKE::Editor {
         ConsolePanel m_Console;
         ViewportPanel m_Viewport;
         AssetBrowserPanel m_AssetBrowser;
+        GamePanel m_Game;
         bool m_ShowHierarchy = true;
         bool m_ShowInspector = true;
         bool m_ShowViewport = true;
         bool m_ShowConsole = true;
         bool m_ShowAssets = true;
+        bool m_ShowGame = true;
         // Files may change on disk while the editor is in the background: they are scanned
         // again when it gets the focus back.
         bool m_WindowFocused = true;

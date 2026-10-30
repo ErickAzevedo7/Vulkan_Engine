@@ -91,6 +91,12 @@ namespace VKE::Scene {
         SyncQueued(systems);
     }
 
+    void Scene::Sync() {
+        SceneSystems systems = GetSystems();
+        SyncQueued(systems);
+        m_Contacts.clear();
+    }
+
     SceneSystems Scene::GetSystems() {
         return SceneSystems{m_RenderScene, m_PhysicsWorld, *m_MeshShapes};
     }

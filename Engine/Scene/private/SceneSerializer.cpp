@@ -294,8 +294,7 @@ namespace VKE::Scene {
         }
     } // namespace
 
-    bool SceneSerializer::Save(const Scene& scene, const Assets::AssetManager& assets,
-                               const std::filesystem::path& file) {
+    std::string SceneSerializer::ToText(const Scene& scene, const Assets::AssetManager& assets) {
         std::vector<GameObject*> objects;
         for (GameObject* root : scene.GetRootObjects()) {
             CollectPreOrder(*root, objects);
@@ -333,17 +332,24 @@ namespace VKE::Scene {
         out << YAML::EndMap;
 
         if (!out.good()) {
-            VKE_CORE_ERROR("SceneSerializer: couldn't write '{}': {}", file.string(), out.GetLastError());
-            return false;
+            VKE_CORE_ERROR("SceneSerializer: couldn't write the scene: {}", out.GetLastError());
+            return {};
         }
+        return std::string(out.c_str()) + '\n';
+    }
+
+    bool SceneSerializer::Save(const Scene& scene, const Assets::AssetManager& assets,
+                               const std::filesystem::path& file) {
+        std::string text = ToText(scene, assets);
+        if (text.empty()) return false;
         std::ofstream stream(file, std::ios::binary | std::ios::trunc);
-        stream << out.c_str() << '\n';
+        stream << text;
         if (!stream) {
             VKE_CORE_ERROR("SceneSerializer: couldn't write '{}'", file.string());
             return false;
         }
 
-        VKE_CORE_INFO("SceneSerializer: saved {} objects to '{}'", objects.size(), file.string());
+        VKE_CORE_INFO("SceneSerializer: saved {} objects to '{}'", scene.GetObjectCount(), file.string());
         return true;
     }
 
@@ -355,9 +361,26 @@ namespace VKE::Scene {
             VKE_CORE_ERROR("SceneSerializer: '{}': {}", file.string(), error.what());
             return false;
         }
+        return LoadObjects(scene, assets, root, file.string());
+    }
+
+    bool SceneSerializer::LoadText(Scene& scene, Assets::AssetManager& assets, const std::string& text,
+                                   const std::string& name) {
+        YAML::Node root;
+        try {
+            root = YAML::Load(text);
+        } catch (const YAML::Exception& error) {
+            VKE_CORE_ERROR("SceneSerializer: '{}': {}", name, error.what());
+            return false;
+        }
+        return LoadObjects(scene, assets, root, name);
+    }
+
+    bool SceneSerializer::LoadObjects(Scene& scene, Assets::AssetManager& assets, const YAML::Node& root,
+                                      const std::string& sourceName) {
         YAML::Node objectNodes = root["Objects"];
         if (!root.IsMap() || !objectNodes || !objectNodes.IsSequence()) {
-            VKE_CORE_ERROR("SceneSerializer: '{}' is not a scene file", file.string());
+            VKE_CORE_ERROR("SceneSerializer: '{}' is not a scene file", sourceName);
             return false;
         }
 
@@ -383,7 +406,7 @@ namespace VKE::Scene {
             }
             if (!id.IsValid() || byID.count(id) || scene.FindByID(id)) {
                 VKE_CORE_WARN("SceneSerializer: '{}' in '{}' has a missing or repeated ID and is skipped", name,
-                              file.string());
+                              sourceName);
                 skipped.insert(id);
                 continue;
             }
@@ -444,7 +467,7 @@ namespace VKE::Scene {
             }
         }
 
-        VKE_CORE_INFO("SceneSerializer: loaded {} objects from '{}'", loaded.size(), file.string());
+        VKE_CORE_INFO("SceneSerializer: loaded {} objects from '{}'", loaded.size(), sourceName);
         return true;
     }
 

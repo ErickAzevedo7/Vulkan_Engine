@@ -110,7 +110,7 @@ namespace VKE::Editor {
 
     void ViewportPanel::PlaceCamera() {
         const Scene::Scene& scene = m_Scene.GetScene();
-        m_PlacedFor = &scene;
+        m_PlacedFor = m_Scene.GetOpenCount();
         if (const Scene::CameraComponent* camera = scene.GetMainCamera()) {
             const Transform& world = camera->GetOwner().GetTransform().GetWorld();
             m_Camera.LookAt(world.Position, world.Position + world.GetForward() * 8.0f);
@@ -130,7 +130,7 @@ namespace VKE::Editor {
         m_Visible = false;
         m_World.Clear();
         ReceivePick();
-        if (m_PlacedFor != &m_Scene.GetScene()) PlaceCamera();
+        if (m_PlacedFor != m_Scene.GetOpenCount()) PlaceCamera();
         if (!m_IconsLoaded) LoadIcons();
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));

@@ -55,7 +55,8 @@ namespace VKE::Editor {
           m_Hierarchy(m_Scene),
           m_Inspector(m_Scene, assets, m_MaterialEdits, ui),
           m_Viewport(m_Scene, assets, renderer, ui),
-          m_AssetBrowser(m_Scene, m_MaterialEdits, ui) {
+          m_AssetBrowser(m_Scene, m_MaterialEdits, ui),
+          m_Game(m_Scene, renderer, ui) {
     }
 
     EditorSystem::~EditorSystem() = default;
@@ -64,6 +65,7 @@ namespace VKE::Editor {
         // The editor decides about closing, to ask about unsaved changes first.
         m_Platform.SetExitOnClose(false);
         m_Viewport.Create();
+        m_Game.Create();
 
         std::error_code ec;
         std::filesystem::create_directories(m_Project.GetSettingsFolder(), ec);
@@ -85,6 +87,7 @@ namespace VKE::Editor {
 
     void EditorSystem::OnShutdown() {
         SaveEditorState();
+        m_Game.Destroy();
         m_Viewport.Destroy();
     }
 
@@ -131,6 +134,7 @@ namespace VKE::Editor {
 
         HandleShortcuts();
         DrawMenuBar();
+        DrawPlayBar();
         DrawStatusBar();
         DrawDockSpace();
 
@@ -141,6 +145,7 @@ namespace VKE::Editor {
         if (m_ShowHierarchy) m_Hierarchy.Draw(&m_ShowHierarchy);
         if (m_ShowInspector) m_Inspector.Draw(&m_ShowInspector);
         if (m_ShowViewport) m_Viewport.Draw(&m_ShowViewport, stats);
+        if (m_ShowGame) m_Game.Draw(&m_ShowGame, stats);
         if (m_ShowConsole) m_Console.Draw(&m_ShowConsole);
         if (m_ShowAssets) m_AssetBrowser.Draw(&m_ShowAssets);
         if (Assets::AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
@@ -150,13 +155,16 @@ namespace VKE::Editor {
         UpdateTitle();
 
         // Only now: the dialogs can replace the scene.
+        m_Scene.Update();
         Scene::Scene& scene = m_Scene.GetScene();
-        scene.Update();
 
         if (m_Renderer.BeginFrame()) {
             if (m_ShowViewport && m_Viewport.IsVisible()) {
                 m_Renderer.DrawScene(scene.GetRenderScene(), m_Viewport.GetView(), m_Viewport.GetTexture(),
                                      &m_Viewport.GetWorldDrawList());
+            }
+            if (m_ShowGame && m_Game.IsVisible()) {
+                m_Renderer.DrawScene(scene.GetRenderScene(), scene.GetView(), m_Game.GetTexture());
             }
             m_UI.Render();
             m_Renderer.EndFrame();
@@ -181,7 +189,20 @@ namespace VKE::Editor {
         return m_Scene.IsDirty() || (closing && m_MaterialEdits.GetUnsavedCount() > 0);
     }
 
+    void EditorSystem::StartPlay() {
+        if (!m_Scene.Play()) return;
+        m_ShowGame = true;
+        ImGui::SetWindowFocus(GamePanel::GetWindowName());
+    }
+
+    void EditorSystem::StopPlay() {
+        m_Scene.Stop();
+        if (m_ShowViewport) ImGui::SetWindowFocus(ViewportPanel::GetWindowName());
+    }
+
     void EditorSystem::Request(Action action, Assets::AssetID scene) {
+        // What the action asks about is the scene as it was before Play.
+        if (m_Scene.IsPlaying()) StopPlay();
         if (HasUnsavedChanges(action)) {
             m_PendingAction = action;
             m_PendingScene = scene;
@@ -254,6 +275,14 @@ namespace VKE::Editor {
         ImGuiInputFlags flags = ImGuiInputFlags_RouteGlobal;
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, flags)) Request(Action::NewScene);
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, flags)) ChooseSceneToOpen();
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, flags)) {
+            if (m_Scene.IsPlaying()) {
+                StopPlay();
+            } else {
+                StartPlay();
+            }
+        }
+        if (m_Scene.IsPlaying()) return;
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, flags)) SaveScene();
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, flags)) SaveSceneAs();
     }
@@ -275,8 +304,10 @@ namespace VKE::Editor {
                 ChooseSceneToOpen();
             }
             ImGui::Separator();
-            if (ImGui::MenuItem(WithIcon(Icons::Save, "Save scene").c_str(), "Ctrl+S")) SaveScene();
-            if (ImGui::MenuItem(WithIcon(Icons::Copy, "Save scene as\xe2\x80\xa6").c_str(), "Ctrl+Shift+S")) {
+            bool editing = !m_Scene.IsPlaying();
+            if (ImGui::MenuItem(WithIcon(Icons::Save, "Save scene").c_str(), "Ctrl+S", false, editing)) SaveScene();
+            if (ImGui::MenuItem(WithIcon(Icons::Copy, "Save scene as\xe2\x80\xa6").c_str(), "Ctrl+Shift+S", false,
+                                editing)) {
                 SaveSceneAs();
             }
             bool isStart = m_Scene.GetID().IsValid() && m_Scene.GetID() == m_Project.GetStartScene();
@@ -299,6 +330,7 @@ namespace VKE::Editor {
             ImGui::MenuItem(WithIcon(Icons::ListTree, "Hierarchy").c_str(), nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(WithIcon(Icons::SlidersHorizontal, "Inspector").c_str(), nullptr, &m_ShowInspector);
             ImGui::MenuItem(WithIcon(Icons::Box, "Viewport").c_str(), nullptr, &m_ShowViewport);
+            ImGui::MenuItem(WithIcon(Icons::Gamepad2, "Game").c_str(), nullptr, &m_ShowGame);
             ImGui::MenuItem(WithIcon(Icons::Terminal, "Console").c_str(), nullptr, &m_ShowConsole);
             ImGui::MenuItem(WithIcon(Icons::Boxes, "Assets").c_str(), nullptr, &m_ShowAssets);
             ImGui::Separator();
@@ -308,6 +340,7 @@ namespace VKE::Editor {
                 m_ShowViewport = true;
                 m_ShowConsole = true;
                 m_ShowAssets = true;
+                m_ShowGame = true;
                 m_ResetLayout = true;
             }
             ImGui::EndMenu();
@@ -329,6 +362,67 @@ namespace VKE::Editor {
             }
         }
         ImGui::EndMainMenuBar();
+    }
+
+    void EditorSystem::DrawPlayBar() {
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
+                                 ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDecoration |
+                                 ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing;
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Widgets::ToVec4(Colors::BgFrame));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Sizes::Space4, 0.0f));
+        bool open = ImGui::BeginViewportSideBar("##PlayBar", ImGui::GetMainViewport(), ImGuiDir_Up,
+                                                Sizes::ToolbarHeight, flags);
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        if (!open) {
+            ImGui::End();
+            return;
+        }
+
+        PlayMode mode = m_Scene.GetPlayMode();
+        bool playing = mode != PlayMode::Edit;
+        ImVec2 min = ImGui::GetWindowPos();
+        f32 width = ImGui::GetWindowWidth();
+        // The bar's lower edge turns green while playing, so the mode can't be missed.
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, min.y + Sizes::ToolbarHeight - 1.0f),
+                                            ImVec2(min.x + width, min.y + Sizes::ToolbarHeight - 1.0f),
+                                            UI::ToImColor(playing ? Colors::Live : Colors::Line));
+
+        // Play, Pause and Stop in the middle.
+        constexpr f32 kButtonWidth = 30.0f;
+        f32 y = std::floor((Sizes::ToolbarHeight - Sizes::ControlHeight) * 0.5f);
+        ImVec2 size(kButtonWidth, Sizes::ControlHeight);
+        ImGui::SetCursorPos(ImVec2(std::floor((width - 3.0f * kButtonWidth - 2.0f * Sizes::Space2) * 0.5f), y));
+
+        bool playLit = mode == PlayMode::Playing;
+        if (playLit) ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::Live));
+        if (Widgets::GhostButton(Icons::Play, size) && !playing) StartPlay();
+        if (playLit) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play (Ctrl+P)");
+
+        ImGui::SameLine(0.0f, Sizes::Space2);
+        bool pauseLit = mode == PlayMode::Paused;
+        if (pauseLit) ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::Accent));
+        ImGui::BeginDisabled(!playing);
+        if (Widgets::GhostButton(Icons::Pause, size)) m_Scene.TogglePause();
+        ImGui::EndDisabled();
+        if (pauseLit) ImGui::PopStyleColor();
+
+        ImGui::SameLine(0.0f, Sizes::Space2);
+        ImGui::BeginDisabled(!playing);
+        if (Widgets::GhostButton(Icons::Square, size)) StopPlay();
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop (Ctrl+P)");
+
+        if (playing) {
+            const char* badge = mode == PlayMode::Playing ? "PLAYING" : "PAUSED";
+            ImFont* small = GetFont(TextStyle::UISmall);
+            f32 badgeWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, badge).x + 10.0f;
+            ImGui::SetCursorPos(ImVec2(width - Sizes::Space4 - badgeWidth,
+                                       std::floor((Sizes::ToolbarHeight - ImGui::GetTextLineHeight()) * 0.5f)));
+            Widgets::Badge(badge, mode == PlayMode::Playing ? Colors::Live : Colors::Accent);
+        }
+        ImGui::End();
     }
 
     void EditorSystem::DrawStatusBar() {
@@ -359,7 +453,9 @@ namespace VKE::Editor {
         char frame[32];
         std::snprintf(frame, sizeof(frame), "%.1f ms", 1000.0f * m_AverageFrameTime);
         std::string objects = std::to_string(m_Scene.GetScene().GetObjectCount()) + " objects";
-        const char* mode = "Edit";
+        const char* mode = m_Scene.GetPlayMode() == PlayMode::Playing  ? "Play"
+                           : m_Scene.GetPlayMode() == PlayMode::Paused ? "Paused"
+                                                                       : "Edit";
         f32 gap = Sizes::Space5;
         f32 rightWidth = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, frame).x +
                          mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, objects.c_str()).x +
@@ -399,7 +495,8 @@ namespace VKE::Editor {
         bool missing = !ImGui::DockBuilderGetNode(dockspace) ||
                        !ImGui::FindWindowSettingsByID(ImHashStr(HierarchyPanel::GetWindowName())) ||
                        !ImGui::FindWindowSettingsByID(ImHashStr(InspectorPanel::GetWindowName())) ||
-                       !ImGui::FindWindowSettingsByID(ImHashStr(AssetBrowserPanel::GetWindowName()));
+                       !ImGui::FindWindowSettingsByID(ImHashStr(AssetBrowserPanel::GetWindowName())) ||
+                       !ImGui::FindWindowSettingsByID(ImHashStr(GamePanel::GetWindowName()));
         bool build = m_ResetLayout || (!m_LayoutChecked && missing);
         m_LayoutChecked = true;
         m_ResetLayout = false;
@@ -419,6 +516,7 @@ namespace VKE::Editor {
             ImGui::DockBuilderDockWindow(HierarchyPanel::GetWindowName(), left);
             ImGui::DockBuilderDockWindow(InspectorPanel::GetWindowName(), right);
             ImGui::DockBuilderDockWindow(ViewportPanel::GetWindowName(), center);
+            ImGui::DockBuilderDockWindow(GamePanel::GetWindowName(), center);
             ImGui::DockBuilderDockWindow(AssetBrowserPanel::GetWindowName(), bottom);
             ImGui::DockBuilderDockWindow(ConsolePanel::GetWindowName(), bottom);
             ImGui::DockBuilderFinish(dockspace);
