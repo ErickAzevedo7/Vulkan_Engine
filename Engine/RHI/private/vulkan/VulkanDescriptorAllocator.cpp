@@ -9,6 +9,7 @@ namespace VKE::RHI {
         const VkDescriptorPoolSize kPoolSizes[] = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSetsPerPool},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSetsPerPool / 4},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSetsPerPool},
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSetsPerPool * 6},
         };
     } // namespace

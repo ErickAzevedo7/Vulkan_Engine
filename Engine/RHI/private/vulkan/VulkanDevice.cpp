@@ -371,6 +371,7 @@ namespace VKE::RHI {
 
         m_Limits.MinUniformBufferOffsetAlignment = static_cast<u32>(properties.limits.minUniformBufferOffsetAlignment);
         m_Limits.MaxPushConstantSize = properties.limits.maxPushConstantsSize;
+        m_Limits.MaxTextureSize = properties.limits.maxImageDimension2D;
         m_Limits.MaxSamplerAnisotropy = m_EnabledFeatures.samplerAnisotropy ? properties.limits.maxSamplerAnisotropy : 1.0f;
 
         const VkFormat depthCandidates[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};

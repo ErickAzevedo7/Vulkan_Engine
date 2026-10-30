@@ -7,6 +7,8 @@ target_sources(VKE_Renderer PRIVATE
     private/RenderScene.cpp
     private/Camera.cpp
     private/ForwardPath.cpp
+    private/LightClusters.cpp
+    private/ShadowAtlas.cpp
     private/GpuCache.cpp
     private/TonemapPass.cpp
     private/SkyboxPass.cpp

@@ -91,7 +91,7 @@ namespace VKE::RHI {
                 imageInfos.push_back(imageInfo);
                 write.pImageInfo = &imageInfos.back();
             } else {
-                VKE_CORE_ASSERT(resource.Buffer, "Uniform buffer slot needs a buffer");
+                VKE_CORE_ASSERT(resource.Buffer, "Buffer slot needs a buffer");
                 VKE_CORE_ASSERT(bufferInfos.size() < bufferInfos.capacity(), "More buffer resources than layout slots");
                 if (bufferInfos.size() == bufferInfos.capacity()) continue;
                 VKE_CORE_ASSERT(slot->Type != BindingType::UniformBufferDynamic || resource.Size > 0,

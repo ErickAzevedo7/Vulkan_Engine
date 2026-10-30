@@ -13,20 +13,25 @@ namespace VKE::Renderer {
     constexpr u32 kEnvironmentSet = 1;
     constexpr u32 kMaterialSet = 2;
 
+    // Slots of the frame bind group. Slot 0 holds the FrameUniforms.
+    constexpr u32 kLightListBinding = 1;
+    constexpr u32 kClusterListBinding = 2;
+    constexpr u32 kLightIndexListBinding = 3;
+    constexpr u32 kShadowListBinding = 4;
+
     // Slots of the environment bind group.
     constexpr u32 kIrradianceBinding = 0;
     constexpr u32 kPrefilterBinding = 1;
     constexpr u32 kBrdfLutBinding = 2;
     constexpr u32 kRadianceBinding = 3;
-    constexpr u32 kShadowMapBinding = 4;
-    constexpr u32 kPointShadowMapBinding = 5;
+    constexpr u32 kShadowAtlasBinding = 4;
 
-    // Must match MAX_LIGHTS in shaders/frame_uniforms.glsl.
-    constexpr u32 kMaxLights = 8;
-    // Must match MAX_SHADOWS in shaders/frame_uniforms.glsl. One shadow map layer each.
-    constexpr u32 kMaxShadows = 4;
-    // Cubes in the point light shadow array.
-    constexpr u32 kMaxPointShadows = 4;
+    // The grid of light clusters: across the screen, down it, and in depth. The shader gets
+    // them from FrameUniforms::ClusterCounts.
+    constexpr u32 kClusterColumns = 16;
+    constexpr u32 kClusterRows = 9;
+    constexpr u32 kClusterSlices = 24;
+
     // Must match kPointShadowNearPlane in shaders/forward.frag.
     constexpr f32 kPointShadowNearPlane = 0.05f;
 
@@ -38,8 +43,8 @@ namespace VKE::Renderer {
         Vec4 DirectionAndType;
         Vec4 ColorAndIntensity;
         // x = cosine of the inner cone angle, y = cosine of the outer one, z = shadow index,
-        // or -1 without a shadow: into FrameUniforms::Shadows for directional and spot
-        // lights, and the cube in the point shadow array for point lights.
+        // or -1 without a shadow: the first of six for a point light, one per face in the
+        // order +X, -X, +Y, -Y, +Z, -Z.
         Vec4 SpotAndShadow;
     };
     static_assert(sizeof(GpuLight) == 64, "GpuLight layout mismatch");
@@ -48,22 +53,33 @@ namespace VKE::Renderer {
         Mat4 ViewProjection;
         // x = size of a shadow map texel in world units, one unit in front of the light
         // for perspective shadows. Multiplied by clip w, it works for both projections.
-        // y = shadow map layer, kept as a float so the shader never converts it.
         Vec4 Parameters;
+        // Where it is in the shadow atlas, in UVs: xy = corner, zw = size.
+        Vec4 AtlasRect;
     };
-    static_assert(sizeof(GpuShadow) == 80, "GpuShadow layout mismatch");
+    static_assert(sizeof(GpuShadow) == 96, "GpuShadow layout mismatch");
+
+    // Where a cluster's lights are in the list of light indices.
+    struct GpuCluster {
+        u32 Offset = 0;
+        u32 Count = 0;
+    };
+    static_assert(sizeof(GpuCluster) == 8, "GpuCluster layout mismatch");
 
     struct FrameUniforms {
         Mat4 View;
         Mat4 Projection;
         Vec4 CameraPosition;
-        UVec4 LightCount;
+        // x = directional lights, the first ones in the list of lights.
+        UVec4 LightCounts;
+        // x, y, z = clusters across the screen, down it and in depth.
+        UVec4 ClusterCounts;
+        // x, y = clusters per pixel. z, w = scale and bias of a pixel's slice: log(depth) * z + w.
+        Vec4 ClusterScale;
         // x = environment intensity.
         Vec4 EnvironmentParameters;
-        GpuLight Lights[kMaxLights];
-        GpuShadow Shadows[kMaxShadows];
     };
-    static_assert(sizeof(FrameUniforms) == 1008, "FrameUniforms layout mismatch");
+    static_assert(sizeof(FrameUniforms) == 208, "FrameUniforms layout mismatch");
 
     struct MaterialUniforms {
         Vec4 BaseColor;

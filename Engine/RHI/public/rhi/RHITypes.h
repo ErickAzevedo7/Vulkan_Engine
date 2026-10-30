@@ -84,6 +84,8 @@ namespace VKE::RHI {
         Vertex = 1 << 0,
         Index = 1 << 1,
         Uniform = 1 << 2,
+        // Shaders read it as a list as long as the buffer.
+        Storage = 1 << 3,
     };
     VKE_ENUM_FLAGS(BufferUsage)
 
@@ -169,6 +171,8 @@ namespace VKE::RHI {
         UniformBuffer,
         // Offset is chosen when the bind group is bound.
         UniformBufferDynamic,
+        // Read-only in shaders.
+        StorageBuffer,
         CombinedImageSampler,
     };
 
@@ -284,6 +288,8 @@ namespace VKE::RHI {
         u32 MinUniformBufferOffsetAlignment = 1;
         u32 MaxPushConstantSize = 0;
         f32 MaxSamplerAnisotropy = 1.0f;
+        // Widest and tallest a 2D texture can be.
+        u32 MaxTextureSize = 0;
     };
 
 } // namespace VKE::RHI

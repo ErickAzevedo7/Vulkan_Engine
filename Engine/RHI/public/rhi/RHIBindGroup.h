@@ -37,7 +37,7 @@ namespace VKE::RHI {
     struct BoundResource {
         u32 Binding = 0;
 
-        // Uniform buffers. Size 0 binds from Offset to the end of the buffer.
+        // Uniform and storage buffers. Size 0 binds from Offset to the end of the buffer.
         RHIBuffer* Buffer = nullptr;
         size_t Offset = 0;
         size_t Size = 0;

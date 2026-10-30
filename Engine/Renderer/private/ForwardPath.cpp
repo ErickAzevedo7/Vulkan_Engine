@@ -33,9 +33,23 @@ namespace VKE::Renderer {
             return result;
         }
 
-        Vec3 SafeNormalize(const Vec3& v) {
-            f32 length = glm::length(v);
-            return length > 0.0f ? v / length : Vec3(0.0f);
+        // Replaces `buffer` with a larger one if it can't hold `size` bytes. Returns whether it did.
+        bool Reserve(RHI::RHIDevice& device, Iunique<RHI::RHIBuffer>& buffer, size_t size, const char* debugName) {
+            if (buffer && buffer->GetSize() >= size) return false;
+
+            // Room to grow, so a scene that adds lights one by one doesn't replace it every frame.
+            RHI::BufferDesc desc;
+            desc.Size = std::max<size_t>(size + size / 2, 4096);
+            desc.Usage = RHI::BufferUsage::Storage;
+            desc.Memory = RHI::BufferMemory::HostVisible;
+            desc.DebugName = debugName;
+            buffer = RHI::RHIBuffer::Create(device, desc);
+            return true;
+        }
+
+        template<typename T>
+        void WriteList(RHI::RHIBuffer& buffer, const std::vector<T>& list) {
+            if (!list.empty()) buffer.Write(list.data(), list.size() * sizeof(T));
         }
     } // namespace
 
@@ -53,13 +67,16 @@ namespace VKE::Renderer {
 
         RHI::BindGroupLayoutDesc frameLayoutDesc;
         frameLayoutDesc.Slots = {{0, RHI::BindingType::UniformBuffer, RHI::ShaderStageFlags::AllGraphics}};
+        for (u32 binding : {kLightListBinding, kClusterListBinding, kLightIndexListBinding, kShadowListBinding}) {
+            frameLayoutDesc.Slots.push_back(
+                {binding, RHI::BindingType::StorageBuffer, RHI::ShaderStageFlags::Fragment});
+        }
         frameLayoutDesc.DebugName = "FrameLayout";
         m_FrameLayout = RHI::RHIBindGroupLayout::Create(m_Device, frameLayoutDesc);
 
         RHI::BindGroupLayoutDesc environmentLayoutDesc;
         for (u32 binding :
-             {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowMapBinding,
-              kPointShadowMapBinding}) {
+             {kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowAtlasBinding}) {
             environmentLayoutDesc.Slots.push_back(
                 {binding, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment});
         }
@@ -134,13 +151,9 @@ namespace VKE::Renderer {
             uniformDesc.Usage = RHI::BufferUsage::Uniform;
             uniformDesc.Memory = RHI::BufferMemory::HostVisible;
             uniformDesc.DebugName = "FrameUniforms";
-            targets->FrameUniformBuffers.push_back(RHI::RHIBuffer::Create(m_Device, uniformDesc));
-
-            RHI::BindGroupDesc groupDesc;
-            groupDesc.Layout = m_FrameLayout.get();
-            groupDesc.Resources = {{0, targets->FrameUniformBuffers.back().get()}};
-            groupDesc.DebugName = "FrameGroup";
-            targets->FrameGroups.push_back(RHI::RHIBindGroup::Create(m_Device, groupDesc));
+            FrameData frame;
+            frame.Uniforms = RHI::RHIBuffer::Create(m_Device, uniformDesc);
+            targets->Frames.push_back(std::move(frame));
 
             targets->TonemapSources.push_back(m_TonemapPass->CreateSource(*targets->Targets[i].Color));
         }
@@ -200,46 +213,55 @@ namespace VKE::Renderer {
         bind(kPrefilterBinding, maps.Prefilter.get(), m_EnvironmentSampler.get());
         bind(kBrdfLutBinding, maps.BrdfLut.get(), m_EnvironmentSampler.get());
         bind(kRadianceBinding, maps.Radiance.get(), m_EnvironmentSampler.get());
-        bind(kShadowMapBinding, &m_ShadowPass->GetShadowMaps(), &m_ShadowPass->GetSampler());
-        bind(kPointShadowMapBinding, &m_ShadowPass->GetPointShadowMaps(), &m_ShadowPass->GetSampler());
+        bind(kShadowAtlasBinding, &m_ShadowPass->GetAtlas(), &m_ShadowPass->GetSampler());
 
         group = RHI::RHIBindGroup::Create(m_Device, groupDesc);
         return *group;
     }
 
-    void ForwardPath::WriteFrameUniforms(RHI::RHIBuffer& buffer, const RenderScene& scene, const RenderView& view,
-                                         f32 aspect) {
+    void ForwardPath::WriteFrameData(FrameData& data, const RenderScene& scene, const RenderView& view, u32 width,
+                                     u32 height) {
         FrameUniforms frame{};
         frame.View = view.View;
-        frame.Projection = view.GetProjection(aspect);
+        frame.Projection = view.GetProjection(static_cast<f32>(width) / static_cast<f32>(height));
         frame.CameraPosition = Vec4(view.Position, 1.0f);
         frame.EnvironmentParameters = Vec4(scene.GetEnvironment().Intensity, 0.0f, 0.0f, 0.0f);
 
-        const std::vector<LightDesc>& lights = scene.GetLights().Values();
-        if (lights.size() > kMaxLights && !m_LightLimitWarned) {
-            VKE_CORE_WARN("Renderer: scene has {} lights, only the first {} are used", lights.size(), kMaxLights);
-            m_LightLimitWarned = true;
-        }
+        m_LightClusters.Build(scene.GetLights().Values(), view, frame.Projection, width, height, frame);
 
-        u32 lightCount = static_cast<u32>(std::min<size_t>(lights.size(), kMaxLights));
-        frame.LightCount = UVec4(lightCount, 0, 0, 0);
-        for (u32 i = 0; i < lightCount; ++i) {
-            const LightDesc& light = lights[i];
-            GpuLight& gpuLight = frame.Lights[i];
-            gpuLight.PositionAndRange = Vec4(light.Position, light.Range);
-            gpuLight.DirectionAndType = Vec4(SafeNormalize(light.Direction), static_cast<f32>(light.Type));
-            gpuLight.ColorAndIntensity = Vec4(light.Color, light.Intensity);
-            gpuLight.SpotAndShadow =
-                Vec4(std::cos(light.InnerConeAngle), std::cos(light.OuterConeAngle), -1.0f, 0.0f);
-        }
-
+        m_Shadows.clear();
         if (m_ShadowsEnabled && !m_DrawItems.empty()) {
-            m_ShadowPass->Prepare(lights, lightCount, m_SceneBounds, frame);
+            f32 pixelsAtOneMeter = 0.5f * static_cast<f32>(height) * std::abs(frame.Projection[1][1]);
+            m_ShadowPass->Prepare(m_LightClusters, view.Position, pixelsAtOneMeter, m_SceneBounds, m_Shadows);
         } else {
-            m_ShadowPass->Prepare({}, 0, m_SceneBounds, frame);
+            m_ShadowPass->Clear();
         }
 
-        buffer.Write(&frame, sizeof(frame));
+        const std::vector<GpuLight>& lights = m_LightClusters.GetLights();
+        const std::vector<GpuCluster>& clusters = m_LightClusters.GetClusters();
+        const std::vector<u32>& indices = m_LightClusters.GetIndices();
+
+        bool replaced = Reserve(m_Device, data.Lights, lights.size() * sizeof(GpuLight), "LightList");
+        replaced |= Reserve(m_Device, data.Clusters, clusters.size() * sizeof(GpuCluster), "ClusterList");
+        replaced |= Reserve(m_Device, data.LightIndices, indices.size() * sizeof(u32), "LightIndexList");
+        replaced |= Reserve(m_Device, data.Shadows, m_Shadows.size() * sizeof(GpuShadow), "ShadowList");
+        if (replaced) {
+            RHI::BindGroupDesc groupDesc;
+            groupDesc.Layout = m_FrameLayout.get();
+            groupDesc.Resources = {{0, data.Uniforms.get()},
+                                   {kLightListBinding, data.Lights.get()},
+                                   {kClusterListBinding, data.Clusters.get()},
+                                   {kLightIndexListBinding, data.LightIndices.get()},
+                                   {kShadowListBinding, data.Shadows.get()}};
+            groupDesc.DebugName = "FrameGroup";
+            data.Group = RHI::RHIBindGroup::Create(m_Device, groupDesc);
+        }
+
+        data.Uniforms->Write(&frame, sizeof(frame));
+        WriteList(*data.Lights, lights);
+        WriteList(*data.Clusters, clusters);
+        WriteList(*data.LightIndices, indices);
+        WriteList(*data.Shadows, m_Shadows);
     }
 
     void ForwardPath::Record(RHI::RHICommandBuffer& cmd, u32 frameIndex, const RenderScene& scene,
@@ -248,9 +270,9 @@ namespace VKE::Renderer {
         CollectDrawItems(scene);
         RHI::RHIBindGroup& environmentGroup = GetEnvironmentGroup(scene);
 
-        f32 aspect = static_cast<f32>(targets.Width) / static_cast<f32>(targets.Height);
-        WriteFrameUniforms(*targets.FrameUniformBuffers[frameIndex], scene, view, aspect);
-        RHI::RHIBindGroup& frameGroup = *targets.FrameGroups[frameIndex];
+        FrameData& frameData = targets.Frames[frameIndex];
+        WriteFrameData(frameData, scene, view, targets.Width, targets.Height);
+        RHI::RHIBindGroup& frameGroup = *frameData.Group;
 
         m_ShadowPass->Record(cmd, m_DrawItems);
 

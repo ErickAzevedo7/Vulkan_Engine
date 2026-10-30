@@ -2,6 +2,7 @@
 
 #include "DrawItem.h"
 #include "GpuCache.h"
+#include "LightClusters.h"
 #include "RenderTarget.h"
 #include "ShadowPass.h"
 #include "SkyboxPass.h"
@@ -28,20 +29,31 @@ namespace VKE::Renderer {
 
     class RenderScene;
 
+    // What the shaders read about one frame. The lists grow with the scene; a frame only
+    // replaces its own, which the GPU has stopped reading by the time the frame starts.
+    struct FrameData {
+        Iunique<RHI::RHIBuffer> Uniforms;
+        Iunique<RHI::RHIBuffer> Lights;
+        Iunique<RHI::RHIBuffer> Clusters;
+        Iunique<RHI::RHIBuffer> LightIndices;
+        Iunique<RHI::RHIBuffer> Shadows;
+        Iunique<RHI::RHIBindGroup> Group;
+    };
+
     // What drawing a scene needs for one output: a high dynamic range color and depth target,
-    // the frame uniforms and the tonemap's view of the target, one of each per frame in
-    // flight, at the output's size.
+    // the frame's data and the tonemap's view of the target, one of each per frame in flight,
+    // at the output's size.
     struct SceneTargets {
         std::vector<RenderTarget> Targets;
-        std::vector<Iunique<RHI::RHIBuffer>> FrameUniformBuffers;
-        std::vector<Iunique<RHI::RHIBindGroup>> FrameGroups;
+        std::vector<FrameData> Frames;
         std::vector<Iunique<RHI::RHIBindGroup>> TonemapSources;
         u32 Width = 0;
         u32 Height = 0;
     };
 
     // Draws a render scene in a single forward pass, with its shadows and sky, into a high
-    // dynamic range target, then resolves that target into displayable color.
+    // dynamic range target, then resolves that target into displayable color. Lights are
+    // sorted into clusters of the view, so their number has no fixed limit.
     class ForwardPath {
     public:
         ForwardPath(RHI::RHIDevice& device, Assets::AssetManager& assets, u32 framesInFlight);
@@ -68,7 +80,7 @@ namespace VKE::Renderer {
         void CreatePipeline();
         void CollectDrawItems(const RenderScene& scene);
         RHI::RHIBindGroup& GetEnvironmentGroup(const RenderScene& scene);
-        void WriteFrameUniforms(RHI::RHIBuffer& buffer, const RenderScene& scene, const RenderView& view, f32 aspect);
+        void WriteFrameData(FrameData& data, const RenderScene& scene, const RenderView& view, u32 width, u32 height);
 
         RHI::RHIDevice& m_Device;
         u32 m_FramesInFlight;
@@ -90,12 +102,13 @@ namespace VKE::Renderer {
         // several scenes, and an earlier one may still need its group.
         std::unordered_map<const GpuEnvironment*, Iunique<RHI::RHIBindGroup>> m_EnvironmentGroups;
 
+        LightClusters m_LightClusters;
+        std::vector<GpuShadow> m_Shadows;
         std::vector<DrawItem> m_DrawItems;
         // World-space bounds of everything in m_DrawItems.
         AABB m_SceneBounds;
         f32 m_Exposure = 1.0f;
         bool m_ShadowsEnabled = true;
-        bool m_LightLimitWarned = false;
     };
 
 } // namespace VKE::Renderer
