@@ -1,4 +1,5 @@
 #include "OverlayPass.h"
+#include "TextureFormats.h"
 
 #include <platform/FileSystem.h>
 
@@ -17,17 +18,6 @@ namespace VKE::Renderer {
         };
         constexpr u32 kTextureIsLinear = 1;
         constexpr u32 kOutputEncodes = 2;
-
-        // Formats whose samples come back as linear color rather than the stored values.
-        bool SamplesAsLinear(RHI::Format format) {
-            switch (format) {
-                case RHI::Format::R8G8B8A8_SRGB:
-                case RHI::Format::B8G8R8A8_SRGB:
-                case RHI::Format::R16G16B16A16_SFLOAT:
-                case RHI::Format::R32G32B32A32_SFLOAT: return true;
-                default: return false;
-            }
-        }
 
         // Room for `needed`, with some to spare so the buffer is not remade every time it grows.
         size_t GrownSize(size_t needed) {

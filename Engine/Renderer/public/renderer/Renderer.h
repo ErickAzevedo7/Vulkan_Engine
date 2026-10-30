@@ -4,6 +4,7 @@
 #include <core/Types.h>
 #include <renderer/Overlay.h>
 #include <renderer/RenderTypes.h>
+#include <renderer/WorldDraw.h>
 
 namespace VKE::Platform {
     class IWindow;
@@ -42,8 +43,18 @@ namespace VKE::Renderer {
 
         // Draws `scene` as seen from `view`. Without a target it fills the window, under
         // the 2D layer; the projection uses the target's aspect ratio. A scene can be
-        // drawn several times a frame, into different targets.
-        void DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target = {});
+        // drawn several times a frame, into different targets. `world` is drawn over the
+        // scene, into view textures only.
+        void DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target = {},
+                       const WorldDrawList* world = nullptr);
+
+        // Finds the mesh that covers pixel (x, y) of a view texture, counted from its top left,
+        // the next time a scene is drawn into it. The answer takes a few frames to come back
+        // from the GPU; a new request replaces one not yet drawn.
+        void RequestPick(ViewTextureID target, u32 x, u32 y);
+        // True once, when the answer to the last request is in. `mesh` is then the instance
+        // at that pixel, or invalid for none.
+        bool TakePickResult(ViewTextureID target, MeshInstanceID& mesh);
 
         // Adds a list to the 2D layer, drawn over the window after any earlier list.
         void DrawOverlay(const OverlayDrawList& list);

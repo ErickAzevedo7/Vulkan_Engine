@@ -5,6 +5,7 @@
 #include "VulkanFramebuffer.h"
 #include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
+#include "VulkanTexture.h"
 #include "VulkanUtils.h"
 
 namespace VKE::RHI {
@@ -142,6 +143,33 @@ namespace VKE::RHI {
     void VulkanCommandBuffer::DrawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, i32 vertexOffset,
                                           u32 firstInstance) {
         vkCmdDrawIndexed(m_CommandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+
+    void VulkanCommandBuffer::CopyTextureToBuffer(RHITexture& source, const ScissorRect& rect, RHIBuffer& destination,
+                                                  size_t offset) {
+        auto& texture = static_cast<VulkanTexture&>(source);
+        auto& buffer = static_cast<VulkanBuffer&>(destination);
+
+        VkBufferImageCopy region{};
+        region.bufferOffset = offset;
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.imageOffset = {rect.X, rect.Y, 0};
+        region.imageExtent = {rect.Width, rect.Height, 1};
+        vkCmdCopyImageToBuffer(m_CommandBuffer, texture.GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               buffer.GetHandle(), 1, &region);
+
+        // The CPU reads the buffer once the frame's fence is signaled.
+        VkBufferMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.buffer = buffer.GetHandle();
+        barrier.offset = offset;
+        barrier.size = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(m_CommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
+                             1, &barrier, 0, nullptr);
     }
 
     Iunique<RHICommandBuffer> RHICommandBuffer::Create(RHIDevice& device) {

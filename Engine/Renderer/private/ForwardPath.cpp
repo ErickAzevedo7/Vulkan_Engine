@@ -211,7 +211,7 @@ namespace VKE::Renderer {
                                          f32 aspect) {
         FrameUniforms frame{};
         frame.View = view.View;
-        frame.Projection = glm::perspectiveRH_ZO(view.FieldOfView, aspect, view.NearPlane, view.FarPlane);
+        frame.Projection = view.GetProjection(aspect);
         frame.CameraPosition = Vec4(view.Position, 1.0f);
         frame.EnvironmentParameters = Vec4(scene.GetEnvironment().Intensity, 0.0f, 0.0f, 0.0f);
 

@@ -68,6 +68,8 @@ namespace VKE::Scene {
         const std::vector<Contact>& GetContacts() const { return m_Contacts; }
 
         const Renderer::RenderScene& GetRenderScene() const { return m_RenderScene; }
+        // The object whose MeshComponent drew `mesh`, or null.
+        GameObject* GetMeshOwner(Renderer::MeshInstanceID mesh) const;
 
         // The camera the scene is seen from. The first camera added is used until another is set.
         CameraComponent* GetMainCamera() const { return m_MainCamera; }

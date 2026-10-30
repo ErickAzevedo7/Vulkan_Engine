@@ -2,11 +2,14 @@
 
 #include "ForwardPath.h"
 #include "OverlayPass.h"
+#include "PickPass.h"
+#include "WorldPass.h"
 
 #include <core/SlotMap.h>
 #include <core/Types.h>
 #include <renderer/Overlay.h>
 #include <renderer/RenderTypes.h>
+#include <renderer/WorldDraw.h>
 #include <rhi/RHICommandBuffer.h>
 #include <rhi/RHIDevice.h>
 #include <rhi/RHIFramebuffer.h>
@@ -28,13 +31,25 @@ namespace VKE::Renderer {
     class RenderScene;
 
     // A view texture's GPU side: the scene targets it draws through, and the displayable
-    // color the 2D layer samples, one per frame in flight.
+    // color the 2D layer samples, one per frame in flight; and what picking in it needs.
     struct ViewTexture {
         Iunique<SceneTargets> Scene;
         std::vector<Iunique<RHI::RHITexture>> Colors;
         std::vector<Iunique<RHI::RHIFramebuffer>> Framebuffers;
+        // The color with the scene's depth, for world draw lists.
+        std::vector<Iunique<RHI::RHIFramebuffer>> WorldFramebuffers;
         u32 Width = 0;
         u32 Height = 0;
+
+        // Made on the first request.
+        Iunique<PickTarget> Pick;
+        // Waiting for the next DrawScene.
+        bool PickRequested = false;
+        u32 PickX = 0;
+        u32 PickY = 0;
+        // Drawn in frame PickFrame, and not read yet.
+        bool PickInFlight = false;
+        u64 PickFrame = 0;
     };
 
     struct OverlayImage {
@@ -49,7 +64,10 @@ namespace VKE::Renderer {
         ~FrameRenderer();
 
         bool BeginFrame();
-        void DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target);
+        void DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target,
+                       const WorldDrawList* world);
+        void RequestPick(ViewTextureID target, u32 x, u32 y);
+        bool TakePickResult(ViewTextureID target, MeshInstanceID& mesh);
         void DrawOverlay(const OverlayDrawList& list);
         void EndFrame();
 
@@ -90,9 +108,13 @@ namespace VKE::Renderer {
         Iunique<RHI::RHIRenderPass> m_OutputPass;
         // Draws into a view texture's color, sampled afterwards.
         Iunique<RHI::RHIRenderPass> m_ViewPass;
+        // Draws over a view texture's color, with the scene's depth.
+        Iunique<RHI::RHIRenderPass> m_WorldRenderPass;
 
         Iunique<ForwardPath> m_ForwardPath;
         Iunique<OverlayPass> m_OverlayPass;
+        Iunique<WorldPass> m_WorldPass;
+        Iunique<PickPass> m_PickPass;
 
         // The scene drawn straight to the window, at the swapchain's size.
         Iunique<SceneTargets> m_WindowScene;

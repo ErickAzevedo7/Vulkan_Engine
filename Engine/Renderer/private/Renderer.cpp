@@ -27,8 +27,17 @@ namespace VKE::Renderer {
         return m_Frame && m_Frame->BeginFrame();
     }
 
-    void Renderer::DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target) {
-        if (m_Frame) m_Frame->DrawScene(scene, view, target);
+    void Renderer::DrawScene(const RenderScene& scene, const RenderView& view, ViewTextureID target,
+                             const WorldDrawList* world) {
+        if (m_Frame) m_Frame->DrawScene(scene, view, target, world);
+    }
+
+    void Renderer::RequestPick(ViewTextureID target, u32 x, u32 y) {
+        if (m_Frame) m_Frame->RequestPick(target, x, y);
+    }
+
+    bool Renderer::TakePickResult(ViewTextureID target, MeshInstanceID& mesh) {
+        return m_Frame && m_Frame->TakePickResult(target, mesh);
     }
 
     void Renderer::DrawOverlay(const OverlayDrawList& list) {

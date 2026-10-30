@@ -12,6 +12,9 @@ target_sources(VKE_Renderer PRIVATE
     private/SkyboxPass.cpp
     private/EnvironmentBaker.cpp
     private/ShadowPass.cpp
+    private/WorldDraw.cpp
+    private/WorldPass.cpp
+    private/PickPass.cpp
 )
 
 target_include_directories(VKE_Renderer
@@ -47,6 +50,10 @@ vke_add_shaders(RendererShaders
         shaders/shadow.vert
         shaders/overlay.vert
         shaders/overlay.frag
+        shaders/world.vert
+        shaders/world.frag
+        shaders/pick.vert
+        shaders/pick.frag
     INCLUDE_DIRS
         shaders
 )

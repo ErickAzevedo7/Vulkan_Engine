@@ -18,6 +18,9 @@ namespace VKE::Renderer {
         std::vector<Handle<Assets::MaterialData>> Materials;
         Mat4 Transform{1.0f};
         bool Visible = true;
+        // Whatever the instance's creator needs to find its own object again, e.g. after
+        // Renderer::TakePickResult. The renderer never reads it.
+        u64 Owner = 0;
     };
 
     VKE_ENUM()
@@ -61,6 +64,12 @@ namespace VKE::Renderer {
         f32 FieldOfView = kDefaultFieldOfView;
         f32 NearPlane = 0.1f;
         f32 FarPlane = 1000.0f;
+
+        // The projection the renderer draws with, for an output of `aspect` width over height.
+        // Clip space is Y-up, with depth in [0, 1].
+        Mat4 GetProjection(f32 aspect) const {
+            return glm::perspectiveRH_ZO(FieldOfView, aspect, NearPlane, FarPlane);
+        }
     };
 
 } // namespace VKE::Renderer

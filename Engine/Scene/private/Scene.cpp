@@ -121,6 +121,11 @@ namespace VKE::Scene {
         }
     }
 
+    GameObject* Scene::GetMeshOwner(Renderer::MeshInstanceID mesh) const {
+        const Renderer::MeshInstanceDesc* desc = m_RenderScene.GetMeshes().Get(mesh);
+        return desc ? Get(UnpackObjectHandle(desc->Owner)) : nullptr;
+    }
+
     Renderer::RenderView Scene::GetView() const {
         return m_MainCamera ? m_MainCamera->GetView() : Renderer::RenderView{};
     }

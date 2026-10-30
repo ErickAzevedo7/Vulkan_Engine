@@ -14,6 +14,7 @@ namespace VKE::RHI {
             if (HasFlag(usage, TextureUsage::Sampled)) result |= VK_IMAGE_USAGE_SAMPLED_BIT;
             if (HasFlag(usage, TextureUsage::ColorAttachment)) result |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
             if (HasFlag(usage, TextureUsage::DepthAttachment)) result |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            if (HasFlag(usage, TextureUsage::CopySource)) result |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             return result;
         }
 

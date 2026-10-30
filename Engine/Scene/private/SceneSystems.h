@@ -17,7 +17,8 @@ namespace VKE::Scene {
         MeshShapeCache& MeshShapes;
     };
 
-    // A physics body's UserData holds the handle of the object it belongs to.
+    // A physics body's UserData and a mesh instance's Owner hold the handle of the object they
+    // belong to.
     inline u64 PackObjectHandle(Handle<GameObject> handle) {
         return (static_cast<u64>(handle.Index) << 32) | handle.Generation;
     }

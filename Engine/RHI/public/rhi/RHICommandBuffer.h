@@ -11,6 +11,7 @@ namespace VKE::RHI {
     class RHIPipeline;
     class RHIBuffer;
     class RHIBindGroup;
+    class RHITexture;
 
     // Records GPU commands. Keep one per frame in flight and reuse it.
     class RHICommandBuffer {
@@ -44,6 +45,12 @@ namespace VKE::RHI {
         virtual void Draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) = 0;
         virtual void DrawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, i32 vertexOffset,
                                  u32 firstInstance) = 0;
+
+        // Copies a rectangle of mip 0 into `destination`, tightly packed, top row first. Outside
+        // any render pass. `source` needs TextureUsage::CopySource and must have just been drawn
+        // by a pass whose attachment sets CopiedAfter; `destination` must be a Readback buffer.
+        virtual void CopyTextureToBuffer(RHITexture& source, const ScissorRect& rect, RHIBuffer& destination,
+                                         size_t offset = 0) = 0;
     };
 
 } // namespace VKE::RHI

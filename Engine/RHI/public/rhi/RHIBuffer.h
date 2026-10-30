@@ -20,6 +20,10 @@ namespace VKE::RHI {
 
         // Copies `size` bytes into the buffer at `offset`. HostVisible buffers only.
         virtual void Write(const void* data, size_t size, size_t offset = 0) = 0;
+
+        // Copies `size` bytes at `offset` out of the buffer. Readback buffers only, once the GPU
+        // work that filled them is done.
+        virtual void Read(void* data, size_t size, size_t offset = 0) = 0;
     };
 
 } // namespace VKE::RHI

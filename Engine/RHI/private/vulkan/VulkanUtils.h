@@ -26,6 +26,7 @@ namespace VKE::RHI {
         switch (format) {
             case Format::R32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
             case Format::R32G32_SFLOAT: return VK_FORMAT_R32G32_SFLOAT;
+            case Format::R32G32_UINT: return VK_FORMAT_R32G32_UINT;
             case Format::R32G32B32_SFLOAT: return VK_FORMAT_R32G32B32_SFLOAT;
             case Format::R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
             case Format::R16G16_SFLOAT: return VK_FORMAT_R16G16_SFLOAT;
@@ -45,6 +46,7 @@ namespace VKE::RHI {
         switch (format) {
             case VK_FORMAT_R32_SFLOAT: return Format::R32_SFLOAT;
             case VK_FORMAT_R32G32_SFLOAT: return Format::R32G32_SFLOAT;
+            case VK_FORMAT_R32G32_UINT: return Format::R32G32_UINT;
             case VK_FORMAT_R32G32B32_SFLOAT: return Format::R32G32B32_SFLOAT;
             case VK_FORMAT_R32G32B32A32_SFLOAT: return Format::R32G32B32A32_SFLOAT;
             case VK_FORMAT_R16G16_SFLOAT: return Format::R16G16_SFLOAT;
@@ -115,7 +117,8 @@ namespace VKE::RHI {
     inline u32 GetBytesPerPixel(Format format) {
         switch (format) {
             case Format::R32_SFLOAT: return 4;
-            case Format::R32G32_SFLOAT: return 8;
+            case Format::R32G32_SFLOAT:
+            case Format::R32G32_UINT: return 8;
             case Format::R32G32B32_SFLOAT: return 12;
             case Format::R32G32B32A32_SFLOAT: return 16;
             case Format::R16G16_SFLOAT: return 4;

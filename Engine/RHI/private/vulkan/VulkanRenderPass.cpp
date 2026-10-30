@@ -20,12 +20,15 @@ namespace VKE::RHI {
             attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            // A kept attachment is where an earlier pass with the same flags left it.
+            attachment.initialLayout = a.Clear ? VK_IMAGE_LAYOUT_UNDEFINED : finalLayout;
             attachment.finalLayout = finalLayout;
             attachments.push_back(attachment);
         };
 
         bool sampledAfter = desc.DepthAttachment.SampledAfter;
+        bool copiedAfter = false;
+        bool keepsContents = hasDepth && !desc.DepthAttachment.Clear;
 
         for (const auto& color : desc.ColorAttachments) {
             VkImageLayout finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -34,7 +37,11 @@ namespace VKE::RHI {
             } else if (color.SampledAfter) {
                 finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 sampledAfter = true;
+            } else if (color.CopiedAfter) {
+                finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                copiedAfter = true;
             }
+            keepsContents = keepsContents || !color.Clear;
             addAttachment(color, finalLayout);
 
             VkAttachmentReference ref{};
@@ -77,6 +84,16 @@ namespace VKE::RHI {
             // A previous frame may still be sampling the attachment this pass overwrites.
             dependency.srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         }
+        if (copiedAfter) {
+            // A previous frame may still be copying out of it.
+            dependency.srcStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+        }
+        if (keepsContents) {
+            // What an earlier pass wrote is read back before drawing over it.
+            dependency.srcAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dependency.dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+            if (hasDepth) dependency.dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        }
 
         VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -97,6 +114,18 @@ namespace VKE::RHI {
             readDependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             readDependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             dependencies.push_back(readDependency);
+        }
+
+        if (copiedAfter) {
+            // Makes what the pass wrote visible to the copy that follows.
+            VkSubpassDependency copyDependency{};
+            copyDependency.srcSubpass = 0;
+            copyDependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+            copyDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            copyDependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            copyDependency.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            copyDependency.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            dependencies.push_back(copyDependency);
         }
 
         renderPassInfo.dependencyCount = static_cast<u32>(dependencies.size());

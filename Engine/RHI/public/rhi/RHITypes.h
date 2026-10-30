@@ -14,6 +14,7 @@ namespace VKE::RHI {
         Undefined,
         R32_SFLOAT,
         R32G32_SFLOAT,
+        R32G32_UINT,
         R32G32B32_SFLOAT,
         R32G32B32A32_SFLOAT,
         R16G16_SFLOAT,
@@ -91,6 +92,8 @@ namespace VKE::RHI {
         GpuOnly,
         // The CPU can update it with RHIBuffer::Write.
         HostVisible,
+        // The GPU copies into it and the CPU reads it with RHIBuffer::Read.
+        Readback,
     };
 
     struct BufferDesc {
@@ -114,6 +117,8 @@ namespace VKE::RHI {
         Sampled = 1 << 0,
         ColorAttachment = 1 << 1,
         DepthAttachment = 1 << 2,
+        // Can be copied into a buffer with RHICommandBuffer::CopyTextureToBuffer.
+        CopySource = 1 << 3,
     };
     VKE_ENUM_FLAGS(TextureUsage)
 
@@ -174,12 +179,15 @@ namespace VKE::RHI {
     struct AttachmentDesc {
         Format Format = Format::Undefined;
         bool IsDepth = false;
-        // If false, the previous contents are kept instead of cleared.
+        // If false, the previous contents are kept instead of cleared. The attachment must then
+        // be in the state this pass leaves it in: drawn by an earlier pass with the same flags.
         bool Clear = true;
         // Set on color attachments that are presented to the screen.
         bool PresentAfter = false;
         // Leaves the attachment readable by shaders once the pass ends.
         bool SampledAfter = false;
+        // Leaves the attachment ready for RHICommandBuffer::CopyTextureToBuffer once the pass ends.
+        bool CopiedAfter = false;
     };
 
     struct RenderPassDesc {

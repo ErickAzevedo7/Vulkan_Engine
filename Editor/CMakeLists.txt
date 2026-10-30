@@ -14,6 +14,13 @@ add_executable(Editor
     Panels/HierarchyPanel.cpp
     Panels/InspectorPanel.cpp
     Panels/ViewportPanel.cpp
+    Gizmo/GizmoMath.cpp
+    Gizmo/GizmoLayout.cpp
+    Gizmo/TransformGizmo.cpp
+    Gizmo/GizmoDrawing.cpp
+    Viewport/EditorCamera.cpp
+    Viewport/SceneMarkers.cpp
+    Viewport/WorldShapes.cpp
 )
 
 find_package(yaml-cpp CONFIG REQUIRED)

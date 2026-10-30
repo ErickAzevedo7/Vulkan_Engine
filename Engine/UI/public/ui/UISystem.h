@@ -48,6 +48,9 @@ namespace VKE::UI {
         // The ImGui texture ID (ImTextureID) that shows `texture`, e.g. in ImGui::Image().
         u64 GetTextureID(const Renderer::OverlayTexture& texture);
 
+        // The texture of the font atlas, where the glyphs of every font are (ImFontGlyph UVs).
+        Renderer::OverlayTexture GetFontTexture() const { return Renderer::OverlayTexture::FromImage(m_FontAtlas); }
+
         // Whether the UI is using the mouse or keyboard this frame, so the scene should not.
         bool WantsMouse() const;
         bool WantsKeyboard() const;

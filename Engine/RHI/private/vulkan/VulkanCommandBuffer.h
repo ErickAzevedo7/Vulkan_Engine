@@ -34,6 +34,9 @@ namespace VKE::RHI {
         void Draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) override;
         void DrawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, i32 vertexOffset, u32 firstInstance) override;
 
+        void CopyTextureToBuffer(RHITexture& source, const ScissorRect& rect, RHIBuffer& destination,
+                                 size_t offset) override;
+
         VkCommandBuffer GetHandle() const { return m_CommandBuffer; }
 
     private:

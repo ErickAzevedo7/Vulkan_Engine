@@ -24,6 +24,7 @@ namespace VKE::Scene {
         // Starts hidden; the first sync fills in the rest.
         Renderer::MeshInstanceDesc desc;
         desc.Visible = false;
+        desc.Owner = PackObjectHandle(GetOwner().GetHandle());
         m_Instance = systems.Render.CreateMesh(desc);
         MarkSyncNeeded();
     }

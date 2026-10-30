@@ -53,7 +53,7 @@ namespace VKE::Editor {
           m_Scene(assets),
           m_Hierarchy(m_Scene),
           m_Inspector(m_Scene, assets),
-          m_Viewport(renderer, ui) {
+          m_Viewport(m_Scene, assets, renderer, ui) {
     }
 
     EditorSystem::~EditorSystem() = default;
@@ -132,7 +132,7 @@ namespace VKE::Editor {
                       m_Scene.GetScene().GetObjectCount());
         if (m_ShowHierarchy) m_Hierarchy.Draw(&m_ShowHierarchy);
         if (m_ShowInspector) m_Inspector.Draw(&m_ShowInspector);
-        if (m_ShowViewport) m_Viewport.Draw(&m_ShowViewport, stats, m_Scene.GetScene().GetMainCamera() != nullptr);
+        if (m_ShowViewport) m_Viewport.Draw(&m_ShowViewport, stats);
         if (m_ShowConsole) m_Console.Draw(&m_ShowConsole);
         DrawUnsavedDialog();
         UpdateTitle();
@@ -143,7 +143,8 @@ namespace VKE::Editor {
 
         if (m_Renderer.BeginFrame()) {
             if (m_ShowViewport && m_Viewport.IsVisible()) {
-                m_Renderer.DrawScene(scene.GetRenderScene(), scene.GetView(), m_Viewport.GetTexture());
+                m_Renderer.DrawScene(scene.GetRenderScene(), m_Viewport.GetView(), m_Viewport.GetTexture(),
+                                     &m_Viewport.GetWorldDrawList());
             }
             m_UI.Render();
             m_Renderer.EndFrame();

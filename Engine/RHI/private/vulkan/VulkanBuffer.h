@@ -15,6 +15,7 @@ namespace VKE::RHI {
 
         size_t GetSize() const override { return m_Size; }
         void Write(const void* data, size_t size, size_t offset) override;
+        void Read(void* data, size_t size, size_t offset) override;
 
         VkBuffer GetHandle() const { return m_Buffer; }
 

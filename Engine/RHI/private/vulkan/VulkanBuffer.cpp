@@ -31,6 +31,10 @@ namespace VKE::RHI {
         if (desc.Memory == BufferMemory::HostVisible) {
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
             allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        } else if (desc.Memory == BufferMemory::Readback) {
+            bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
         } else {
             bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -40,7 +44,9 @@ namespace VKE::RHI {
         VK_CHECK(vmaCreateBuffer(m_Device.GetAllocator(), &bufferInfo, &allocInfo, &m_Buffer, &m_Allocation, &resultInfo));
         m_Device.SetDebugName(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<u64>(m_Buffer), desc.DebugName);
 
-        if (desc.Memory == BufferMemory::HostVisible) {
+        if (desc.Memory == BufferMemory::Readback) {
+            m_Mapped = resultInfo.pMappedData;
+        } else if (desc.Memory == BufferMemory::HostVisible) {
             m_Mapped = resultInfo.pMappedData;
             if (initialData) {
                 Write(initialData, desc.Size, 0);
@@ -62,6 +68,14 @@ namespace VKE::RHI {
 
         std::memcpy(static_cast<Byte*>(m_Mapped) + offset, data, size);
         vmaFlushAllocation(m_Device.GetAllocator(), m_Allocation, offset, size);
+    }
+
+    void VulkanBuffer::Read(void* data, size_t size, size_t offset) {
+        VKE_CORE_ASSERT(m_Memory == BufferMemory::Readback, "RHIBuffer::Read requires a Readback buffer");
+        VKE_CORE_ASSERT(offset + size <= m_Size, "RHIBuffer::Read out of range");
+
+        vmaInvalidateAllocation(m_Device.GetAllocator(), m_Allocation, offset, size);
+        std::memcpy(data, static_cast<const Byte*>(m_Mapped) + offset, size);
     }
 
     void VulkanBuffer::UploadThroughStaging(const void* data) {
