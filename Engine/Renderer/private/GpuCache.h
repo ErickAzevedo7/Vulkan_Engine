@@ -35,13 +35,21 @@ namespace VKE::Renderer {
     struct GpuMaterial {
         Iunique<RHI::RHIBuffer> UniformBuffer;
         Iunique<RHI::RHIBindGroup> BindGroup;
+        // The MaterialData::Revision it was made from.
+        u32 Revision = 0;
     };
 
-    // GPU copies of assets, created the first time each asset is requested.
+    // GPU copies of assets, created the first time each asset is requested. A material is made
+    // again when its data changes; the old copy is kept until the frames that used it are done.
     class GpuCache {
     public:
-        GpuCache(RHI::RHIDevice& device, Assets::AssetManager& assets, RHI::RHIBindGroupLayout& materialLayout);
+        GpuCache(RHI::RHIDevice& device, Assets::AssetManager& assets, RHI::RHIBindGroupLayout& materialLayout,
+                 u32 framesInFlight);
         ~GpuCache();
+
+        // Called as each frame begins, with the count of frames begun so far: frees the old
+        // copies no frame in flight can still use.
+        void BeginFrame(u64 frameNumber);
 
         // nullptr if the mesh asset doesn't exist.
         const GpuMesh* GetMesh(Handle<Assets::MeshData> handle);
@@ -57,8 +65,16 @@ namespace VKE::Renderer {
         RHI::RHITexture& GetTexture(Handle<Assets::TextureData> handle);
 
     private:
+        struct RetiredMaterial {
+            u64 Frame = 0;
+            Iunique<GpuMaterial> Material;
+        };
+
+        Iunique<GpuMaterial> CreateMaterial(const Assets::MaterialData& material);
 
         RHI::RHIDevice& m_Device;
+        u32 m_FramesInFlight = 1;
+        u64 m_FrameNumber = 0;
         Assets::AssetManager& m_Assets;
         RHI::RHIBindGroupLayout& m_MaterialLayout;
 
@@ -69,6 +85,7 @@ namespace VKE::Renderer {
         // Destroyed in reverse declaration order: meshes, then materials, then textures.
         std::unordered_map<Handle<Assets::TextureData>, Iunique<RHI::RHITexture>> m_Textures;
         std::unordered_map<Handle<Assets::MaterialData>, Iunique<GpuMaterial>> m_Materials;
+        std::vector<RetiredMaterial> m_RetiredMaterials;
         std::unordered_map<Handle<Assets::MeshData>, Iunique<GpuMesh>> m_Meshes;
         std::unordered_map<Handle<Assets::TextureData>, Iunique<GpuEnvironment>> m_Environments;
     };

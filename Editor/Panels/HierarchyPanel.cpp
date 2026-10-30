@@ -1,9 +1,11 @@
 #include "HierarchyPanel.h"
 #include "Display.h"
 #include "EditorScene.h"
+#include "Fields.h"
 #include "ObjectMenus.h"
 #include "Widgets.h"
 
+#include <assets/AssetManager.h>
 #include <core/Log.h>
 #include <scene/GameObject.h>
 #include <scene/Scene.h>
@@ -101,6 +103,13 @@ namespace VKE::Editor {
             Scene::GameObject* target = scene.Get(m_DropTarget);
             if (dragged && (target || !m_DropTarget.IsValid())) Move(*dragged, target, m_DropPlace);
         }
+        if (m_ModelToPlace.IsValid()) {
+            Scene::GameObject* parent = scene.Get(m_ModelParent);
+            if (parent || !m_ModelParent.IsValid()) {
+                if (Scene::GameObject* model = m_Scene.InstantiateModel(m_ModelToPlace, parent)) m_Scene.Select(model);
+            }
+            m_ModelToPlace = {};
+        }
         if (Scene::GameObject* doomed = scene.Get(m_ToDestroy)) {
             VKE_CORE_INFO("Editor: destroyed '{}'", doomed->GetName());
             m_Scene.Destroy(*doomed);
@@ -152,6 +161,13 @@ namespace VKE::Editor {
                 m_Dragged = *static_cast<const Handle<Scene::GameObject>*>(payload->Data);
                 m_DropTarget = {};
                 m_DropPending = true;
+            } else if (const ImGuiPayload* asset =
+                           ImGui::AcceptDragDropPayload(Fields::kAssetPayload, ImGuiDragDropFlags_AcceptBeforeDelivery)) {
+                Assets::AssetID model = *static_cast<const Assets::AssetID*>(asset->Data);
+                if (m_Scene.GetAssets().GetType(model) == Assets::AssetType::Model && asset->IsDelivery()) {
+                    m_ModelToPlace = model;
+                    m_ModelParent = {};
+                }
             }
             ImGui::EndDragDropTarget();
         }
@@ -222,6 +238,14 @@ namespace VKE::Editor {
                     m_DropTarget = handle;
                     m_DropPlace = place;
                     m_DropPending = true;
+                }
+            } else if (const ImGuiPayload* asset = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
+                // A model goes inside the row's object.
+                Assets::AssetID model = *static_cast<const Assets::AssetID*>(asset->Data);
+                dropping = m_Scene.GetAssets().GetType(model) == Assets::AssetType::Model;
+                if (dropping && asset->IsDelivery()) {
+                    m_ModelToPlace = model;
+                    m_ModelParent = handle;
                 }
             }
             ImGui::EndDragDropTarget();

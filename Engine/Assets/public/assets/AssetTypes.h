@@ -31,11 +31,13 @@ namespace VKE::Assets {
     };
 
     // What kind of file an asset is. Scenes are only listed: the scene module reads them.
+    // Meshes are only inside models, like some materials.
     enum class AssetType : u8 {
         Model,
         Texture,
         Material,
         Scene,
+        Mesh,
     };
 
     // A folder of asset files. A read-only root, like the engine's content, is never written
@@ -103,6 +105,14 @@ namespace VKE::Assets {
         SRGB,
     };
 
+    // A texture's color space setting, kept in its .vkasset.
+    enum class TextureColorSpace : u8 {
+        // Whatever the material or model using it asks for: sRGB for color, linear for data.
+        FromUse,
+        SRGB,
+        Linear,
+    };
+
     enum class PixelType {
         UNorm8,
         // Used by .hdr images, whose values go above 1.
@@ -143,6 +153,21 @@ namespace VKE::Assets {
         f32 Roughness = 1.0f;
         f32 Occlusion = 1.0f;
         std::array<Handle<TextureData>, static_cast<size_t>(MaterialTexture::Count)> Textures{};
+        // Counts the changes made to a loaded material; the renderer makes its copy again when it changes.
+        u32 Revision = 0;
+    };
+
+    // The color space each material texture slot is read in, when the texture doesn't fix one.
+    inline ColorSpace GetSlotColorSpace(MaterialTexture slot) {
+        return slot == MaterialTexture::Albedo || slot == MaterialTexture::Emissive ? ColorSpace::SRGB
+                                                                                    : ColorSpace::Linear;
+    }
+
+    // A mesh or material inside a model file.
+    struct SubAsset {
+        AssetID ID;
+        AssetType Type = AssetType::Model;
+        std::string Name;
     };
 
 } // namespace VKE::Assets

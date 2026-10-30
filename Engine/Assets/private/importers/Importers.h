@@ -18,5 +18,8 @@ namespace VKE::Assets::Importers {
 
     // Reads a .mat YAML file and loads the textures it references.
     bool ImportMaterial(AssetManager& assets, const std::filesystem::path& file, MaterialData& outMaterial);
+    // Writes a material as a .mat file, its textures by asset ID. Textures without one, like the
+    // default ones, are left out. The name isn't written: it is the file's.
+    bool ExportMaterial(const AssetManager& assets, const MaterialData& material, const std::filesystem::path& file);
 
 } // namespace VKE::Assets::Importers

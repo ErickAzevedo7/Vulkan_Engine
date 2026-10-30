@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace VKE::Scene {
     struct EnumInfo;
@@ -34,6 +35,8 @@ namespace VKE::Editor::Fields {
 
     // The design system's checkbox: an amber square with a check while on.
     bool Checkbox(const char* id, bool& value);
+    // One of `names`, by its index.
+    bool Choice(const char* id, const std::vector<std::string>& names, int& current);
     // A value of a reflected enum, by its names in words.
     bool Enum(const char* id, const Scene::EnumInfo& info, void* value);
     // A linear RGB color, shown as its sRGB swatch and hex; a click opens a picker. Values over 1

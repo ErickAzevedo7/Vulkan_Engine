@@ -78,7 +78,7 @@ namespace VKE::Renderer {
 
         CreatePipeline();
 
-        m_GpuCache = MakeIunique<GpuCache>(m_Device, assets, *m_MaterialLayout);
+        m_GpuCache = MakeIunique<GpuCache>(m_Device, assets, *m_MaterialLayout, framesInFlight);
 
         RHI::SamplerDesc environmentSamplerDesc;
         environmentSamplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;

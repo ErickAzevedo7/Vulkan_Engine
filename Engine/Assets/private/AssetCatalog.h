@@ -11,14 +11,6 @@
 
 namespace VKE::Assets {
 
-    // A texture's color space setting in its .vkasset.
-    enum class TextureColorSpace : u8 {
-        // Whatever the material or model using it asks for: sRGB for color, linear for data.
-        FromUse,
-        SRGB,
-        Linear,
-    };
-
     // What a .vkasset holds about one asset file.
     struct AssetEntry {
         AssetID ID;
@@ -54,14 +46,30 @@ namespace VKE::Assets {
 
         // Reads every asset file under the roots.
         void Scan();
+        // Adds the files created since the last scan and drops the entries whose files are gone.
+        // Returns whether anything changed.
+        bool Refresh();
+
+        // After a file or folder under a root moved on disk: the entries under `from` move to `to`,
+        // keeping their IDs.
+        void Moved(const std::filesystem::path& from, const std::filesystem::path& to);
+        // After a file or folder was deleted from disk: the entries under it are dropped.
+        void Removed(const std::filesystem::path& path);
+
+        // Writes the setting to the texture's .vkasset. False for other assets and read-only roots.
+        bool SetColorSpace(AssetID id, TextureColorSpace colorSpace);
 
         const std::vector<AssetRoot>& GetRoots() const { return m_Roots; }
 
         // Null if the file isn't an asset under a root. With `addIfMissing`, a file the scan
         // didn't see, like one created since, is added.
         const AssetEntry* FindByFile(const std::filesystem::path& file, bool addIfMissing);
+        // The same, without adding anything.
+        const AssetEntry* Find(const std::filesystem::path& file) const;
         const AssetEntry* Find(AssetID id) const;
         const SubAssetEntry* FindSubAsset(AssetID id) const;
+        // Null if `file` isn't under a root.
+        const AssetRoot* FindRoot(const std::filesystem::path& file) const;
         std::filesystem::path GetFile(const AssetEntry& entry) const { return m_Roots[entry.Root].Folder / entry.Path; }
 
         // The IDs of a model's meshes and materials, in the order of the names given. Names seen
@@ -72,6 +80,11 @@ namespace VKE::Assets {
                              std::vector<AssetID>& outMaterialIDs);
 
     private:
+        // Adds the files no entry has yet.
+        void AddNewFiles(bool log);
+        void Remove(AssetID id);
+        // The entries whose files are `path`, or under it if it is a folder.
+        std::vector<AssetID> FindUnder(const std::filesystem::path& path) const;
         const AssetEntry* Add(const std::filesystem::path& file, AssetType type);
         // Returns false if the file is missing or unreadable.
         bool ReadMetadata(const std::filesystem::path& metadataFile, AssetEntry& entry) const;

@@ -5,6 +5,7 @@
 #include <core/Log.h>
 #include <rhi/RHIDevice.h>
 
+#include <algorithm>
 #include <cfloat>
 
 namespace VKE::Renderer {
@@ -12,8 +13,9 @@ namespace VKE::Renderer {
     static_assert(kMaterialUniformsBinding == static_cast<u32>(Assets::MaterialTexture::Count),
                   "Material uniforms must follow the texture bindings");
 
-    GpuCache::GpuCache(RHI::RHIDevice& device, Assets::AssetManager& assets, RHI::RHIBindGroupLayout& materialLayout)
-        : m_Device(device), m_Assets(assets), m_MaterialLayout(materialLayout) {
+    GpuCache::GpuCache(RHI::RHIDevice& device, Assets::AssetManager& assets, RHI::RHIBindGroupLayout& materialLayout,
+                       u32 framesInFlight)
+        : m_Device(device), m_FramesInFlight(framesInFlight), m_Assets(assets), m_MaterialLayout(materialLayout) {
         RHI::SamplerDesc samplerDesc;
         samplerDesc.DebugName = "MaterialSampler";
         m_Sampler = RHI::RHISampler::Create(m_Device, samplerDesc);
@@ -27,6 +29,13 @@ namespace VKE::Renderer {
     }
 
     GpuCache::~GpuCache() = default;
+
+    void GpuCache::BeginFrame(u64 frameNumber) {
+        m_FrameNumber = frameNumber;
+        auto done = [&](const RetiredMaterial& retired) { return retired.Frame + m_FramesInFlight <= frameNumber; };
+        m_RetiredMaterials.erase(std::remove_if(m_RetiredMaterials.begin(), m_RetiredMaterials.end(), done),
+                                 m_RetiredMaterials.end());
+    }
 
     const GpuMesh* GpuCache::GetMesh(Handle<Assets::MeshData> handle) {
         if (auto it = m_Meshes.find(handle); it != m_Meshes.end()) {
@@ -72,12 +81,26 @@ namespace VKE::Renderer {
         if (!m_Assets.GetMaterial(handle)) {
             handle = m_DefaultMaterial;
         }
-        if (auto it = m_Materials.find(handle); it != m_Materials.end()) {
+        const Assets::MaterialData& material = *m_Assets.GetMaterial(handle);
+        auto it = m_Materials.find(handle);
+        if (it != m_Materials.end() && it->second->Revision == material.Revision) {
             return *it->second;
         }
 
-        const Assets::MaterialData& material = *m_Assets.GetMaterial(handle);
+        // Frames still in flight may use the old copy; the current one counts too.
+        Iunique<GpuMaterial> gpuMaterial = CreateMaterial(material);
+        if (it != m_Materials.end()) {
+            m_RetiredMaterials.push_back({m_FrameNumber, std::move(it->second)});
+            it->second = std::move(gpuMaterial);
+            return *it->second;
+        }
+        auto [added, inserted] = m_Materials.emplace(handle, std::move(gpuMaterial));
+        return *added->second;
+    }
+
+    Iunique<GpuMaterial> GpuCache::CreateMaterial(const Assets::MaterialData& material) {
         auto gpuMaterial = MakeIunique<GpuMaterial>();
+        gpuMaterial->Revision = material.Revision;
 
         MaterialUniforms uniforms;
         uniforms.BaseColor = material.BaseColor;
@@ -107,9 +130,7 @@ namespace VKE::Renderer {
         groupDesc.Resources.push_back(uniformResource);
 
         gpuMaterial->BindGroup = RHI::RHIBindGroup::Create(m_Device, groupDesc);
-
-        auto [it, inserted] = m_Materials.emplace(handle, std::move(gpuMaterial));
-        return *it->second;
+        return gpuMaterial;
     }
 
     const GpuEnvironment& GpuCache::GetEnvironmentMaps(Handle<Assets::TextureData> source) {

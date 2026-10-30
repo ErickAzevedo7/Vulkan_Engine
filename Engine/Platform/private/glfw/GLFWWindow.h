@@ -21,6 +21,7 @@ namespace VKE::Platform {
         u32 GetWidth() const override { return m_Width; }
         u32 GetHeight() const override { return m_Height; }
         bool IsMinimized() const override { return m_Width == 0 || m_Height == 0; }
+        bool IsFocused() const override;
 
         bool ConsumeResizedFlag() override;
 

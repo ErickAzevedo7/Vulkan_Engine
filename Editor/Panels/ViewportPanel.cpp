@@ -1,7 +1,10 @@
 #include "ViewportPanel.h"
 #include "EditorScene.h"
+#include "Fields.h"
 #include "Gizmo/GizmoDrawing.h"
 #include "Widgets.h"
+
+#include <assets/AssetManager.h>
 
 #include <renderer/Renderer.h>
 #include <scene/GameObject.h>
@@ -155,6 +158,17 @@ namespace VKE::Editor {
                                    ImGuiButtonFlags_MouseButtonMiddle);
         bool hovered = ImGui::IsItemHovered();
         m_Visible = true;
+        Assets::AssetID droppedModel;
+        if (ImGui::BeginDragDropTarget()) {
+            ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery;
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
+                Assets::AssetID asset = *static_cast<const Assets::AssetID*>(payload->Data);
+                if (payload->IsDelivery() && m_Scene.GetAssets().GetType(asset) == Assets::AssetType::Model) {
+                    droppedModel = asset;
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
 
         HandleCamera(hovered, size.y);
         HandleShortcuts(hovered);
@@ -163,6 +177,20 @@ namespace VKE::Editor {
         Vec2 mouse = ToVec2(ImGui::GetIO().MousePos) - ToVec2(min);
         bool gizmoBusy = HandleGizmo(view, mouse, hovered);
         HandleClick(view, mouse, hovered, gizmoBusy);
+
+        // A dropped model goes where the mouse's ray meets the ground, or a few meters ahead.
+        if (droppedModel.IsValid()) {
+            Ray ray = view.GetRay(mouse);
+            f32 distance = 0.0f;
+            constexpr f32 kAhead = 5.0f;
+            if (!IntersectPlane(ray, Vec3(0.0f), Vec3(0.0f, 1.0f, 0.0f), distance) || distance > 200.0f) {
+                distance = kAhead;
+            }
+            Vec3 position = ray.Origin + ray.Direction * distance;
+            if (Scene::GameObject* model = m_Scene.InstantiateModel(droppedModel, nullptr, position)) {
+                m_Scene.Select(model);
+            }
+        }
 
         Scene::GameObject* selected = m_Scene.GetSelected();
         m_Markers.Draw(m_Scene.GetScene(), selected, view, m_World);

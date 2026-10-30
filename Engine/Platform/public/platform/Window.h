@@ -57,6 +57,8 @@ namespace VKE::Platform {
 
         // True while the window is minimized (0x0 framebuffer).
         virtual bool IsMinimized() const = 0;
+        // True while the window has the keyboard focus.
+        virtual bool IsFocused() const = 0;
 
         // True on the first call after the framebuffer size changed;
         // resets to false once read. Poll once per frame from the RHI

@@ -35,6 +35,12 @@ namespace VKE::Assets {
             }
             return unique;
         }
+
+        template<typename T>
+        Handle<T> FindLoaded(const std::unordered_map<AssetID, Handle<T>>& loaded, AssetID id) {
+            auto it = loaded.find(id);
+            return it != loaded.end() ? it->second : Handle<T>{};
+        }
     } // namespace
 
     AssetManager::AssetManager(std::vector<AssetRoot> roots)
@@ -85,6 +91,106 @@ namespace VKE::Assets {
     std::optional<AssetType> AssetManager::GetType(AssetID id) const {
         const AssetEntry* entry = m_Catalog->Find(id);
         return entry ? std::optional<AssetType>(entry->Type) : std::nullopt;
+    }
+
+    std::optional<AssetType> AssetManager::GetAnyType(AssetID id) const {
+        if (const SubAssetEntry* subAsset = m_Catalog->FindSubAsset(id)) {
+            return subAsset->Kind == SubAssetKind::Mesh ? AssetType::Mesh : AssetType::Material;
+        }
+        return GetType(id);
+    }
+
+    AssetID AssetManager::GetAsset(const std::filesystem::path& file) const {
+        const AssetEntry* entry = m_Catalog->Find(file);
+        return entry ? entry->ID : AssetID{};
+    }
+
+    const AssetRoot* AssetManager::FindRoot(const std::filesystem::path& file) const {
+        return m_Catalog->FindRoot(file);
+    }
+
+    bool AssetManager::IsWritable(AssetID id) const {
+        const AssetEntry* entry = m_Catalog->Find(id);
+        return entry && !GetRoots()[entry->Root].ReadOnly;
+    }
+
+    std::vector<SubAsset> AssetManager::GetSubAssets(AssetID model) const {
+        std::vector<SubAsset> subAssets;
+        const AssetEntry* entry = m_Catalog->Find(model);
+        if (!entry) return subAssets;
+        for (const auto& [name, id] : entry->Meshes) {
+            subAssets.push_back({id, AssetType::Mesh, name});
+        }
+        for (const auto& [name, id] : entry->Materials) {
+            subAssets.push_back({id, AssetType::Material, name});
+        }
+        return subAssets;
+    }
+
+    bool AssetManager::Refresh() {
+        return m_Catalog->Refresh();
+    }
+
+    bool AssetManager::Move(const std::filesystem::path& from, const std::filesystem::path& to) {
+        const AssetRoot* fromRoot = FindRoot(from);
+        const AssetRoot* toRoot = FindRoot(to);
+        if (!fromRoot || !toRoot || fromRoot->ReadOnly || toRoot->ReadOnly) {
+            VKE_CORE_ERROR("AssetManager: '{}' can't be moved to '{}': both must be in a writable asset root",
+                           from.u8string(), to.u8string());
+            return false;
+        }
+        std::error_code ec;
+        if (std::filesystem::exists(to, ec)) {
+            VKE_CORE_ERROR("AssetManager: '{}' already exists", to.u8string());
+            return false;
+        }
+
+        bool isFile = std::filesystem::is_regular_file(from, ec);
+        AssetID moved = isFile ? GetAsset(from) : AssetID{};
+        std::filesystem::rename(from, to, ec);
+        if (ec) {
+            VKE_CORE_ERROR("AssetManager: couldn't move '{}' to '{}': {}", from.u8string(), to.u8string(),
+                           ec.message());
+            return false;
+        }
+        // A file's .vkasset goes with it; a folder's files take theirs along already.
+        if (isFile) {
+            std::filesystem::path metadata = from;
+            metadata += ".vkasset";
+            std::filesystem::path movedMetadata = to;
+            movedMetadata += ".vkasset";
+            if (std::filesystem::exists(metadata, ec)) std::filesystem::rename(metadata, movedMetadata, ec);
+            if (ec) VKE_CORE_WARN("AssetManager: couldn't move '{}': {}", metadata.u8string(), ec.message());
+        }
+        m_Catalog->Moved(from, to);
+
+        // A material named after its file follows it.
+        if (MaterialData* material = m_Materials.Get(FindLoaded(m_LoadedMaterials, moved))) {
+            if (material->Name == from.stem().u8string()) material->Name = to.stem().u8string();
+        }
+        return true;
+    }
+
+    bool AssetManager::Delete(const std::filesystem::path& path) {
+        const AssetRoot* root = FindRoot(path);
+        if (!root || root->ReadOnly) {
+            VKE_CORE_ERROR("AssetManager: '{}' can't be deleted: it isn't in a writable asset root", path.u8string());
+            return false;
+        }
+        std::error_code ec;
+        bool isFile = std::filesystem::is_regular_file(path, ec);
+        std::filesystem::remove_all(path, ec);
+        if (!ec && isFile) {
+            std::filesystem::path metadata = path;
+            metadata += ".vkasset";
+            std::filesystem::remove(metadata, ec);
+        }
+        if (ec) {
+            VKE_CORE_ERROR("AssetManager: couldn't delete '{}': {}", path.u8string(), ec.message());
+            return false;
+        }
+        m_Catalog->Removed(path);
+        return true;
     }
 
     Handle<ModelData> AssetManager::LoadModel(AssetID id) {
@@ -228,6 +334,86 @@ namespace VKE::Assets {
         return it != m_LoadedMeshes.end() ? it->second : Handle<MeshData>{};
     }
 
+    Handle<TextureData> AssetManager::FindLoadedTexture(AssetID id) const {
+        auto it = m_LoadedTextures.find(id);
+        if (it == m_LoadedTextures.end()) return {};
+        for (Handle<TextureData> texture : it->second) {
+            if (m_Textures.Contains(texture)) return texture;
+        }
+        return {};
+    }
+
+    TextureColorSpace AssetManager::GetColorSpace(AssetID texture) const {
+        const AssetEntry* entry = m_Catalog->Find(texture);
+        return entry ? entry->ColorSpace : TextureColorSpace::FromUse;
+    }
+
+    bool AssetManager::SetColorSpace(AssetID texture, TextureColorSpace colorSpace) {
+        if (!m_Catalog->SetColorSpace(texture, colorSpace)) return false;
+
+        // Materials holding the texture take it again, in the space they read it in now.
+        for (auto& [id, handle] : m_LoadedMaterials) {
+            MaterialData* material = m_Materials.Get(handle);
+            if (!material) continue;
+            bool changed = false;
+            for (u32 slot = 0; slot < static_cast<u32>(MaterialTexture::Count); ++slot) {
+                Handle<TextureData>& used = material->Textures[slot];
+                if (GetID(used) != texture) continue;
+                MaterialTexture use = static_cast<MaterialTexture>(slot);
+                Handle<TextureData> loaded = LoadTexture(texture, GetSlotColorSpace(use));
+                if (!loaded.IsValid() || loaded == used) continue;
+                used = loaded;
+                changed = true;
+            }
+            if (changed) ++material->Revision;
+        }
+        return true;
+    }
+
+    AssetID AssetManager::CreateMaterial(const std::filesystem::path& file) {
+        const AssetRoot* root = FindRoot(file);
+        std::error_code ec;
+        if (!root || root->ReadOnly) {
+            VKE_CORE_ERROR("AssetManager: '{}' isn't in a writable asset root", file.u8string());
+            return {};
+        }
+        if (std::filesystem::exists(file, ec)) {
+            VKE_CORE_ERROR("AssetManager: '{}' already exists", file.u8string());
+            return {};
+        }
+        // Content/Materials/Default.mat's values.
+        MaterialData material;
+        material.BaseColor = Vec4(0.55f, 0.55f, 0.55f, 1.0f);
+        material.Metallic = 0.0f;
+        material.Roughness = 0.5f;
+        if (!Importers::ExportMaterial(*this, material, file)) return {};
+        return FindAsset(file.u8string());
+    }
+
+    void AssetManager::UpdateMaterial(Handle<MaterialData> handle, MaterialData material) {
+        MaterialData* current = m_Materials.Get(handle);
+        if (!current) return;
+        FillDefaultTextures(material);
+        material.ID = current->ID;
+        material.Revision = current->Revision + 1;
+        *current = std::move(material);
+    }
+
+    bool AssetManager::SaveMaterial(AssetID id) {
+        const MaterialData* material = GetMaterial(FindLoaded(m_LoadedMaterials, id));
+        if (!material || GetType(id) != AssetType::Material || !IsWritable(id)) return false;
+        return Importers::ExportMaterial(*this, *material, GetFile(id));
+    }
+
+    bool AssetManager::ReloadMaterial(AssetID id) {
+        Handle<MaterialData> handle = FindLoaded(m_LoadedMaterials, id);
+        if (!m_Materials.Contains(handle) || GetType(id) != AssetType::Material) return false;
+        MaterialData material;
+        if (!Importers::ImportMaterial(*this, GetFile(id), material)) return false;
+        UpdateMaterial(handle, std::move(material));
+        return true;
+    }
+
     AssetID AssetManager::GetID(Handle<ModelData> handle) const {
         const ModelData* model = GetModel(handle);
         return model ? model->ID : AssetID{};
@@ -266,6 +452,11 @@ namespace VKE::Assets {
 
     Handle<MaterialData> AssetManager::AddMaterial(MaterialData material) {
         material.ID = {};
+        FillDefaultTextures(material);
+        return m_Materials.Emplace(std::move(material));
+    }
+
+    void AssetManager::FillDefaultTextures(MaterialData& material) const {
         auto fill = [&](MaterialTexture slot, DefaultTexture fallback) {
             Handle<TextureData>& texture = material.Textures[static_cast<size_t>(slot)];
             if (!m_Textures.Contains(texture)) texture = GetDefaultTexture(fallback);
@@ -276,8 +467,6 @@ namespace VKE::Assets {
         fill(MaterialTexture::Roughness, DefaultTexture::White);
         fill(MaterialTexture::Occlusion, DefaultTexture::White);
         fill(MaterialTexture::Emissive, DefaultTexture::White);
-
-        return m_Materials.Emplace(std::move(material));
     }
 
     void AssetManager::CreateDefaultTextures() {

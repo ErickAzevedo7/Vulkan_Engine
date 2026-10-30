@@ -115,6 +115,7 @@ namespace VKE::Renderer {
         ++m_FrameNumber;
         m_FrameIndex = m_Swapchain->GetCurrentFrameIndex();
         ReleaseRetired(false);
+        m_ForwardPath->GetGpuCache().BeginFrame(m_FrameNumber);
         m_WorldPass->BeginFrame(m_FrameIndex);
 
         m_InFrame = true;

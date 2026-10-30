@@ -4,6 +4,7 @@
 #include <core/Log.h>
 #include <platform/FileSystem.h>
 #include <scene/GameObject.h>
+#include <scene/ModelInstantiation.h>
 #include <scene/Scene.h>
 #include <scene/SceneSerializer.h>
 #include <scene/components/CameraComponent.h>
@@ -51,7 +52,6 @@ namespace VKE::Editor {
     void EditorScene::New() {
         m_Scene = MakeIunique<Scene::Scene>();
         m_ID = {};
-        m_File.clear();
         m_Dirty = false;
         m_Selected = {};
 
@@ -82,15 +82,15 @@ namespace VKE::Editor {
 
         m_Scene = std::move(loaded);
         m_ID = scene;
-        m_File = file;
         m_Dirty = false;
         m_Selected = {};
         return true;
     }
 
     bool EditorScene::Save() {
-        if (m_File.empty()) return false;
-        if (!Scene::SceneSerializer::Save(*m_Scene, m_Assets, m_File)) return false;
+        std::filesystem::path file = GetFile();
+        if (file.empty()) return false;
+        if (!Scene::SceneSerializer::Save(*m_Scene, m_Assets, file)) return false;
         m_Dirty = false;
         return true;
     }
@@ -107,13 +107,17 @@ namespace VKE::Editor {
         Assets::AssetID id = m_Assets.FindAsset(file.u8string());
         if (!id.IsValid()) return false;
         m_ID = id;
-        m_File = m_Assets.GetFile(id);
         m_Dirty = false;
         return true;
     }
 
+    std::filesystem::path EditorScene::GetFile() const {
+        return m_ID.IsValid() ? m_Assets.GetFile(m_ID) : std::filesystem::path();
+    }
+
     std::string EditorScene::GetFileName() const {
-        return m_File.empty() ? std::string("Untitled") : m_File.filename().u8string();
+        std::filesystem::path file = GetFile();
+        return file.empty() ? std::string("Untitled") : file.filename().u8string();
     }
 
     Scene::GameObject* EditorScene::GetSelected() const {
@@ -122,6 +126,12 @@ namespace VKE::Editor {
 
     void EditorScene::Select(Scene::GameObject* object) {
         m_Selected = object ? object->GetHandle() : Handle<Scene::GameObject>();
+        m_SelectedAsset = {};
+    }
+
+    void EditorScene::SelectAsset(Assets::AssetID asset) {
+        m_Selected = {};
+        m_SelectedAsset = asset;
     }
 
     Scene::GameObject& EditorScene::CreateEmpty(Scene::GameObject* parent) {
@@ -183,6 +193,19 @@ namespace VKE::Editor {
         light.AddComponent<Scene::LightComponent>(settings);
         m_Dirty = true;
         return light;
+    }
+
+    Scene::GameObject* EditorScene::InstantiateModel(Assets::AssetID model, Scene::GameObject* parent,
+                                                     const Vec3& position) {
+        if (m_Assets.GetType(model) != Assets::AssetType::Model) {
+            VKE_CORE_ERROR("Editor: {} isn't a model", model.ToString());
+            return nullptr;
+        }
+        Scene::GameObject* root = Scene::InstantiateModel(*m_Scene, m_Assets, m_Assets.LoadModel(model), parent);
+        if (!root) return nullptr;
+        root->GetTransform().SetLocalPosition(position);
+        m_Dirty = true;
+        return root;
     }
 
     void EditorScene::Destroy(Scene::GameObject& object) {

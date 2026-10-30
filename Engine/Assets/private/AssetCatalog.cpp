@@ -45,6 +45,7 @@ namespace VKE::Assets {
             case AssetType::Texture: return "Texture";
             case AssetType::Material: return "Material";
             case AssetType::Scene: return "Scene";
+            case AssetType::Mesh: return "Mesh";
             }
             return "";
         }
@@ -94,11 +95,29 @@ namespace VKE::Assets {
     }
 
     void AssetCatalog::Scan() {
+        AddNewFiles(true);
+    }
+
+    bool AssetCatalog::Refresh() {
+        std::vector<AssetID> gone;
+        for (const auto& [id, entry] : m_Entries) {
+            std::error_code ec;
+            if (!std::filesystem::is_regular_file(GetFile(entry), ec)) gone.push_back(id);
+        }
+        for (AssetID id : gone) {
+            Remove(id);
+        }
+        size_t before = m_Entries.size();
+        AddNewFiles(false);
+        return !gone.empty() || m_Entries.size() != before;
+    }
+
+    void AssetCatalog::AddNewFiles(bool log) {
         auto options = std::filesystem::directory_options::skip_permission_denied;
         for (const AssetRoot& root : m_Roots) {
             std::error_code ec;
             if (!std::filesystem::is_directory(root.Folder, ec)) {
-                VKE_CORE_WARN("AssetCatalog: asset root '{}' does not exist", root.Folder.string());
+                if (log) VKE_CORE_WARN("AssetCatalog: asset root '{}' does not exist", root.Folder.string());
                 continue;
             }
 
@@ -110,9 +129,74 @@ namespace VKE::Assets {
                 if (m_ByPath.count(MakePathKey(it->path()))) continue;
                 Add(it->path(), type);
             }
-            VKE_CORE_INFO("AssetCatalog: {} assets under '{}'{}", m_Entries.size() - created, root.Folder.string(),
-                          root.ReadOnly ? " (read-only)" : "");
+            if (log) {
+                VKE_CORE_INFO("AssetCatalog: {} assets under '{}'{}", m_Entries.size() - created, root.Folder.string(),
+                              root.ReadOnly ? " (read-only)" : "");
+            }
         }
+    }
+
+    void AssetCatalog::Moved(const std::filesystem::path& from, const std::filesystem::path& to) {
+        u32 fromRoot = 0;
+        u32 toRoot = 0;
+        std::string fromPath;
+        std::string toPath;
+        if (!FindRoot(from, fromRoot, fromPath) || !FindRoot(to, toRoot, toPath)) return;
+
+        for (AssetID id : FindUnder(from)) {
+            AssetEntry& entry = m_Entries.at(id);
+            m_ByPath.erase(MakePathKey(GetFile(entry)));
+            // The part past the moved folder stays; a moved file is the whole path.
+            entry.Root = toRoot;
+            entry.Path = toPath + entry.Path.substr(fromPath.size());
+            m_ByPath[MakePathKey(GetFile(entry))] = id;
+        }
+    }
+
+    void AssetCatalog::Removed(const std::filesystem::path& path) {
+        for (AssetID id : FindUnder(path)) {
+            Remove(id);
+        }
+    }
+
+    bool AssetCatalog::SetColorSpace(AssetID id, TextureColorSpace colorSpace) {
+        auto it = m_Entries.find(id);
+        if (it == m_Entries.end() || it->second.Type != AssetType::Texture || m_Roots[it->second.Root].ReadOnly) {
+            return false;
+        }
+        it->second.ColorSpace = colorSpace;
+        WriteMetadata(it->second);
+        return true;
+    }
+
+    void AssetCatalog::Remove(AssetID id) {
+        auto it = m_Entries.find(id);
+        if (it == m_Entries.end()) return;
+        for (const auto* subAssets : {&it->second.Meshes, &it->second.Materials}) {
+            for (const auto& [name, subID] : *subAssets) {
+                m_SubAssets.erase(subID);
+            }
+        }
+        m_ByPath.erase(MakePathKey(GetFile(it->second)));
+        m_Entries.erase(it);
+    }
+
+    std::vector<AssetID> AssetCatalog::FindUnder(const std::filesystem::path& path) const {
+        std::string key = MakePathKey(path);
+        std::vector<AssetID> found;
+        if (key.empty()) return found;
+        for (const auto& [entryKey, id] : m_ByPath) {
+            bool inside = entryKey.size() > key.size() && entryKey[key.size()] == '/' &&
+                          entryKey.compare(0, key.size(), key) == 0;
+            if (entryKey == key || inside) found.push_back(id);
+        }
+        return found;
+    }
+
+    const AssetRoot* AssetCatalog::FindRoot(const std::filesystem::path& file) const {
+        u32 root = 0;
+        std::string path;
+        return FindRoot(file, root, path) ? &m_Roots[root] : nullptr;
     }
 
     const AssetEntry* AssetCatalog::FindByFile(const std::filesystem::path& file, bool addIfMissing) {
@@ -124,6 +208,11 @@ namespace VKE::Assets {
         AssetType type;
         if (!addIfMissing || !FindType(file, type) || !std::filesystem::is_regular_file(file, ec)) return nullptr;
         return Add(file, type);
+    }
+
+    const AssetEntry* AssetCatalog::Find(const std::filesystem::path& file) const {
+        auto it = m_ByPath.find(MakePathKey(file));
+        return it != m_ByPath.end() ? &m_Entries.at(it->second) : nullptr;
     }
 
     const AssetEntry* AssetCatalog::Find(AssetID id) const {

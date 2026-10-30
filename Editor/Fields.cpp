@@ -218,33 +218,27 @@ namespace VKE::Editor::Fields {
         return clicked;
     }
 
-    bool Enum(const char* id, const Scene::EnumInfo& info, void* value) {
-        u32 current = info.Read(value);
-        std::string preview = std::to_string(current);
-        for (u32 i = 0; i < info.Count; ++i) {
-            if (info.Values[i].Value == current) preview = Display::ToWords(info.Values[i].Name);
-        }
-
+    bool Choice(const char* id, const std::vector<std::string>& names, int& current) {
+        std::string preview = current >= 0 && current < static_cast<int>(names.size()) ? names[current] : "";
         ImVec2 position = ImGui::GetCursorScreenPos();
         f32 width = ImGui::CalcItemWidth();
         bool changed = false;
         ImGui::SetNextItemWidth(width);
         if (ImGui::BeginCombo(id, preview.c_str(), ImGuiComboFlags_NoArrowButton)) {
-            for (u32 i = 0; i < info.Count; ++i) {
-                const Scene::EnumValue& item = info.Values[i];
-                bool selected = item.Value == current;
-                ImGui::PushID(static_cast<int>(i));
+            for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+                bool selected = i == current;
+                ImGui::PushID(i);
                 if (ImGui::Selectable("##Item", false, ImGuiSelectableFlags_None, ImVec2(0.0f, Sizes::RowHeight))) {
-                    info.Write(value, item.Value);
                     changed = !selected;
+                    current = i;
                 }
                 if (selected) ImGui::SetItemDefaultFocus();
                 ImVec2 min = ImGui::GetItemRectMin();
                 f32 top = min.y + std::floor((Sizes::RowHeight - Sizes::ControlHeight) * 0.5f);
                 // The current value's check, in a column of its own.
                 if (selected) DrawText(TextStyle::UI, min.x + Sizes::Space1, top, Colors::Accent, Icons::Check);
-                std::string name = Display::ToWords(item.Name);
-                DrawText(TextStyle::UI, min.x + Sizes::Space1 + 14.0f + Sizes::Space3, top, Colors::Text, name.c_str());
+                DrawText(TextStyle::UI, min.x + Sizes::Space1 + 14.0f + Sizes::Space3, top, Colors::Text,
+                         names[i].c_str());
                 ImGui::PopID();
             }
             ImGui::EndCombo();
@@ -256,6 +250,24 @@ namespace VKE::Editor::Fields {
         DrawText(TextStyle::UI, position.x + width - Sizes::Space3 - chevronWidth, position.y, Colors::TextMuted,
                  Icons::ChevronDown);
         return changed;
+    }
+
+    bool Enum(const char* id, const Scene::EnumInfo& info, void* value) {
+        u32 stored = info.Read(value);
+        std::vector<std::string> names;
+        int current = -1;
+        for (u32 i = 0; i < info.Count; ++i) {
+            names.push_back(Display::ToWords(info.Values[i].Name));
+            if (info.Values[i].Value == stored) current = static_cast<int>(i);
+        }
+        // A value the enum doesn't name shows as its number.
+        if (current < 0) {
+            names.push_back(std::to_string(stored));
+            current = static_cast<int>(info.Count);
+        }
+        if (!Choice(id, names, current) || current >= static_cast<int>(info.Count)) return false;
+        info.Write(value, info.Values[current].Value);
+        return true;
     }
 
     bool Color(const char* id, Vec3& linear) {

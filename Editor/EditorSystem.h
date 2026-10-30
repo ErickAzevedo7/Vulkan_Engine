@@ -1,6 +1,8 @@
 #pragma once
 
 #include "EditorScene.h"
+#include "MaterialEdits.h"
+#include "Panels/AssetBrowserPanel.h"
 #include "Panels/ConsolePanel.h"
 #include "Panels/HierarchyPanel.h"
 #include "Panels/InspectorPanel.h"
@@ -56,8 +58,11 @@ namespace VKE::Editor {
             Quit,
         };
 
-        // Does `action`, asking first to save the scene if it has unsaved changes.
+        // Does `action`, asking first to save the scene if it has unsaved changes, and the
+        // materials too when the project closes.
         void Request(Action action, Assets::AssetID scene = {});
+        // Whether `action` would lose changes: the scene's, and for closing, the materials'.
+        bool HasUnsavedChanges(Action action) const;
         void Perform(Action action, Assets::AssetID scene);
 
         // Saves to the scene's file, or asks for one; false if it wasn't saved.
@@ -85,14 +90,20 @@ namespace VKE::Editor {
         UI::UISystem& m_UI;
 
         EditorScene m_Scene;
+        MaterialEdits m_MaterialEdits;
         HierarchyPanel m_Hierarchy;
         InspectorPanel m_Inspector;
         ConsolePanel m_Console;
         ViewportPanel m_Viewport;
+        AssetBrowserPanel m_AssetBrowser;
         bool m_ShowHierarchy = true;
         bool m_ShowInspector = true;
         bool m_ShowViewport = true;
         bool m_ShowConsole = true;
+        bool m_ShowAssets = true;
+        // Files may change on disk while the editor is in the background: they are scanned
+        // again when it gets the focus back.
+        bool m_WindowFocused = true;
         bool m_ResetLayout = false;
         bool m_LayoutChecked = false;
 

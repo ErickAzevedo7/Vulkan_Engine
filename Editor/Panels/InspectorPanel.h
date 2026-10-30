@@ -6,6 +6,8 @@
 #include <math/MathTypes.h>
 #include <scene/ComponentRegistry.h>
 
+#include <imgui.h>
+
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -21,17 +23,25 @@ namespace VKE::Scene {
     struct StructInfo;
 } // namespace VKE::Scene
 
+namespace VKE::UI {
+    class UISystem;
+} // namespace VKE::UI
+
 namespace VKE::Editor {
 
     class EditorScene;
+    class MaterialEdits;
 
     // The selected object: its name, whether it is on, and a block per component with the
     // properties the reflection generator describes, in their order. Components are added from
     // the registry and reset or removed from their block's menu. Every edit is applied to the
     // component as it happens.
+    //
+    // Or the selected asset: a material's values and textures, applied as they are edited and
+    // saved to its .mat with Save; a texture's image and color space; what a model holds.
     class InspectorPanel {
     public:
-        InspectorPanel(EditorScene& scene, Assets::AssetManager& assets);
+        InspectorPanel(EditorScene& scene, Assets::AssetManager& assets, MaterialEdits& edits, UI::UISystem& ui);
 
         // The window's title, with its icon.
         static const char* GetWindowName();
@@ -40,6 +50,8 @@ namespace VKE::Editor {
 
     private:
         void DrawObjectHeader(Scene::GameObject& object);
+        // A block's header, which opens and closes it. Returns its bottom right corner.
+        ImVec2 DrawBlockHeader(const char* icon, const std::string& label, bool& open);
         void DrawComponent(Scene::Component& component);
         // Nested structs are listed inline. True if a value changed.
         bool DrawProperties(const Scene::StructInfo& type, void* object);
@@ -48,8 +60,24 @@ namespace VKE::Editor {
         bool DrawMaterials(std::vector<Handle<Assets::MaterialData>>& materials);
         void DrawAddComponent(Scene::GameObject& object);
 
+        void DrawAsset(Assets::AssetID asset);
+        void DrawAssetHeader(Assets::AssetID asset, Assets::AssetType type);
+        // A block of an asset, open unless closed before. True while open; EndAssetBlock after.
+        bool BeginAssetBlock(const char* icon, const char* label);
+        void EndAssetBlock();
+        void DrawMaterial(Assets::AssetID asset);
+        void DrawTexture(Assets::AssetID asset);
+        void DrawModel(Assets::AssetID asset);
+        void DrawMesh(Assets::AssetID asset);
+        // The texture's image, loaded in its own color space if it isn't loaded; 0 if it can't be.
+        u64 GetTextureImage(Assets::AssetID texture);
+
         EditorScene& m_Scene;
         Assets::AssetManager& m_Assets;
+        MaterialEdits& m_Edits;
+        UI::UISystem& m_UI;
+        // Asset blocks closed, by their label.
+        std::unordered_set<std::string> m_ClosedAssetBlocks;
         // Component types whose blocks are closed, on every object.
         std::unordered_set<Scene::ComponentTypeID> m_Closed;
         std::string m_NameText;

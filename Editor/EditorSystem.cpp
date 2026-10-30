@@ -51,9 +51,11 @@ namespace VKE::Editor {
           m_Renderer(renderer),
           m_UI(ui),
           m_Scene(assets),
+          m_MaterialEdits(assets),
           m_Hierarchy(m_Scene),
-          m_Inspector(m_Scene, assets),
-          m_Viewport(m_Scene, assets, renderer, ui) {
+          m_Inspector(m_Scene, assets, m_MaterialEdits, ui),
+          m_Viewport(m_Scene, assets, renderer, ui),
+          m_AssetBrowser(m_Scene, m_MaterialEdits, ui) {
     }
 
     EditorSystem::~EditorSystem() = default;
@@ -120,6 +122,12 @@ namespace VKE::Editor {
             window.CancelClose();
             Request(Action::Quit);
         }
+        bool focused = window.IsFocused();
+        if (focused && !m_WindowFocused && m_Assets.Refresh()) {
+            m_MaterialEdits.DropMissing();
+            m_AssetBrowser.Refresh();
+        }
+        m_WindowFocused = focused;
 
         HandleShortcuts();
         DrawMenuBar();
@@ -134,6 +142,10 @@ namespace VKE::Editor {
         if (m_ShowInspector) m_Inspector.Draw(&m_ShowInspector);
         if (m_ShowViewport) m_Viewport.Draw(&m_ShowViewport, stats);
         if (m_ShowConsole) m_Console.Draw(&m_ShowConsole);
+        if (m_ShowAssets) m_AssetBrowser.Draw(&m_ShowAssets);
+        if (Assets::AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
+            Request(Action::OpenScene, scene);
+        }
         DrawUnsavedDialog();
         UpdateTitle();
 
@@ -164,8 +176,13 @@ namespace VKE::Editor {
         }
     }
 
+    bool EditorSystem::HasUnsavedChanges(Action action) const {
+        bool closing = action == Action::CloseProject || action == Action::Quit;
+        return m_Scene.IsDirty() || (closing && m_MaterialEdits.GetUnsavedCount() > 0);
+    }
+
     void EditorSystem::Request(Action action, Assets::AssetID scene) {
-        if (m_Scene.IsDirty()) {
+        if (HasUnsavedChanges(action)) {
             m_PendingAction = action;
             m_PendingScene = scene;
             m_OpenUnsavedDialog = true;
@@ -283,12 +300,14 @@ namespace VKE::Editor {
             ImGui::MenuItem(WithIcon(Icons::SlidersHorizontal, "Inspector").c_str(), nullptr, &m_ShowInspector);
             ImGui::MenuItem(WithIcon(Icons::Box, "Viewport").c_str(), nullptr, &m_ShowViewport);
             ImGui::MenuItem(WithIcon(Icons::Terminal, "Console").c_str(), nullptr, &m_ShowConsole);
+            ImGui::MenuItem(WithIcon(Icons::Boxes, "Assets").c_str(), nullptr, &m_ShowAssets);
             ImGui::Separator();
             if (ImGui::MenuItem(WithIcon(Icons::LayoutGrid, "Reset layout").c_str())) {
                 m_ShowHierarchy = true;
                 m_ShowInspector = true;
                 m_ShowViewport = true;
                 m_ShowConsole = true;
+                m_ShowAssets = true;
                 m_ResetLayout = true;
             }
             ImGui::EndMenu();
@@ -375,11 +394,12 @@ namespace VKE::Editor {
         ImGuiID dockspace = ImHashStr("EditorDockSpace");
 
         // No saved layout yet, or a reset: the Hierarchy on the left, the Inspector on the right,
-        // the Viewport in the middle and the Console under it.
+        // the Viewport in the middle and Assets and the Console under it.
         // A layout saved before a panel existed is built again too.
         bool missing = !ImGui::DockBuilderGetNode(dockspace) ||
                        !ImGui::FindWindowSettingsByID(ImHashStr(HierarchyPanel::GetWindowName())) ||
-                       !ImGui::FindWindowSettingsByID(ImHashStr(InspectorPanel::GetWindowName()));
+                       !ImGui::FindWindowSettingsByID(ImHashStr(InspectorPanel::GetWindowName())) ||
+                       !ImGui::FindWindowSettingsByID(ImHashStr(AssetBrowserPanel::GetWindowName()));
         bool build = m_ResetLayout || (!m_LayoutChecked && missing);
         m_LayoutChecked = true;
         m_ResetLayout = false;
@@ -399,6 +419,7 @@ namespace VKE::Editor {
             ImGui::DockBuilderDockWindow(HierarchyPanel::GetWindowName(), left);
             ImGui::DockBuilderDockWindow(InspectorPanel::GetWindowName(), right);
             ImGui::DockBuilderDockWindow(ViewportPanel::GetWindowName(), center);
+            ImGui::DockBuilderDockWindow(AssetBrowserPanel::GetWindowName(), bottom);
             ImGui::DockBuilderDockWindow(ConsolePanel::GetWindowName(), bottom);
             ImGui::DockBuilderFinish(dockspace);
         }
@@ -424,7 +445,16 @@ namespace VKE::Editor {
         Widgets::PopDialogStyle();
         if (!open) return;
 
-        std::string title = "Save changes to " + m_Scene.GetFileName() + "?";
+        // The scene, the materials, or both.
+        size_t materials = m_PendingAction == Action::CloseProject || m_PendingAction == Action::Quit
+                               ? m_MaterialEdits.GetUnsavedCount()
+                               : 0;
+        std::string materialsText = std::to_string(materials) + (materials == 1 ? " material" : " materials");
+        std::string title = "Save changes to " +
+                            (m_Scene.IsDirty() && materials > 0 ? m_Scene.GetFileName() + " and " + materialsText
+                             : m_Scene.IsDirty()                ? m_Scene.GetFileName()
+                                                                : materialsText) +
+                            "?";
         bool cancel = Widgets::DialogHeader(title.c_str()) || ImGui::IsKeyPressed(ImGuiKey_Escape);
         ImGui::PushTextWrapPos(0.0f);
         Widgets::Text("The changes are lost if you don't save them.", Colors::TextMuted);
@@ -454,7 +484,8 @@ namespace VKE::Editor {
         ImGui::EndPopup();
 
         // A save that didn't happen, like a cancelled file dialog, cancels the action too.
-        if (save && !SaveScene()) return;
+        if (save && m_Scene.IsDirty() && !SaveScene()) return;
+        if (save && materials > 0 && !m_MaterialEdits.SaveAll()) return;
         if (save || discard) Perform(action, scene);
     }
 

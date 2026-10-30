@@ -70,6 +70,10 @@ namespace VKE::Platform {
         return glfwWindowShouldClose(m_Handle) != 0;
     }
 
+    bool GLFWWindow::IsFocused() const {
+        return glfwGetWindowAttrib(m_Handle, GLFW_FOCUSED) != 0;
+    }
+
     void GLFWWindow::CancelClose() {
         glfwSetWindowShouldClose(m_Handle, GLFW_FALSE);
     }

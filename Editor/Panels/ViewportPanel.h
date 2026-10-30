@@ -34,7 +34,8 @@ namespace VKE::Editor {
 
     // Shows the scene from the editor's camera, drawn into a view texture the size of the
     // panel, with the grid, the icons and the gizmo over it. The mouse flies, orbits and pans
-    // the camera, drags the gizmo, and selects what it clicks.
+    // the camera, drags the gizmo, and selects what it clicks. A model dragged from Assets is
+    // placed where it is dropped.
     //
     //   Right button: look around, WASD/QE to fly, wheel for speed   Alt + left: orbit
     //   Middle: pan   Wheel: zoom   F: frame the selected   W/E/R: move, rotate, scale

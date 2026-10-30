@@ -2,9 +2,12 @@
 #include "Display.h"
 #include "EditorScene.h"
 #include "Fields.h"
+#include "MaterialEdits.h"
 #include "Widgets.h"
 
 #include <assets/AssetManager.h>
+#include <renderer/Overlay.h>
+#include <ui/UISystem.h>
 #include <scene/Component.h>
 #include <scene/GameObject.h>
 #include <scene/Properties.h>
@@ -85,8 +88,9 @@ namespace VKE::Editor {
         }
     } // namespace
 
-    InspectorPanel::InspectorPanel(EditorScene& scene, Assets::AssetManager& assets)
-        : m_Scene(scene), m_Assets(assets) {
+    InspectorPanel::InspectorPanel(EditorScene& scene, Assets::AssetManager& assets, MaterialEdits& edits,
+                                   UI::UISystem& ui)
+        : m_Scene(scene), m_Assets(assets), m_Edits(edits), m_UI(ui) {
     }
 
     const char* InspectorPanel::GetWindowName() {
@@ -103,9 +107,17 @@ namespace VKE::Editor {
             return;
         }
 
+        if (Assets::AssetID asset = m_Scene.GetSelectedAsset(); asset.IsValid()) {
+            ImGui::BeginChild("##Asset");
+            DrawAsset(asset);
+            ImGui::EndChild();
+            ImGui::End();
+            return;
+        }
+
         Scene::GameObject* object = m_Scene.GetSelected();
         if (!object) {
-            const char* note = "Select an object to see its components.";
+            const char* note = "Select an object or an asset to see it here.";
             ImVec2 size = ImGui::CalcTextSize(note);
             ImVec2 available = ImGui::GetContentRegionAvail();
             ImGui::SetCursorPos(ImVec2(std::max(Sizes::Space4, std::floor((available.x - size.x) * 0.5f)),
@@ -196,29 +208,15 @@ namespace VKE::Editor {
         ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
     }
 
-    void InspectorPanel::DrawComponent(Scene::Component& component) {
-        const Scene::ComponentTypeInfo* type = Scene::ComponentRegistry::Find(component.GetTypeID());
-        if (!type) return;
-        bool isTransform = !type->Create;
-        bool open = m_Closed.count(type->ID) == 0;
-        std::string label = Display::GetComponentLabel(*type);
-
-        ImGui::PushID(static_cast<int>(type->ID));
+    ImVec2 InspectorPanel::DrawBlockHeader(const char* icon, const std::string& label, bool& open) {
         ImDrawList* draw = ImGui::GetWindowDrawList();
         ImVec2 min = ImGui::GetCursorScreenPos();
         f32 width = ImGui::GetContentRegionAvail().x;
         ImVec2 max(min.x + width, min.y + Sizes::TabHeight);
 
-        // The header: a click opens or closes the block.
+        // A click opens or closes the block.
         ImGui::SetNextItemAllowOverlap();
-        if (ImGui::InvisibleButton("##Header", ImVec2(width, Sizes::TabHeight))) {
-            if (open) {
-                m_Closed.insert(type->ID);
-            } else {
-                m_Closed.erase(type->ID);
-            }
-            open = !open;
-        }
+        if (ImGui::InvisibleButton("##Header", ImVec2(width, Sizes::TabHeight))) open = !open;
         bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem);
         draw->AddRectFilled(min, max, ToImColor(hovered ? Colors::BgHover : Colors::BgHeader));
         draw->AddLine(min, ImVec2(max.x, min.y), ToImColor(Colors::Line));
@@ -230,11 +228,28 @@ namespace VKE::Editor {
         draw->AddText(font, font->FontSize, ImVec2(x, textY), ToImColor(Colors::TextMuted),
                       open ? Icons::ChevronDown : Icons::ChevronRight);
         x += 14.0f + Sizes::Space3;
-        draw->AddText(font, font->FontSize, ImVec2(x, textY), ToImColor(Colors::TextMuted),
-                      Display::GetComponentIcon(component));
+        draw->AddText(font, font->FontSize, ImVec2(x, textY), ToImColor(Colors::TextMuted), icon);
         x += 14.0f + Sizes::Space3;
         f32 nameY = min.y + std::floor((Sizes::TabHeight - strong->FontSize) * 0.5f);
         draw->AddText(strong, strong->FontSize, ImVec2(x, nameY), ToImColor(Colors::Text), label.c_str());
+        return max;
+    }
+
+    void InspectorPanel::DrawComponent(Scene::Component& component) {
+        const Scene::ComponentTypeInfo* type = Scene::ComponentRegistry::Find(component.GetTypeID());
+        if (!type) return;
+        bool isTransform = !type->Create;
+        bool open = m_Closed.count(type->ID) == 0;
+        std::string label = Display::GetComponentLabel(*type);
+
+        ImGui::PushID(static_cast<int>(type->ID));
+        ImVec2 min = ImGui::GetCursorScreenPos();
+        ImVec2 max = DrawBlockHeader(Display::GetComponentIcon(component), label, open);
+        if (open) {
+            m_Closed.erase(type->ID);
+        } else {
+            m_Closed.insert(type->ID);
+        }
 
         // The block's menu, on the right.
         constexpr f32 kMenuButtonWidth = 26.0f;
@@ -324,7 +339,7 @@ namespace VKE::Editor {
             auto& mesh = *static_cast<Handle<Assets::MeshData>*>(value);
             const Assets::MeshData* data = m_Assets.GetMesh(mesh);
             Assets::AssetID dropped;
-            auto accepts = [this](Assets::AssetID id) { return m_Assets.LoadMesh(id).IsValid(); };
+            auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Mesh; };
             switch (Fields::Asset("##Value", Icons::Box, data ? data->Name : std::string(), "Mesh", accepts, dropped)) {
             case Fields::AssetAction::Drop: mesh = m_Assets.LoadMesh(dropped); return true;
             case Fields::AssetAction::Clear: mesh = {}; return true;
@@ -384,7 +399,7 @@ namespace VKE::Editor {
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove the last slot");
         }
 
-        auto accepts = [this](Assets::AssetID id) { return m_Assets.LoadMaterial(id).IsValid(); };
+        auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Material; };
         for (size_t i = 0; i < materials.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
             // Slots sit under the list's label, a step in.
@@ -452,6 +467,329 @@ namespace VKE::Editor {
             if (shown == 0) Widgets::Text("Nothing to add", Colors::TextFaint);
             ImGui::EndPopup();
         }
+    }
+
+    void InspectorPanel::DrawAsset(Assets::AssetID asset) {
+        std::optional<Assets::AssetType> type = m_Assets.GetAnyType(asset);
+        if (!type) {
+            ImGui::SetCursorPos(ImVec2(Sizes::Space4, ImGui::GetCursorPosY() + Sizes::Space7));
+            Widgets::Text("The asset is gone.", Colors::TextMuted);
+            return;
+        }
+
+        ImGui::PushID(asset.ToString().c_str());
+        DrawAssetHeader(asset, *type);
+        switch (*type) {
+        case Assets::AssetType::Material: DrawMaterial(asset); break;
+        case Assets::AssetType::Texture: DrawTexture(asset); break;
+        case Assets::AssetType::Model: DrawModel(asset); break;
+        case Assets::AssetType::Mesh: DrawMesh(asset); break;
+        case Assets::AssetType::Scene:
+            ImGui::SetCursorPosX(Sizes::Space4);
+            Widgets::Text("Double-click the scene in Assets to open it.", Colors::TextMuted);
+            break;
+        }
+        ImGui::PopID();
+    }
+
+    void InspectorPanel::DrawAssetHeader(Assets::AssetID asset, Assets::AssetType type) {
+        static constexpr const char* kIcons[] = {Icons::Boxes, Icons::Image, Icons::Palette, Icons::Clapperboard,
+                                                 Icons::Box};
+        std::filesystem::path file = m_Assets.GetFile(asset);
+        std::string name = file.empty() ? std::string() : file.stem().u8string();
+        if (name.empty()) {
+            if (const Assets::MaterialData* material = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
+                type == Assets::AssetType::Material && material) {
+                name = material->Name;
+            } else if (const Assets::MeshData* mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset));
+                       type == Assets::AssetType::Mesh && mesh) {
+                name = mesh->Name;
+            }
+        }
+
+        bool isMaterialFile = type == Assets::AssetType::Material && !file.empty();
+        bool writable = !file.empty() && m_Assets.IsWritable(asset);
+        bool unsaved = m_Edits.IsUnsaved(asset);
+
+        // The icon and the name, the unsaved mark, and the file under them.
+        ImGui::SetCursorPos(ImVec2(Sizes::Space4, ImGui::GetCursorPosY() + Sizes::Space4));
+        ImGui::AlignTextToFramePadding();
+        Widgets::Text(kIcons[static_cast<size_t>(type)], Colors::TextMuted, TextStyle::Icons16);
+        ImGui::SameLine(0.0f, Sizes::Space4);
+        ImGui::AlignTextToFramePadding();
+        Widgets::Text(name.c_str(), Colors::Text, TextStyle::UIStrong);
+        if (unsaved) {
+            ImGui::SameLine(0.0f, Sizes::Space3);
+            ImGui::AlignTextToFramePadding();
+            Widgets::Dot(Colors::Accent);
+        }
+
+        // Save and Revert for a material file, on the right; a badge for what can't be changed.
+        f32 right = ImGui::GetWindowContentRegionMax().x - Sizes::Space4;
+        if (isMaterialFile && writable) {
+            ImGui::PushFont(GetFont(TextStyle::UIMedium));
+            const ImGuiStyle& style = ImGui::GetStyle();
+            f32 saveWidth = ImGui::CalcTextSize("Save").x + 2.0f * style.FramePadding.x + 14.0f + Sizes::Space3;
+            f32 revertWidth = ImGui::CalcTextSize("Revert").x + 2.0f * style.FramePadding.x;
+            ImGui::PopFont();
+            ImGui::SameLine(std::max(right - saveWidth - revertWidth - Sizes::Space3, ImGui::GetCursorPosX()));
+            if (Widgets::PrimaryButton(WithIcon(Icons::Save, "Save").c_str(), ImVec2(0.0f, 0.0f), unsaved)) {
+                m_Edits.Save(asset);
+            }
+            ImGui::SameLine(0.0f, Sizes::Space3);
+            ImGui::BeginDisabled(!unsaved);
+            ImGui::PushFont(GetFont(TextStyle::UIMedium));
+            if (ImGui::Button("Revert")) m_Edits.Revert(asset);
+            ImGui::PopFont();
+            ImGui::EndDisabled();
+        } else if (!writable) {
+            const char* badge = file.empty() ? "IN MODEL" : "READ-ONLY";
+            ImFont* small = GetFont(TextStyle::UISmall);
+            f32 badgeWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, badge).x + 10.0f;
+            ImGui::SameLine(std::max(right - badgeWidth, ImGui::GetCursorPosX()));
+            ImGui::AlignTextToFramePadding();
+            Widgets::Badge(badge, Colors::TextMuted);
+        }
+
+        // The file as its root names it, or the model the asset is inside.
+        std::string where;
+        if (!file.empty()) {
+            const Assets::AssetRoot* root = m_Assets.FindRoot(file);
+            where = (root ? root->Name + "/" : std::string()) +
+                    (root ? file.lexically_relative(root->Folder).generic_u8string() : file.u8string());
+        } else {
+            where = "Inside a model, which can't be changed here";
+        }
+        ImGui::SetCursorPosX(Sizes::Space4 + 16.0f + Sizes::Space4);
+        Widgets::Text(where.c_str(), Colors::TextMuted, file.empty() ? TextStyle::UISmall : TextStyle::MonoSmall);
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
+    }
+
+    bool InspectorPanel::BeginAssetBlock(const char* icon, const char* label) {
+        ImGui::PushID(label);
+        bool open = m_ClosedAssetBlocks.count(label) == 0;
+        ImVec2 min = ImGui::GetCursorScreenPos();
+        ImVec2 max = DrawBlockHeader(icon, label, open);
+        if (open) {
+            m_ClosedAssetBlocks.erase(label);
+        } else {
+            m_ClosedAssetBlocks.insert(label);
+        }
+        ImGui::SetCursorScreenPos(ImVec2(min.x, max.y));
+        if (!open) {
+            ImGui::PopID();
+            return false;
+        }
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space3 - Sizes::Space2));
+        ImGui::Indent(kBodyIndent);
+        ImGui::PushItemWidth(-Sizes::Space4);
+        return true;
+    }
+
+    void InspectorPanel::EndAssetBlock() {
+        ImGui::PopItemWidth();
+        ImGui::Unindent(kBodyIndent);
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space4 - Sizes::Space2));
+        ImGui::PopID();
+    }
+
+    void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
+        struct Slot {
+            const char* Label;
+            Assets::MaterialTexture Texture;
+        };
+        static constexpr Slot kSlots[] = {
+            {"Albedo", Assets::MaterialTexture::Albedo},       {"Normal", Assets::MaterialTexture::Normal},
+            {"Metallic", Assets::MaterialTexture::Metallic},   {"Roughness", Assets::MaterialTexture::Roughness},
+            {"Occlusion", Assets::MaterialTexture::Occlusion}, {"Emissive", Assets::MaterialTexture::Emissive},
+        };
+
+        const Assets::MaterialData* data = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
+        if (!data) {
+            ImGui::SetCursorPosX(Sizes::Space4);
+            Widgets::Text("The material can't be loaded.", Colors::Danger);
+            return;
+        }
+        Assets::MaterialData values = *data;
+        bool editable = !m_Assets.GetFile(asset).empty() && m_Assets.IsWritable(asset);
+        bool changed = false;
+
+        ImGui::BeginDisabled(!editable);
+        if (BeginAssetBlock(Icons::SlidersHorizontal, "Surface")) {
+            Vec3 color(values.BaseColor);
+            Fields::Label("Base color", Sizes::LabelWidth);
+            if (Fields::Color("##BaseColor", color)) {
+                values.BaseColor = Vec4(color, values.BaseColor.a);
+                changed = true;
+            }
+            Fields::Label("Opacity", Sizes::LabelWidth);
+            changed |= Fields::Float("##Opacity", values.BaseColor.a, 0.005f, 0.0f, 1.0f, "%.3f");
+            Fields::Label("Metallic", Sizes::LabelWidth);
+            changed |= Fields::Float("##Metallic", values.Metallic, 0.005f, 0.0f, 1.0f, "%.3f");
+            Fields::Label("Roughness", Sizes::LabelWidth);
+            changed |= Fields::Float("##Roughness", values.Roughness, 0.005f, 0.0f, 1.0f, "%.3f");
+            Fields::Label("Occlusion", Sizes::LabelWidth);
+            changed |= Fields::Float("##Occlusion", values.Occlusion, 0.005f, 0.0f, 1.0f, "%.3f");
+            Fields::Label("Emissive", Sizes::LabelWidth);
+            changed |= Fields::Color("##Emissive", values.Emissive);
+            EndAssetBlock();
+        }
+
+        if (BeginAssetBlock(Icons::Image, "Textures")) {
+            ImFont* small = GetFont(TextStyle::UISmall);
+            f32 badgeWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, "LINEAR").x + 10.0f;
+            constexpr f32 kThumbSize = 22.0f;
+            auto accepts = [this](Assets::AssetID id) { return m_Assets.GetType(id) == Assets::AssetType::Texture; };
+            for (const Slot& slot : kSlots) {
+                ImGui::PushID(slot.Label);
+                Handle<Assets::TextureData>& texture = values.Textures[static_cast<size_t>(slot.Texture)];
+                Assets::AssetID textureID = m_Assets.GetID(texture);
+                Fields::Label(slot.Label, Sizes::LabelWidth);
+
+                // The image, the field and the color space the slot reads it in.
+                ImVec2 thumbMin = ImGui::GetCursorScreenPos();
+                ImGui::Dummy(ImVec2(kThumbSize, kThumbSize));
+                ImDrawList* draw = ImGui::GetWindowDrawList();
+                ImVec2 thumbMax(thumbMin.x + kThumbSize, thumbMin.y + kThumbSize);
+                draw->AddRectFilled(thumbMin, thumbMax, ToImColor(Colors::BgField), 2.0f);
+                if (textureID.IsValid()) {
+                    draw->AddImageRounded(m_UI.GetTextureID(Renderer::OverlayTexture::FromAsset(texture)), thumbMin,
+                                          thumbMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 2.0f);
+                }
+                draw->AddRect(thumbMin, thumbMax, ToImColor(Colors::Line), 2.0f);
+                ImGui::SameLine(0.0f, Sizes::Space3);
+
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Sizes::Space4 - badgeWidth - Sizes::Space3);
+                const Assets::TextureData* textureData = m_Assets.GetTexture(texture);
+                std::string name = textureID.IsValid() && textureData ? textureData->Name : std::string();
+                Assets::AssetID dropped;
+                switch (Fields::Asset("##Texture", Icons::Image, name, "Texture", accepts, dropped)) {
+                case Fields::AssetAction::Drop:
+                    texture = m_Assets.LoadTexture(dropped, Assets::GetSlotColorSpace(slot.Texture));
+                    changed = true;
+                    break;
+                case Fields::AssetAction::Clear:
+                    texture = {};
+                    changed = true;
+                    break;
+                case Fields::AssetAction::None: break;
+                }
+
+                ImGui::SameLine(0.0f, Sizes::Space3);
+                Assets::ColorSpace space = textureData && textureID.IsValid() ? textureData->ColorSpace
+                                                                              : Assets::GetSlotColorSpace(slot.Texture);
+                // Centered on the field's height.
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                                     std::floor((Sizes::ControlHeight - ImGui::GetTextLineHeight()) * 0.5f));
+                Widgets::Badge(space == Assets::ColorSpace::SRGB ? "SRGB" : "LINEAR", Colors::TextMuted);
+                ImGui::PopID();
+            }
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
+            Widgets::Text("Color space follows the slot. Override it on the texture.", Colors::TextFaint,
+                          TextStyle::UISmall);
+            ImGui::PopTextWrapPos();
+            EndAssetBlock();
+        }
+        ImGui::EndDisabled();
+
+        if (changed && editable) m_Edits.Change(asset, std::move(values));
+    }
+
+    u64 InspectorPanel::GetTextureImage(Assets::AssetID texture) {
+        Handle<Assets::TextureData> handle = m_Assets.FindLoadedTexture(texture);
+        if (!handle.IsValid()) {
+            Assets::ColorSpace space = m_Assets.GetColorSpace(texture) == Assets::TextureColorSpace::Linear
+                                           ? Assets::ColorSpace::Linear
+                                           : Assets::ColorSpace::SRGB;
+            handle = m_Assets.LoadTexture(texture, space);
+        }
+        return handle.IsValid() ? m_UI.GetTextureID(Renderer::OverlayTexture::FromAsset(handle)) : 0;
+    }
+
+    void InspectorPanel::DrawTexture(Assets::AssetID asset) {
+        static const std::vector<std::string> kSpaces = {"From use", "sRGB", "Linear"};
+        u64 image = GetTextureImage(asset);
+        const Assets::TextureData* data = m_Assets.GetTexture(m_Assets.FindLoadedTexture(asset));
+
+        if (BeginAssetBlock(Icons::Image, "Image")) {
+            // The image as large as fits, keeping its shape.
+            f32 width = ImGui::GetContentRegionAvail().x - Sizes::Space4;
+            f32 aspect =
+                data && data->Height > 0 ? static_cast<f32>(data->Width) / static_cast<f32>(data->Height) : 1.0f;
+            ImVec2 size(width, width / aspect);
+            if (size.y > 256.0f) size = ImVec2(256.0f * aspect, 256.0f);
+            ImVec2 min = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(size);
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(min, ImVec2(min.x + size.x, min.y + size.y), ToImColor(Colors::BgField));
+            if (image) draw->AddImage(image, min, ImVec2(min.x + size.x, min.y + size.y));
+            draw->AddRect(min, ImVec2(min.x + size.x, min.y + size.y), ToImColor(Colors::Line));
+            ImGui::Dummy(ImVec2(0.0f, Sizes::Space2));
+
+            if (data) {
+                char text[64];
+                std::snprintf(text, sizeof(text), "%u \xc3\x97 %u", data->Width, data->Height);
+                Fields::Label("Size", Sizes::LabelWidth);
+                ImGui::AlignTextToFramePadding();
+                Widgets::Text(text, Colors::Text, TextStyle::Mono);
+                Fields::Label("Pixels", Sizes::LabelWidth);
+                ImGui::AlignTextToFramePadding();
+                Widgets::Text(data->PixelType == Assets::PixelType::Float32 ? "32-bit float (HDR)" : "8-bit",
+                              Colors::Text);
+            }
+
+            // Kept in the .vkasset: changing it loads the texture again where materials use it.
+            Fields::Label("Color space", Sizes::LabelWidth);
+            int current = static_cast<int>(m_Assets.GetColorSpace(asset));
+            ImGui::BeginDisabled(!m_Assets.IsWritable(asset));
+            if (Fields::Choice("##ColorSpace", kSpaces, current)) {
+                m_Assets.SetColorSpace(asset, static_cast<Assets::TextureColorSpace>(current));
+            }
+            ImGui::EndDisabled();
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
+            Widgets::Text("From use: sRGB in the albedo and emissive slots, linear in the others.", Colors::TextFaint,
+                          TextStyle::UISmall);
+            ImGui::PopTextWrapPos();
+            EndAssetBlock();
+        }
+    }
+
+    void InspectorPanel::DrawModel(Assets::AssetID asset) {
+        std::vector<Assets::SubAsset> subAssets = m_Assets.GetSubAssets(asset);
+        if (BeginAssetBlock(Icons::Layers, "Contents")) {
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
+            if (subAssets.empty()) {
+                Widgets::Text("Open the model's tile in Assets to list its meshes and materials.", Colors::TextMuted);
+            }
+            ImGui::PopTextWrapPos();
+            for (const Assets::SubAsset& subAsset : subAssets) {
+                ImGui::AlignTextToFramePadding();
+                Widgets::Text(subAsset.Type == Assets::AssetType::Mesh ? Icons::Box : Icons::Palette,
+                              Colors::TextMuted);
+                ImGui::SameLine(0.0f, Sizes::Space3);
+                Widgets::Text(subAsset.Name.c_str(), Colors::Text);
+            }
+            ImGui::Dummy(ImVec2(0.0f, Sizes::Space2));
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
+            Widgets::Text("Drag the model into the Hierarchy or the Viewport to place it.", Colors::TextFaint,
+                          TextStyle::UISmall);
+            ImGui::PopTextWrapPos();
+            EndAssetBlock();
+        }
+    }
+
+    void InspectorPanel::DrawMesh(Assets::AssetID asset) {
+        const Assets::MeshData* mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset));
+        if (!mesh || !BeginAssetBlock(Icons::Box, "Geometry")) return;
+        auto row = [](const char* label, size_t value) {
+            Fields::Label(label, Sizes::LabelWidth);
+            ImGui::AlignTextToFramePadding();
+            Widgets::Text(std::to_string(value).c_str(), Colors::Text, TextStyle::Mono);
+        };
+        row("Vertices", mesh->Vertices.size());
+        row("Triangles", mesh->Indices.size() / 3);
+        row("Submeshes", mesh->Submeshes.size());
+        EndAssetBlock();
     }
 
 } // namespace VKE::Editor

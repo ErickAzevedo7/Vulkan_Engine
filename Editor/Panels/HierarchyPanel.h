@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assets/AssetTypes.h>
 #include <core/Handle.h>
 #include <core/ObjectID.h>
 #include <core/Types.h>
@@ -16,7 +17,8 @@ namespace VKE::Editor {
     class EditorScene;
 
     // The scene's objects as a tree. A click selects; a double click or F2 renames; dragging a
-    // row onto another makes it a child, and between two rows moves it there. The context menu
+    // row onto another makes it a child, and between two rows moves it there. A model dragged
+    // from Assets onto a row goes inside it, and under the rows to the root. The context menu
     // creates, renames and destroys objects, and the eye on a row turns the object on and off.
     // With a filter, the objects whose names match are listed flat.
     class HierarchyPanel {
@@ -67,6 +69,9 @@ namespace VKE::Editor {
         Handle<Scene::GameObject> m_DropTarget;
         DropPlace m_DropPlace = DropPlace::Inside;
         bool m_DropPending = false;
+        // A model dropped from Assets, placed under m_ModelParent, or at the root if it is invalid.
+        Assets::AssetID m_ModelToPlace;
+        Handle<Scene::GameObject> m_ModelParent;
         Handle<Scene::GameObject> m_ToDestroy;
     };
 
