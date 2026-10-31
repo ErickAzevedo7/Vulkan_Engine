@@ -12,6 +12,13 @@ namespace VKE::Scene {
 
     enum class PropertyType : u8 {
         Bool,
+        // Only game scripts have these three.
+        I32,
+        // The ObjectID of an object. In a prefab's instance, that of the part in the prefab
+        // when it points inside the instance: see PrefabLibrary::FindReferenced.
+        Object,
+        // The AssetID of a prefab.
+        Prefab,
         F32,
         Vec3,
         Quat,

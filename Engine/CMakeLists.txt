@@ -24,6 +24,10 @@ add_subdirectory(scene)
 add_subdirectory(ui)
 add_subdirectory(project)
 
+# Phase 5 modules
+add_subdirectory(sdk)
+add_subdirectory(scripting)
+
 # The parent aggregates all modules — modules do NOT link to VKE_Engine themselves
 target_link_libraries(VKE_Engine INTERFACE
     VKE_Reflection
@@ -38,7 +42,5 @@ target_link_libraries(VKE_Engine INTERFACE
     VKE_Scene
     VKE_UI
     VKE_Project
+    VKE_Scripting
 )
-
-# Later modules — uncomment as implemented
-# add_subdirectory(scripting)

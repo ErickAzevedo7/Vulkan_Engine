@@ -34,7 +34,7 @@ namespace Reflect {
         SourceLocation Location;
     };
 
-    // A marked struct, or a component.
+    // A marked struct, a component, or a game's script.
     struct StructDef {
         std::string QualifiedName;
         std::string Name;
@@ -43,7 +43,24 @@ namespace Reflect {
         bool Addable = true;
         std::vector<PropertyDef> Properties;
         // Include path of the header, as code includes it: "scene/components/LightComponent.h".
+        // A game's headers are relative to its scripts folder.
         std::string Include;
+        SourceLocation Location;
+    };
+
+    struct ParameterDef {
+        // The declaration up to the name, with tokens separated by spaces: "const char *".
+        std::string Type;
+        std::string Name;
+    };
+
+    // A function of the SDK marked VKE_API, which a script calls through the engine's table.
+    struct ApiFunctionDef {
+        // The namespaces around it, from the global one: "vke::Log".
+        std::string Namespace;
+        std::string Name;
+        std::string ReturnType;
+        std::vector<ParameterDef> Parameters;
         SourceLocation Location;
     };
 
@@ -51,6 +68,9 @@ namespace Reflect {
         std::vector<std::string> Includes;
         std::vector<EnumDef> Enums;
         std::vector<StructDef> Structs;
+        std::vector<ApiFunctionDef> Functions;
+        // Follows every token read, so it changes when a header changes in any way but comments.
+        std::uint32_t TokenHash = 2166136261u;
     };
 
     // Thrown for anything the generator refuses, and printed as "file(line): error: message".

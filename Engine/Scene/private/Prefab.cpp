@@ -3,6 +3,7 @@
 #include "scene/Properties.h"
 #include "scene/Scene.h"
 #include "scene/SceneSerializer.h"
+#include "scene/components/MissingComponent.h"
 
 #include <assets/AssetManager.h>
 #include <core/Log.h>
@@ -126,6 +127,10 @@ namespace VKE::Scene {
                     Component* copy = component == &part.GetTransform() ? &object.GetTransform()
                                                                         : object.AddComponent(type->ID);
                     if (!copy) continue;
+                    if (type->Missing) {
+                        static_cast<MissingComponent*>(copy)->SetSavedText(
+                            static_cast<MissingComponent*>(component)->GetSavedText());
+                    }
                     CopyValues(*type->Properties, type->ToObject(copy), type->ToObject(component));
                     copy->ApplyPropertyChanges(Assets);
                 }
@@ -152,6 +157,19 @@ namespace VKE::Scene {
             if (GameObject* found = FindInstancePart(*child, part)) return found;
         }
         return nullptr;
+    }
+
+    ObjectID PrefabLibrary::GetReference(GameObject& owner, GameObject& target) {
+        GameObject* root = owner.GetPrefabRoot();
+        return root && target.GetPrefabRoot() == root ? target.GetPrefabPart() : target.GetID();
+    }
+
+    GameObject* PrefabLibrary::FindReferenced(GameObject& owner, ObjectID reference) {
+        if (!reference.IsValid()) return nullptr;
+        if (GameObject* root = owner.GetPrefabRoot()) {
+            if (GameObject* part = FindInstancePart(*root, reference)) return part;
+        }
+        return owner.GetScene().FindByID(reference);
     }
 
     void PrefabLibrary::Unpack(GameObject& root) {

@@ -5,6 +5,7 @@
 #include "scene/Properties.h"
 #include "scene/Scene.h"
 #include "scene/components/CameraComponent.h"
+#include "scene/components/MissingComponent.h"
 
 #include <assets/AssetManager.h>
 #include <core/Log.h>
@@ -70,6 +71,20 @@ namespace VKE::Scene {
                 case PropertyType::Bool:
                     Key(property) << As<bool>(value);
                     break;
+                case PropertyType::I32:
+                    Key(property) << As<i32>(value);
+                    break;
+                case PropertyType::Object: {
+                    // Nothing is an empty string: the values compared with can have something.
+                    ObjectID id = As<ObjectID>(value);
+                    Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
+                    break;
+                }
+                case PropertyType::Prefab: {
+                    Assets::AssetID id = As<Assets::AssetID>(value);
+                    Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
+                    break;
+                }
                 case PropertyType::F32:
                     Key(property) << As<f32>(value);
                     break;
@@ -176,6 +191,19 @@ namespace VKE::Scene {
                 case PropertyType::Bool:
                     ReadScalar(node, As<bool>(value), path);
                     break;
+                case PropertyType::I32:
+                    ReadScalar(node, As<i32>(value), path);
+                    break;
+                case PropertyType::Object: {
+                    std::string text;
+                    if (ReadScalar(node, text, path)) As<ObjectID>(value) = ObjectID::Parse(text);
+                    break;
+                }
+                case PropertyType::Prefab: {
+                    std::string text;
+                    if (ReadScalar(node, text, path)) As<Assets::AssetID>(value) = Assets::AssetID::Parse(text);
+                    break;
+                }
                 case PropertyType::F32:
                     ReadScalar(node, As<f32>(value), path);
                     break;
@@ -286,6 +314,14 @@ namespace VKE::Scene {
             }
         }
 
+        // What a component whose type isn't there said in the file.
+        void WriteMissing(YAML::Emitter& out, const Component& component) {
+            const std::string& text = static_cast<const MissingComponent&>(component).GetSavedText();
+            YAML::Node node = YAML::Load(text);
+            if (node.IsNull() || !node.IsDefined()) node = YAML::Node(YAML::NodeType::Map);
+            out << node;
+        }
+
         void WriteObject(YAML::Emitter& out, const GameObject& object, const Assets::AssetManager& assets,
                          bool writeParent) {
             out << YAML::BeginMap;
@@ -300,6 +336,10 @@ namespace VKE::Scene {
             for (Component* component : object.GetComponents()) {
                 const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
                 out << YAML::Key << type->Name << YAML::Value;
+                if (type->Missing) {
+                    WriteMissing(out, *component);
+                    continue;
+                }
                 PropertyWriter writer(out, assets, object.GetName());
                 writer.Write(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
             }
@@ -329,9 +369,11 @@ namespace VKE::Scene {
                     const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
                     Component* original = pristine->GetComponent(component->GetTypeID());
                     if (!original) continue;
-                    if (!AreEqual(*type->Properties, type->ToObject(component), type->ToObject(original))) {
-                        changed.emplace_back(component, original);
-                    }
+                    bool differs = type->Missing ? static_cast<MissingComponent*>(component)->GetSavedText() !=
+                                                       static_cast<MissingComponent*>(original)->GetSavedText()
+                                                 : !AreEqual(*type->Properties, type->ToObject(component),
+                                                             type->ToObject(original));
+                    if (differs) changed.emplace_back(component, original);
                 }
                 bool renamed = part != &root && part->GetName() != pristine->GetName();
                 bool switched = part->IsActive() != pristine->IsActive();
@@ -348,6 +390,10 @@ namespace VKE::Scene {
                     for (auto [component, original] : changed) {
                         const ComponentTypeInfo* type = ComponentRegistry::Find(component->GetTypeID());
                         out << YAML::Key << type->Name << YAML::Value;
+                        if (type->Missing) {
+                            WriteMissing(out, *component);
+                            continue;
+                        }
                         PropertyWriter writer(out, prefabs.GetAssets(), part->GetName());
                         writer.Write(*type->Properties, type->ToObject(component), type->ToObject(original));
                     }
@@ -390,6 +436,10 @@ namespace VKE::Scene {
                         VKE_CORE_WARN("SceneSerializer: an override of '{}' is for a component '{}' it doesn't have "
                                       "and is ignored",
                                       object.GetName(), typeName);
+                        continue;
+                    }
+                    if (type->Missing) {
+                        static_cast<MissingComponent*>(component)->SetSavedText(YAML::Dump(item.second));
                         continue;
                     }
                     PropertyReader reader(assets, object.GetName());
@@ -599,16 +649,16 @@ namespace VKE::Scene {
             if (!components || !components.IsMap()) continue;
             for (const auto& item : components) {
                 std::string typeName = item.first.Scalar();
-                const ComponentTypeInfo* type = ComponentRegistry::Find(typeName);
-                Component* component = nullptr;
-                if (type && type->ID == ComponentRegistry::GetID<TransformComponent>()) {
-                    component = &object.GetTransform();
-                } else if (type) {
-                    component = object.AddComponent(type->ID);
-                }
-                if (!component) {
-                    VKE_CORE_WARN("SceneSerializer: '{}' has a component of unknown type '{}'", object.GetName(),
-                                  typeName);
+                const ComponentTypeInfo* type = &ComponentRegistry::FindOrAddMissing(typeName);
+                Component* component = type->ID == ComponentRegistry::GetID<TransformComponent>()
+                                           ? &object.GetTransform()
+                                           : object.AddComponent(type->ID);
+                if (!component) continue;
+                if (type->Missing) {
+                    VKE_CORE_WARN("SceneSerializer: '{}' has a component of unknown type '{}', kept as it is until "
+                                  "the type is back",
+                                  object.GetName(), typeName);
+                    static_cast<MissingComponent*>(component)->SetSavedText(YAML::Dump(item.second));
                     continue;
                 }
 

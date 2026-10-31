@@ -195,12 +195,13 @@ namespace VKE::Editor {
         f32 x = min.x + Sizes::Space4 + static_cast<f32>(depth) * Sizes::Indent;
 
         ImGui::SetNextItemAllowOverlap();
-        ImGui::InvisibleButton("##Row", ImVec2(width, Sizes::RowHeight));
+        bool released = ImGui::InvisibleButton("##Row", ImVec2(width, Sizes::RowHeight));
         // Still hovered under the chevron and the eye, which sit on top of it, and while they are
         // held: the eye is only drawn while the row is hovered.
         bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem |
                                             ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        // Selected on release, so dragging an object onto a field keeps the Inspector where it is.
+        if (released || ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
             m_Scene.Select(&object);
             m_LastSelected = handle;
             selected = true;

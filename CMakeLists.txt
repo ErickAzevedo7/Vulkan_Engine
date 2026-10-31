@@ -16,6 +16,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VkeShaders)
 include(VkeReflection)
 include(VkeContent)
+include(VkeSDK)
 
 # Build tools the engine's build runs
 add_subdirectory(tools/reflect)

@@ -307,7 +307,9 @@ namespace VKE::Editor {
             ImGui::OpenPopup("##ComponentMenu");
         }
         if (ImGui::BeginPopup("##ComponentMenu")) {
-            if (ImGui::MenuItem(WithIcon(Icons::RefreshCw, "Reset").c_str())) m_ToReset = type->ID;
+            if (ImGui::MenuItem(WithIcon(Icons::RefreshCw, "Reset").c_str(), nullptr, false, !type->Missing)) {
+                m_ToReset = type->ID;
+            }
             // Every object keeps its transform, and an instance the components of its prefab.
             if (!isTransform) {
                 ImGui::Separator();
@@ -324,6 +326,12 @@ namespace VKE::Editor {
             ImGui::Dummy(ImVec2(0.0f, Sizes::Space3 - Sizes::Space2));
             ImGui::Indent(kBodyIndent);
             ImGui::PushItemWidth(-Sizes::Space4);
+            if (type->Missing) {
+                ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::TextMuted));
+                ImGui::TextWrapped("This script isn't loaded, so it does nothing. Its values are kept and "
+                                   "come back with it.");
+                ImGui::PopStyleColor();
+            }
             Scene::Component* original = m_Scene.GetPrefabs().GetPart(component);
             bool changed = DrawProperties(component, *type->Properties, type->ToObject(&component),
                                           original ? type->ToObject(original) : nullptr);
@@ -349,7 +357,7 @@ namespace VKE::Editor {
                 changed |= DrawProperties(component, *property.Struct, value, original);
             } else {
                 f32 top = ImGui::GetCursorScreenPos().y;
-                changed |= DrawProperty(property, value);
+                changed |= DrawProperty(component, property, value);
                 if (original) changed |= DrawOverride(component, property, value, original, top);
             }
             ImGui::PopID();
@@ -401,7 +409,7 @@ namespace VKE::Editor {
         return changed;
     }
 
-    bool InspectorPanel::DrawProperty(const Scene::PropertyInfo& property, void* value) {
+    bool InspectorPanel::DrawProperty(Scene::Component& component, const Scene::PropertyInfo& property, void* value) {
         using Scene::PropertyDisplay;
         using Scene::PropertyType;
 
@@ -410,6 +418,45 @@ namespace VKE::Editor {
         case PropertyType::Bool:
             Fields::Label(label.c_str(), Sizes::LabelWidth);
             return Fields::Checkbox("##Value", *static_cast<bool*>(value));
+
+        case PropertyType::I32:
+            Fields::Label(label.c_str(), Sizes::LabelWidth);
+            return Fields::Int("##Value", *static_cast<i32*>(value));
+
+        case PropertyType::Object: {
+            Fields::Label(label.c_str(), Sizes::LabelWidth);
+            Scene::GameObject& owner = component.GetOwner();
+            ObjectID& reference = *static_cast<ObjectID*>(value);
+            Scene::GameObject* target = Scene::PrefabLibrary::FindReferenced(owner, reference);
+            std::string name = target ? target->GetName() : reference.IsValid() ? "Missing object" : "";
+            Handle<Scene::GameObject> dropped;
+            switch (Fields::ObjectReference("##Value", name, dropped)) {
+            case Fields::AssetAction::Drop:
+                if (Scene::GameObject* object = owner.GetScene().Get(dropped)) {
+                    reference = Scene::PrefabLibrary::GetReference(owner, *object);
+                    return true;
+                }
+                break;
+            case Fields::AssetAction::Clear: reference = {}; return true;
+            case Fields::AssetAction::None: break;
+            }
+            return false;
+        }
+
+        case PropertyType::Prefab: {
+            Fields::Label(label.c_str(), Sizes::LabelWidth);
+            Assets::AssetID& prefab = *static_cast<Assets::AssetID*>(value);
+            std::filesystem::path file = m_Assets.GetFile(prefab);
+            std::string name = !file.empty() ? file.stem().u8string() : prefab.IsValid() ? "Missing prefab" : "";
+            Assets::AssetID dropped;
+            auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Prefab; };
+            switch (Fields::Asset("##Value", Icons::Package, name, "Prefab", accepts, dropped)) {
+            case Fields::AssetAction::Drop: prefab = dropped; return true;
+            case Fields::AssetAction::Clear: prefab = {}; return true;
+            case Fields::AssetAction::None: break;
+            }
+            return false;
+        }
 
         case PropertyType::F32: {
             Fields::Label(label.c_str(), Sizes::LabelWidth);
@@ -562,7 +609,7 @@ namespace VKE::Editor {
             u32 shown = 0;
             for (Scene::ComponentTypeID id = 0; id < Scene::ComponentRegistry::GetCount(); ++id) {
                 const Scene::ComponentTypeInfo* type = Scene::ComponentRegistry::Find(id);
-                if (!type || !type->Create || object.GetComponent(id)) continue;
+                if (!type || !type->Create || type->Missing || object.GetComponent(id)) continue;
                 std::string label = Display::GetComponentLabel(*type);
                 if (!m_AddFilter.empty() && !ContainsIgnoringCase(label, m_AddFilter)) continue;
                 ++shown;

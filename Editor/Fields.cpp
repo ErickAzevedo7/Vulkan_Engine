@@ -141,6 +141,70 @@ namespace VKE::Editor::Fields {
             draw->ChannelsMerge();
             return changed;
         }
+
+        // A reference field. `accepts` tells whether what is dragged, of the payload's type,
+        // can go here, and `deliver` receives it when it is dropped.
+        AssetAction Reference(const char* id, const char* icon, const std::string& name, const char* typeName,
+                              const char* payloadType, const std::function<bool(const void*)>& accepts,
+                              const std::function<void(const void*)>& deliver) {
+            enum class Drop { None, Accepted, Refused };
+
+            ImGui::PushID(id);
+            ImVec2 min = ImGui::GetCursorScreenPos();
+            f32 width = ImGui::CalcItemWidth();
+            ImVec2 max(min.x + width, min.y + Sizes::ControlHeight);
+            ImGui::InvisibleButton("##Field", ImVec2(width, Sizes::ControlHeight));
+            bool hovered = ImGui::IsItemHovered();
+            AssetAction action = AssetAction::None;
+
+            Drop drop = Drop::None;
+            if (ImGui::BeginDragDropTarget()) {
+                ImGuiDragDropFlags flags =
+                    ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(payloadType, flags)) {
+                    drop = accepts(payload->Data) ? Drop::Accepted : Drop::Refused;
+                    if (drop == Drop::Accepted && payload->IsDelivery()) {
+                        deliver(payload->Data);
+                        action = AssetAction::Drop;
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopupContextItem("##Menu")) {
+                if (ImGui::MenuItem("Clear", nullptr, false, !name.empty())) action = AssetAction::Clear;
+                ImGui::EndPopup();
+            }
+
+            u32 fill = drop == Drop::Accepted ? Colors::AccentSoft
+                       : drop == Drop::Refused ? Colors::DangerSoft
+                       : hovered               ? Colors::BgFieldHover
+                                               : Colors::BgField;
+            u32 border = drop == Drop::Accepted  ? Colors::Accent
+                         : drop == Drop::Refused ? Colors::Danger
+                                                 : Colors::ControlBorder;
+            DrawWell(min, max, fill, border);
+
+            f32 x = min.x + Sizes::Space3;
+            DrawText(TextStyle::UI, x, min.y, drop == Drop::Refused ? Colors::Danger : Colors::TextMuted,
+                     drop == Drop::Refused ? Icons::Ban : icon);
+            x += 14.0f + Sizes::Space3;
+            std::string text;
+            u32 color = Colors::Text;
+            if (drop == Drop::Refused) {
+                text = std::string("Not a ") + typeName;
+                color = Colors::Danger;
+            } else if (name.empty()) {
+                text = std::string("None (") + typeName + ")";
+                color = Colors::TextFaint;
+            } else {
+                text = name;
+            }
+            DrawText(TextStyle::UI, x, min.y, color, text.c_str(), max.x - Sizes::Space3);
+            if (hovered && drop == Drop::None && !name.empty()) ImGui::SetTooltip("%s", name.c_str());
+
+            ImGui::PopID();
+            return action;
+        }
     } // namespace
 
     void Label(const char* label, f32 labelWidth) {
@@ -164,6 +228,15 @@ namespace VKE::Editor::Fields {
         bool clamped = min < max;
         bool changed = ImGui::DragFloat(id, &value, speed, clamped ? min : 0.0f, clamped ? max : 0.0f, format,
                                         clamped ? ImGuiSliderFlags_AlwaysClamp : ImGuiSliderFlags_None);
+        ShowDragCursor();
+        DrawFocusBorder();
+        PopMono();
+        return changed;
+    }
+
+    bool Int(const char* id, i32& value) {
+        PushMono();
+        bool changed = ImGui::DragInt(id, &value, 0.1f);
         ShowDragCursor();
         DrawFocusBorder();
         PopMono();
@@ -321,64 +394,16 @@ namespace VKE::Editor::Fields {
 
     AssetAction Asset(const char* id, const char* icon, const std::string& name, const char* typeName,
                       const std::function<bool(Assets::AssetID)>& accepts, Assets::AssetID& dropped) {
-        enum class Drop { None, Accepted, Refused };
+        return Reference(
+            id, icon, name, typeName, kAssetPayload,
+            [&](const void* data) { return accepts(*static_cast<const Assets::AssetID*>(data)); },
+            [&](const void* data) { dropped = *static_cast<const Assets::AssetID*>(data); });
+    }
 
-        ImGui::PushID(id);
-        ImVec2 min = ImGui::GetCursorScreenPos();
-        f32 width = ImGui::CalcItemWidth();
-        ImVec2 max(min.x + width, min.y + Sizes::ControlHeight);
-        ImGui::InvisibleButton("##Field", ImVec2(width, Sizes::ControlHeight));
-        bool hovered = ImGui::IsItemHovered();
-        AssetAction action = AssetAction::None;
-
-        Drop drop = Drop::None;
-        if (ImGui::BeginDragDropTarget()) {
-            ImGuiDragDropFlags flags =
-                ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetPayload, flags)) {
-                Assets::AssetID asset = *static_cast<const Assets::AssetID*>(payload->Data);
-                drop = accepts(asset) ? Drop::Accepted : Drop::Refused;
-                if (drop == Drop::Accepted && payload->IsDelivery()) {
-                    dropped = asset;
-                    action = AssetAction::Drop;
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-        if (ImGui::BeginPopupContextItem("##Menu")) {
-            if (ImGui::MenuItem("Clear", nullptr, false, !name.empty())) action = AssetAction::Clear;
-            ImGui::EndPopup();
-        }
-
-        u32 fill = drop == Drop::Accepted ? Colors::AccentSoft
-                   : drop == Drop::Refused ? Colors::DangerSoft
-                   : hovered               ? Colors::BgFieldHover
-                                           : Colors::BgField;
-        u32 border = drop == Drop::Accepted  ? Colors::Accent
-                     : drop == Drop::Refused ? Colors::Danger
-                                             : Colors::ControlBorder;
-        DrawWell(min, max, fill, border);
-
-        f32 x = min.x + Sizes::Space3;
-        DrawText(TextStyle::UI, x, min.y, drop == Drop::Refused ? Colors::Danger : Colors::TextMuted,
-                 drop == Drop::Refused ? Icons::Ban : icon);
-        x += 14.0f + Sizes::Space3;
-        std::string text;
-        u32 color = Colors::Text;
-        if (drop == Drop::Refused) {
-            text = std::string("Not a ") + typeName;
-            color = Colors::Danger;
-        } else if (name.empty()) {
-            text = std::string("None (") + typeName + ")";
-            color = Colors::TextFaint;
-        } else {
-            text = name;
-        }
-        DrawText(TextStyle::UI, x, min.y, color, text.c_str(), max.x - Sizes::Space3);
-        if (hovered && drop == Drop::None && !name.empty()) ImGui::SetTooltip("%s", name.c_str());
-
-        ImGui::PopID();
-        return action;
+    AssetAction ObjectReference(const char* id, const std::string& name, Handle<Scene::GameObject>& dropped) {
+        return Reference(
+            id, Icons::Box, name, "Object", kObjectPayload, [](const void*) { return true; },
+            [&](const void* data) { dropped = *static_cast<const Handle<Scene::GameObject>*>(data); });
     }
 
 } // namespace VKE::Editor::Fields

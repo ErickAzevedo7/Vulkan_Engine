@@ -62,7 +62,7 @@ namespace VKE::Editor {
         // The mark on an overridden row that started at `top`, and its menu.
         bool DrawOverride(Scene::Component& component, const Scene::PropertyInfo& property, void* value, void* pristine,
                           f32 top);
-        bool DrawProperty(const Scene::PropertyInfo& property, void* value);
+        bool DrawProperty(Scene::Component& component, const Scene::PropertyInfo& property, void* value);
         bool DrawRotation(const char* label, const Scene::PropertyInfo& property, Quat& rotation);
         bool DrawMaterials(std::vector<Handle<Assets::MaterialData>>& materials);
         void DrawAddComponent(Scene::GameObject& object);

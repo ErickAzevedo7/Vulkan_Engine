@@ -42,6 +42,7 @@ set_target_properties(Editor PROPERTIES FOLDER "Apps")
 
 vke_stage_shaders(Editor RendererShaders)
 vke_stage_engine_content(Editor)
+vke_stage_sdk(Editor)
 
 # Project templates go to a "Templates" folder next to the editor.
 add_custom_command(TARGET Editor POST_BUILD

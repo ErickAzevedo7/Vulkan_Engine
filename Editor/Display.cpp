@@ -74,6 +74,9 @@ namespace VKE::Editor::Display {
     const char* GetComponentIcon(const Scene::Component& component) {
         using namespace Scene;
         ComponentTypeID type = component.GetTypeID();
+        const ComponentTypeInfo* info = ComponentRegistry::Find(type);
+        if (info->Missing) return Icons::TriangleAlert;
+        if (info->Context) return Icons::Terminal;
         if (type == ComponentRegistry::GetID<TransformComponent>()) return Icons::Move;
         if (type == ComponentRegistry::GetID<MeshComponent>()) return Icons::Box;
         if (type == ComponentRegistry::GetID<CameraComponent>()) return Icons::Video;

@@ -12,18 +12,21 @@
 #include <scene/Prefab.h>
 #include <scene/Scene.h>
 #include <scene/SceneSerializer.h>
+#include <scripting/GameModule.h>
 
 namespace {
 
     // Plays the project's start scene from its main camera until the window closes.
     class RuntimeSystem : public VKE::System {
     public:
-        RuntimeSystem(VKE::Assets::AssetID startScene, VKE::Assets::AssetManager& assets,
+        RuntimeSystem(const VKE::Project::Project& project, VKE::Assets::AssetManager& assets,
                       VKE::Renderer::Renderer& renderer)
-            : m_StartScene(startScene), m_Assets(assets), m_Renderer(renderer) {
+            : m_StartScene(project.GetStartScene()), m_Library(project.GetGameLibrary()),
+              m_WorkFolder(project.GetGameWorkFolder()), m_Assets(assets), m_Renderer(renderer) {
         }
 
         void OnInitialize() override {
+            m_Game.Load(m_Library, m_WorkFolder);
             if (m_Assets.GetType(m_StartScene) != VKE::Assets::AssetType::Scene) {
                 VKE_CORE_ERROR("Runtime: the project has no start scene");
                 VKE::RequestExit();
@@ -44,8 +47,12 @@ namespace {
 
     private:
         VKE::Assets::AssetID m_StartScene;
+        std::filesystem::path m_Library;
+        std::filesystem::path m_WorkFolder;
         VKE::Assets::AssetManager& m_Assets;
         VKE::Renderer::Renderer& m_Renderer;
+        // Before the scene, which holds objects of the game's types.
+        VKE::Scripting::GameModule m_Game;
         VKE::Scene::Scene m_Scene;
     };
 
@@ -70,7 +77,7 @@ public:
         auto* assets = Register<VKE::Assets::AssetManager>(project->GetAssetRoots());
         auto* renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
         VKE::Scene::ComponentRegistry::RegisterEngineComponents();
-        Register<RuntimeSystem>(project->GetStartScene(), *assets, *renderer);
+        Register<RuntimeSystem>(*project, *assets, *renderer);
     }
 };
 

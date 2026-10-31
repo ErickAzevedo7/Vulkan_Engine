@@ -57,6 +57,7 @@ namespace VKE::Editor {
           m_Viewport(m_Scene, assets, renderer, ui),
           m_AssetBrowser(m_Scene, m_MaterialEdits, ui),
           m_Game(m_Scene, renderer, ui) {
+        m_GameModule.Load(m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
     }
 
     EditorSystem::~EditorSystem() = default;

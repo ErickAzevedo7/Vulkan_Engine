@@ -66,6 +66,12 @@ namespace VKE::Scene {
         static bool HasParts(const GameObject& object);
         // The part of `root`'s instance that copies `part`, or null.
         static GameObject* FindInstancePart(GameObject& root, ObjectID part);
+        // A reference held by something on `owner` keeps meaning the same object when the prefab
+        // is copied: inside an instance it is the ID of the part in the prefab, so it counts as
+        // equal to the prefab's value and each instance reaches its own part. These go from an
+        // object to its reference and back; the object found can be null.
+        static ObjectID GetReference(GameObject& owner, GameObject& target);
+        static GameObject* FindReferenced(GameObject& owner, ObjectID reference);
         // Makes the instance of `root` plain objects, as they are now.
         static void Unpack(GameObject& root);
 

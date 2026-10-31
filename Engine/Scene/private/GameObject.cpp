@@ -83,7 +83,7 @@ namespace VKE::Scene {
 
         const ComponentTypeInfo* info = ComponentRegistry::Find(type);
         if (!info || !info->Create) return nullptr;
-        Iunique<Component> component(info->Create());
+        Iunique<Component> component(info->Create(*info));
         Component* result = component.get();
         AttachComponent(type, std::move(component));
         return result;

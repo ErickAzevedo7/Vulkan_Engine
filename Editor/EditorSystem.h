@@ -13,6 +13,7 @@
 #include <core/System.h>
 #include <core/Types.h>
 #include <project/Project.h>
+#include <scripting/GameModule.h>
 
 #include <string>
 
@@ -96,6 +97,8 @@ namespace VKE::Editor {
         Renderer::Renderer& m_Renderer;
         UI::UISystem& m_UI;
 
+        // Before the scene, which holds objects of the game's types.
+        Scripting::GameModule m_GameModule;
         EditorScene m_Scene;
         MaterialEdits m_MaterialEdits;
         HierarchyPanel m_Hierarchy;

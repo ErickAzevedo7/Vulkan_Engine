@@ -37,6 +37,11 @@ namespace VKE::Project {
         // The editor's own files for the project, like its panel layout: a .vke folder, kept
         // out of version control.
         std::filesystem::path GetSettingsFolder() const { return m_Folder / ".vke"; }
+        // The game's code: a scripts/ folder, built into a DLL in the .vke folder.
+        std::filesystem::path GetScriptsFolder() const { return m_Folder / "scripts"; }
+        std::filesystem::path GetGameLibrary() const { return GetSettingsFolder() / "bin" / "Game.dll"; }
+        // Where a program keeps the copy of the DLL it runs.
+        std::filesystem::path GetGameWorkFolder() const { return GetSettingsFolder() / "run"; }
 
         // Invalid when the project has none.
         Assets::AssetID GetStartScene() const { return m_StartScene; }

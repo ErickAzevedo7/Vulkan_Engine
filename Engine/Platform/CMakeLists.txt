@@ -16,12 +16,14 @@ if(WIN32)
     target_sources(VKE_Platform PRIVATE
         private/windows/WindowsFileDialog.cpp
         private/windows/WindowsProcess.cpp
+        private/windows/WindowsDynamicLibrary.cpp
     )
     target_link_libraries(VKE_Platform PRIVATE ole32 shell32)
 else()
     target_sources(VKE_Platform PRIVATE
         private/FileDialog.cpp
         private/Process.cpp
+        private/DynamicLibrary.cpp
     )
 endif()
 

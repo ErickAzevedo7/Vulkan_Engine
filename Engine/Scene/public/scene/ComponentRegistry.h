@@ -48,13 +48,17 @@ private:                                                                        
         ComponentTypeID ID = kInvalidComponentType;
         const char* Name = nullptr;
         // Null for types that can't be added by name.
-        Component* (*Create)() = nullptr;
+        Component* (*Create)(const ComponentTypeInfo& type) = nullptr;
+        // For Create, when the type isn't a class of its own, like a game's script.
+        const void* Context = nullptr;
         const StructInfo* Properties = nullptr;
         // The object the properties describe, behind a component of this type.
         void* (*ToObject)(Component*) = nullptr;
         // A default-constructed component, never part of a scene: what properties are worth
         // saving is decided by comparing against it.
         Iunique<Component> Defaults;
+        // Stands for a type that isn't there: its components are MissingComponents.
+        bool Missing = false;
     };
 
     // Every component type the engine knows, by ID and by name.
@@ -75,12 +79,23 @@ private:                                                                        
 
             ComponentTypeInfo info;
             info.Name = T::kComponentTypeName;
-            if (addable) info.Create = [] { return static_cast<Component*>(new T()); };
+            if (addable) info.Create = [](const ComponentTypeInfo&) { return static_cast<Component*>(new T()); };
             info.Properties = &properties;
             info.ToObject = [](Component* component) -> void* { return static_cast<T*>(component); };
             info.Defaults.reset(new T());
             T::s_ComponentTypeID = Add(std::move(info));
         }
+
+        // A type defined outside the engine, like a game's script, for the code that loads it.
+        // `info.Name` is copied. The ID is the one the name already has, if it was a missing or
+        // released type, so components keep their type across reloads. Invalid if an engine
+        // type has the name.
+        static ComponentTypeID RegisterExternal(ComponentTypeInfo info);
+        // The type stops being there: it turns into a missing type, with the same ID.
+        // Call with no components of it left, as the code they run may be going away.
+        static void ReleaseExternal(ComponentTypeID id);
+        // The missing type called `name`, added if no type has that name yet.
+        static const ComponentTypeInfo& FindOrAddMissing(std::string_view name);
 
         template<typename T>
         static ComponentTypeID GetID() {

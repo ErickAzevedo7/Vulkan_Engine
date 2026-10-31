@@ -142,8 +142,12 @@ namespace Reflect {
                             ParseStructMark();
                             continue;
                         }
-                        if (token.Text == "VKE_COMPONENT") {
+                        if (token.Text == "VKE_COMPONENT" || token.Text == "VKE_SCRIPT") {
                             ParseComponentMark();
+                            continue;
+                        }
+                        if (token.Text == "VKE_API") {
+                            ParseApiFunction();
                             continue;
                         }
                         if (token.Text == "VKE_PROPERTY") {
@@ -408,11 +412,11 @@ namespace Reflect {
                 const Token& mark = Peek();
                 std::vector<Token> arguments = ReadMarkArguments();
                 if (arguments.empty() || arguments[0].Kind != TokenKind::Identifier) {
-                    Fail(mark, "VKE_COMPONENT needs the class name");
+                    Fail(mark, mark.Text + " needs the class name");
                 }
                 if (m_Scopes.empty() || m_Scopes.back().Kind != ScopeKind::Class ||
                     m_Scopes.back().Name != arguments[0].Text) {
-                    Fail(mark, "VKE_COMPONENT(" + arguments[0].Text + ") must go in the body of class " +
+                    Fail(mark, mark.Text + "(" + arguments[0].Text + ") must go in the body of class " +
                                    arguments[0].Text);
                 }
                 Scope& scope = m_Scopes.back();
@@ -433,7 +437,7 @@ namespace Reflect {
                     if (argument.Text == "NotAddable") {
                         definition.Addable = false;
                     } else {
-                        Fail(argument, "unknown VKE_COMPONENT option '" + argument.Text + "'");
+                        Fail(argument, "unknown " + mark.Text + " option '" + argument.Text + "'");
                     }
                 }
 
@@ -441,6 +445,73 @@ namespace Reflect {
                 scope.Struct = static_cast<int>(m_Model.Structs.size() - 1);
                 // The macro ends in a private section.
                 scope.IsPublic = false;
+            }
+
+            // A declaration at namespace scope: a return type, a name and parameters.
+            void ParseApiFunction() {
+                const Token& mark = Peek();
+                ++m_Pos;
+                ApiFunctionDef function;
+                function.Location = {m_File, mark.Line};
+                for (const Scope& scope : m_Scopes) {
+                    if (scope.Kind != ScopeKind::Namespace) Fail(mark, "VKE_API goes on a function in a namespace");
+                    function.Namespace += (function.Namespace.empty() ? "" : "::") + scope.Name;
+                }
+                if (function.Namespace != "vke" && function.Namespace.rfind("vke::", 0) != 0) {
+                    Fail(mark, "VKE_API goes on a function in namespace vke");
+                }
+
+                std::vector<std::string> head;
+                while (!IsSymbol("(")) {
+                    if (Peek().Kind == TokenKind::End || IsSymbol(";")) {
+                        Fail(mark, "VKE_API must be followed by a function");
+                    }
+                    head.push_back(Peek().Text);
+                    ++m_Pos;
+                }
+                if (head.size() < 2) Fail(mark, "VKE_API must be followed by a return type and a name");
+                function.Name = head.back();
+                head.pop_back();
+                function.ReturnType = Join(head);
+                ++m_Pos;
+
+                std::vector<std::string> parameter;
+                int depth = 0;
+                bool inDefault = false;
+                auto finish = [&] {
+                    inDefault = false;
+                    if (parameter.empty()) return;
+                    if (parameter.size() < 2) Fail(mark, "parameters of a VKE_API function need names");
+                    std::string name = parameter.back();
+                    parameter.pop_back();
+                    function.Parameters.push_back({Join(parameter), name});
+                    parameter.clear();
+                };
+                while (!(depth == 0 && IsSymbol(")"))) {
+                    if (Peek().Kind == TokenKind::End) Fail(mark, "unterminated parameter list");
+                    if (IsSymbol("(") || IsSymbol("<")) ++depth;
+                    if (IsSymbol(")") || IsSymbol(">")) --depth;
+                    if (depth == 0 && IsSymbol(",")) {
+                        finish();
+                    } else if (depth == 0 && IsSymbol("=")) {
+                        inDefault = true;
+                    } else if (!inDefault) {
+                        parameter.push_back(Peek().Text);
+                    }
+                    ++m_Pos;
+                }
+                finish();
+                ++m_Pos;
+                if (!IsSymbol(";")) Fail(mark, "VKE_API goes on a declaration; the generator writes the body");
+                m_Model.Functions.push_back(std::move(function));
+            }
+
+            static std::string Join(const std::vector<std::string>& words) {
+                std::string text;
+                for (const std::string& word : words) {
+                    text += (text.empty() ? "" : " ") + word;
+                }
+                return text;
             }
 
             void ParseProperty() {
@@ -571,21 +642,34 @@ namespace Reflect {
         };
     } // namespace
 
-    void ParseHeader(const std::filesystem::path& file, ReflectionModel& model) {
+    void ParseHeader(const std::filesystem::path& file, const std::filesystem::path& includeRoot,
+                     ReflectionModel& model) {
         std::ifstream stream(file, std::ios::binary);
         if (!stream) throw ReflectError{{file.generic_string(), 0}, "can't read the file"};
         std::stringstream buffer;
         buffer << stream.rdbuf();
 
-        // Code includes the header by its path under a module's "public" folder.
+        // Code includes the header by its path under `includeRoot` or a module's "public" folder.
         std::string path = file.generic_string();
-        size_t publicFolder = path.rfind("/public/");
-        if (publicFolder == std::string::npos) {
-            throw ReflectError{{path, 0}, "the header isn't in a module's public folder"};
+        std::string include;
+        if (!includeRoot.empty()) {
+            include = std::filesystem::relative(file, includeRoot).generic_string();
+        } else {
+            size_t publicFolder = path.rfind("/public/");
+            if (publicFolder == std::string::npos) {
+                throw ReflectError{{path, 0}, "the header isn't in a module's public folder"};
+            }
+            include = path.substr(publicFolder + 8);
         }
-        std::string include = path.substr(publicFolder + 8);
 
-        Parser parser(Tokenize(buffer.str()), path, include, model);
+        std::vector<Token> tokens = Tokenize(buffer.str());
+        for (const Token& token : tokens) {
+            for (unsigned char c : token.Text) {
+                model.TokenHash = (model.TokenHash ^ c) * 16777619u;
+            }
+            model.TokenHash = (model.TokenHash ^ 0xFFu) * 16777619u;
+        }
+        Parser parser(std::move(tokens), path, include, model);
         parser.Run();
         model.Includes.push_back(include);
     }

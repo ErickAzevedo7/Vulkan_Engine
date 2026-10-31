@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assets/AssetTypes.h>
+#include <core/Handle.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
 
@@ -10,6 +11,7 @@
 
 namespace VKE::Scene {
     struct EnumInfo;
+    class GameObject;
 } // namespace VKE::Scene
 
 // The Inspector's property rows and the fields in them, after the design system's Field,
@@ -30,6 +32,8 @@ namespace VKE::Editor::Fields {
     // A number in mono, changed by dragging sideways or typed after a double click. Kept between
     // `min` and `max` when min < max.
     bool Float(const char* id, f32& value, f32 speed, f32 min, f32 max, const char* format);
+    // A whole number, used the same way.
+    bool Int(const char* id, i32& value);
     // An angle stored in radians, shown and edited in degrees.
     bool Angle(const char* id, f32& radians, f32 minRadians, f32 maxRadians);
     // Three numbers marked X, Y and Z; dragging a letter drags only its number.
@@ -57,5 +61,7 @@ namespace VKE::Editor::Fields {
     // Takes assets dragged onto it that `accepts` takes, and shows a refusal for the others.
     AssetAction Asset(const char* id, const char* icon, const std::string& name, const char* typeName,
                       const std::function<bool(Assets::AssetID)>& accepts, Assets::AssetID& dropped);
+    // The same for a reference to an object, with an object from the Hierarchy in `dropped`.
+    AssetAction ObjectReference(const char* id, const std::string& name, Handle<Scene::GameObject>& dropped);
 
 } // namespace VKE::Editor::Fields
