@@ -21,7 +21,10 @@ namespace VKE::Scripting {
         // Fields of these types are read as the engine's own.
         static_assert(sizeof(vke::Vec3) == sizeof(Vec3) && sizeof(vke::Quat) == sizeof(Quat));
         static_assert(offsetof(Quat, x) == offsetof(vke::Quat, x) && offsetof(Quat, w) == offsetof(vke::Quat, w));
-        static_assert(sizeof(vke::ObjectRef) == sizeof(ObjectID) && sizeof(vke::PrefabRef) == sizeof(Assets::AssetID));
+        static_assert(sizeof(vke::PrefabRef) == sizeof(Assets::AssetID));
+        static_assert(sizeof(vke::MeshRef) == sizeof(Assets::AssetID));
+        static_assert(sizeof(vke::MaterialRef) == sizeof(Assets::AssetID));
+        static_assert(sizeof(vke::SceneRef) == sizeof(Assets::AssetID));
 
         constexpr const char* kLoadFunction = "VkeLoadGame";
         using LoadFunction = const vke::detail::GameInfo* (*)(const vke::detail::ApiTable*);
@@ -39,6 +42,9 @@ namespace VKE::Scripting {
             case From::Struct: return To::Struct;
             case From::Object: return To::Object;
             case From::Prefab: return To::Prefab;
+            case From::MeshAsset: return To::MeshAsset;
+            case From::MaterialAsset: return To::MaterialAsset;
+            case From::SceneAsset: return To::SceneAsset;
             }
             return To::Bool;
         }

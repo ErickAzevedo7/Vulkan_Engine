@@ -38,8 +38,12 @@ namespace VKE::Scripting {
         void CallTrigger(vke::detail::ContactPhase phase, vke::Object other);
 
     private:
+        // Points the ObjectRef fields at their objects, for the ones that hold one.
+        void ResolveReferences();
+
         void ConnectToSystems(Scene::SceneSystems& systems) override;
         void DisconnectFromSystems(Scene::SceneSystems& systems) override;
+        void OnPropertiesChanged(const Assets::AssetManager& assets) override;
 
         const ScriptType& m_Type;
         void* m_Instance;

@@ -14,8 +14,9 @@
 // - `Display = Color` on a Vec3 holding a color, and `Display = Angle` on a float holding an angle.
 // - `Name = "Saved"` to save the field under another name, like after renaming it.
 //
-// A field can be a bool, int, float, vke::Vec3, vke::Quat, vke::ObjectRef, vke::PrefabRef, an
-// `enum class` marked VKE_ENUM or a struct marked VKE_STRUCT, whose marked fields must be public.
+// A field can be a bool, int, float, vke::Vec3, vke::Quat, vke::ObjectRef, vke::ScriptRef<T>,
+// vke::PrefabRef, vke::MeshRef, vke::MaterialRef, vke::SceneRef, an `enum class` marked VKE_ENUM
+// or a struct marked VKE_STRUCT, whose marked fields must be public.
 
 #define VKE_ENUM(...)
 #define VKE_STRUCT(...)

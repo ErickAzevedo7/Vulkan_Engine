@@ -5,6 +5,42 @@
 namespace VKE::Physics {
 
     namespace {
+        bool RayTouchesBounds(const AABB& bounds, const Vec3& origin, const Vec3& direction, f32 maxT) {
+            f32 near = 0.0f;
+            f32 far = maxT;
+            for (int axis = 0; axis < 3; ++axis) {
+                if (direction[axis] == 0.0f) {
+                    if (origin[axis] < bounds.Min[axis] || origin[axis] > bounds.Max[axis]) return false;
+                    continue;
+                }
+                f32 first = (bounds.Min[axis] - origin[axis]) / direction[axis];
+                f32 second = (bounds.Max[axis] - origin[axis]) / direction[axis];
+                near = std::max(near, std::min(first, second));
+                far = std::min(far, std::max(first, second));
+            }
+            return near <= far;
+        }
+
+        // Both faces of the triangle count.
+        bool RayHitsTriangle(const Triangle& triangle, const Vec3& origin, const Vec3& direction, f32& outT) {
+            Vec3 edge1 = triangle.B - triangle.A;
+            Vec3 edge2 = triangle.C - triangle.A;
+            Vec3 p = glm::cross(direction, edge2);
+            f32 determinant = glm::dot(edge1, p);
+            if (determinant == 0.0f) return false;
+
+            Vec3 toOrigin = origin - triangle.A;
+            f32 u = glm::dot(toOrigin, p) / determinant;
+            if (u < 0.0f || u > 1.0f) return false;
+            Vec3 q = glm::cross(toOrigin, edge1);
+            f32 v = glm::dot(direction, q) / determinant;
+            if (v < 0.0f || u + v > 1.0f) return false;
+            outT = glm::dot(edge2, q) / determinant;
+            return outT > 0.0f;
+        }
+    } // namespace
+
+    namespace {
         constexpr u32 kMaxLeafTriangles = 4;
         // Each level adds at most one entry to the query stack, which holds 64.
         constexpr u32 kMaxDepth = 60;
@@ -56,6 +92,36 @@ namespace VKE::Physics {
 
         m_Order = {};
         m_Centroids = {};
+    }
+
+    bool TriangleTree::Raycast(const Vec3& origin, const Vec3& direction, f32 maxT, f32& outT, Vec3& outNormal) const {
+        if (m_Nodes.empty()) return false;
+
+        bool hit = false;
+        f32 nearest = maxT;
+        // Deep enough for the depth limit in BuildNode.
+        u32 stack[64];
+        u32 depth = 0;
+        stack[depth++] = 0;
+        while (depth > 0) {
+            const Node& node = m_Nodes[stack[--depth]];
+            if (!RayTouchesBounds(node.Bounds, origin, direction, nearest)) continue;
+            if (node.Count == 0) {
+                stack[depth++] = node.First;
+                stack[depth++] = node.First + 1;
+                continue;
+            }
+            for (u32 i = node.First; i < node.First + node.Count; ++i) {
+                f32 t = 0.0f;
+                if (RayHitsTriangle(m_Triangles[i], origin, direction, t) && t < nearest) {
+                    nearest = t;
+                    outNormal = glm::cross(m_Triangles[i].B - m_Triangles[i].A, m_Triangles[i].C - m_Triangles[i].A);
+                    hit = true;
+                }
+            }
+        }
+        outT = nearest;
+        return hit;
     }
 
     void TriangleTree::BuildNode(u32 nodeIndex, u32 first, u32 count, u32 depth) {

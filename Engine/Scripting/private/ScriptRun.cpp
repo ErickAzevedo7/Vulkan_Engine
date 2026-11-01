@@ -34,7 +34,7 @@ namespace VKE::Scripting {
 
     ScriptRun* ScriptRun::s_Current = nullptr;
 
-    ScriptRun::ScriptRun(Scene::Scene& scene) : m_Scene(scene) {
+    ScriptRun::ScriptRun(Scene::Scene& scene, const GameContext& context) : m_Scene(scene), m_Context(context) {
         VKE_CORE_ASSERT(!s_Current, "Only one game runs at a time");
         s_Current = this;
 
@@ -65,7 +65,17 @@ namespace VKE::Scripting {
         }
     }
 
+    void ScriptRun::SetInputArea(bool focused, f32 viewX, f32 viewY) {
+        m_InputFocused = focused;
+        m_ViewX = viewX;
+        m_ViewY = viewY;
+    }
+
     void ScriptRun::Update(f32 deltaTime) {
+        m_DeltaTime = deltaTime;
+        m_Time += deltaTime;
+        ++m_Frame;
+
         StartNewScripts();
         ForEachRunning([&](ScriptComponent& script) { script.CallUpdate(deltaTime); });
         m_Scene.Update();

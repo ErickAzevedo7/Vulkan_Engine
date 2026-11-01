@@ -41,6 +41,7 @@ namespace VKE::Editor {
 
     void GamePanel::Draw(bool* open, const std::string& stats) {
         m_Visible = false;
+        m_Focused = false;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         bool shown = ImGui::Begin(GetWindowName(), open);
         ImGui::PopStyleVar();
@@ -60,12 +61,15 @@ namespace VKE::Editor {
             return;
         }
 
+        m_Focused = ImGui::IsWindowFocused();
         ImVec2 size = ImGui::GetContentRegionAvail();
         size.x = std::max(size.x, 1.0f);
         size.y = std::max(size.y, 1.0f);
         m_Renderer.ResizeViewTexture(m_Texture, static_cast<u32>(size.x), static_cast<u32>(size.y));
         ImVec2 min = ImGui::GetCursorScreenPos();
         ImVec2 max(min.x + std::floor(size.x), min.y + std::floor(size.y));
+        m_ViewX = min.x - ImGui::GetMainViewport()->Pos.x;
+        m_ViewY = min.y - ImGui::GetMainViewport()->Pos.y;
         ImDrawList* draw = ImGui::GetWindowDrawList();
         draw->AddImage(m_UI.GetTextureID(Renderer::OverlayTexture::FromView(m_Texture)), min, max);
         m_Visible = true;

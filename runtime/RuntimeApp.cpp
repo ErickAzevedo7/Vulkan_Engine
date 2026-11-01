@@ -21,9 +21,10 @@ namespace {
     class RuntimeSystem : public VKE::System {
     public:
         RuntimeSystem(const VKE::Project::Project& project, VKE::Assets::AssetManager& assets,
-                      VKE::Renderer::Renderer& renderer)
+                      VKE::Renderer::Renderer& renderer, const VKE::Platform::IInput& input)
             : m_StartScene(project.GetStartScene()), m_Library(project.GetGameLibrary()),
-              m_WorkFolder(project.GetGameWorkFolder()), m_Assets(assets), m_Renderer(renderer) {
+              m_WorkFolder(project.GetGameWorkFolder()), m_Assets(assets), m_Renderer(renderer), m_Input(input),
+              m_Prefabs(assets) {
         }
 
         void OnInitialize() override {
@@ -33,30 +34,42 @@ namespace {
                 VKE::RequestExit();
                 return;
             }
-            VKE::Scene::PrefabLibrary prefabs(m_Assets);
-            if (!VKE::Scene::SceneSerializer::Load(m_Scene, prefabs, m_Assets.GetFile(m_StartScene))) {
-                VKE::RequestExit();
-                return;
-            }
-            m_Runner.Start(m_Scene);
+            if (!LoadScene(m_StartScene)) VKE::RequestExit();
         }
 
         void OnUpdate(VKE::FrameTime ft) override {
             m_Runner.Update(ft.GetDeltaF());
-            m_Renderer.Render(m_Scene.GetRenderScene(), m_Scene.GetView());
+            m_Renderer.Render(m_Scene->GetRenderScene(), m_Scene->GetView());
         }
 
         std::string_view GetName() const override { return "RuntimeSystem"; }
 
     private:
+        // The current scene stays if the new one can't be read.
+        bool LoadScene(VKE::Assets::AssetID scene) {
+            auto loaded = VKE::MakeIunique<VKE::Scene::Scene>();
+            if (m_Assets.GetType(scene) != VKE::Assets::AssetType::Scene ||
+                !VKE::Scene::SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
+                VKE_CORE_ERROR("Runtime: scene {} can't be loaded", scene.ToString());
+                return false;
+            }
+            m_Runner.Stop();
+            m_Scene = std::move(loaded);
+            m_Runner.Start(*m_Scene, {m_Prefabs, m_Input, [this](VKE::Assets::AssetID next) { LoadScene(next); },
+                                      [] { VKE::RequestExit(); }});
+            return true;
+        }
+
         VKE::Assets::AssetID m_StartScene;
         std::filesystem::path m_Library;
         std::filesystem::path m_WorkFolder;
         VKE::Assets::AssetManager& m_Assets;
         VKE::Renderer::Renderer& m_Renderer;
-        // Before the scene, which holds objects of the game's types.
+        const VKE::Platform::IInput& m_Input;
+        // Before the prefabs and the scene, which hold objects of the game's types.
         VKE::Scripting::GameModule m_Game;
-        VKE::Scene::Scene m_Scene;
+        VKE::Scene::PrefabLibrary m_Prefabs;
+        VKE::Iunique<VKE::Scene::Scene> m_Scene;
         VKE::Scripting::ScriptRunner m_Runner;
     };
 
@@ -81,7 +94,7 @@ public:
         auto* assets = Register<VKE::Assets::AssetManager>(project->GetAssetRoots());
         auto* renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
         VKE::Scene::ComponentRegistry::RegisterEngineComponents();
-        Register<RuntimeSystem>(*project, *assets, *renderer);
+        Register<RuntimeSystem>(*project, *assets, *renderer, platform->GetInput());
     }
 };
 

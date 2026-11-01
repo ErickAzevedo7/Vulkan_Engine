@@ -89,6 +89,36 @@ namespace VKE::Physics {
         AABB Expand(const AABB& bounds, f32 amount) {
             return AABB(bounds.Min - Vec3(amount), bounds.Max + Vec3(amount));
         }
+
+        // Against the outside of a box, in its axes. From inside there's no hit.
+        bool RayHitsBox(const OrientedBox& box, const Vec3& origin, const Vec3& direction, f32 maxT, f32& outT,
+                        Vec3& outNormal) {
+            Vec3 toBox = box.Center - origin;
+            f32 near = 0.0f;
+            f32 far = maxT;
+            Vec3 normal(0.0f);
+            for (int axis = 0; axis < 3; ++axis) {
+                f32 along = glm::dot(box.Axes[axis], toBox);
+                f32 speed = glm::dot(box.Axes[axis], direction);
+                if (speed == 0.0f) {
+                    if (std::abs(along) > box.HalfExtents[axis]) return false;
+                    continue;
+                }
+                f32 first = (along - box.HalfExtents[axis]) / speed;
+                f32 second = (along + box.HalfExtents[axis]) / speed;
+                if (first > second) std::swap(first, second);
+                if (first > near) {
+                    near = first;
+                    normal = speed > 0.0f ? -box.Axes[axis] : box.Axes[axis];
+                }
+                far = std::min(far, second);
+                if (near > far) return false;
+            }
+            if (near <= 0.0f) return false;
+            outT = near;
+            outNormal = normal;
+            return true;
+        }
     } // namespace
 
     struct PhysicsWorld::Storage {
@@ -278,6 +308,47 @@ namespace VKE::Physics {
     const BodyDesc* PhysicsWorld::GetBody(BodyID id) const {
         const Body* body = m_Storage->Bodies.Get(id);
         return body ? &body->Desc : nullptr;
+    }
+
+    bool PhysicsWorld::Raycast(const Vec3& origin, const Vec3& direction, f32 maxDistance, bool withTriggers,
+                               RayHit& outHit) const {
+        if (glm::dot(direction, direction) == 0.0f) return false;
+        Vec3 unit = glm::normalize(direction);
+
+        Storage& s = *m_Storage;
+        bool found = false;
+        f32 nearest = maxDistance;
+        const u32 bodyCount = static_cast<u32>(s.Bodies.Size());
+        for (u32 i = 0; i < bodyCount; ++i) {
+            BodyID id = s.Bodies.HandleAt(i);
+            const Body& body = *s.Bodies.Get(id);
+            const BodyDesc& desc = body.Desc;
+            if (desc.IsTrigger && !withTriggers) continue;
+
+            f32 distance = 0.0f;
+            Vec3 normal(0.0f);
+            bool hit = false;
+            if (desc.Shape == ShapeType::Box) {
+                hit = RayHitsBox(MakeBox(desc), origin, unit, nearest, distance, normal);
+            } else if (const MeshShape* shape = s.Shapes.Get(desc.Mesh)) {
+                // Not normalized in the mesh's space, so t stays a distance in the world's.
+                Mat4 toMesh = desc.Pose.GetInverseMatrix();
+                Vec3 meshOrigin(toMesh * Vec4(origin, 1.0f));
+                Vec3 meshDirection(toMesh * Vec4(unit, 0.0f));
+                Vec3 meshNormal(0.0f);
+                hit = shape->Tree.Raycast(meshOrigin, meshDirection, nearest, distance, meshNormal);
+                if (hit) {
+                    normal = glm::normalize(Vec3(glm::transpose(toMesh) * Vec4(meshNormal, 0.0f)));
+                    if (glm::dot(normal, unit) > 0.0f) normal = -normal;
+                }
+            }
+            if (!hit || distance >= nearest) continue;
+
+            nearest = distance;
+            found = true;
+            outHit = {id, origin + unit * distance, normal, distance, desc.UserData};
+        }
+        return found;
     }
 
     void PhysicsWorld::Step() {

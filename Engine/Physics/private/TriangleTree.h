@@ -51,6 +51,10 @@ namespace VKE::Physics {
             }
         }
 
+        // The nearest triangle along `origin + t * direction`, for t in (0, maxT]. `direction` need
+        // not be a unit vector. False if none is hit.
+        bool Raycast(const Vec3& origin, const Vec3& direction, f32 maxT, f32& outT, Vec3& outNormal) const;
+
     private:
         struct Node {
             AABB Bounds;

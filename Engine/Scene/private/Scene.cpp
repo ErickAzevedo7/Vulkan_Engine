@@ -127,6 +127,14 @@ namespace VKE::Scene {
         }
     }
 
+    bool Scene::Raycast(const Vec3& origin, const Vec3& direction, f32 maxDistance, bool withTriggers,
+                        RaycastHit& outHit) const {
+        Physics::RayHit hit;
+        if (!m_PhysicsWorld.Raycast(origin, direction, maxDistance, withTriggers, hit)) return false;
+        outHit = {Get(UnpackObjectHandle(hit.UserData)), hit.Point, hit.Normal, hit.Distance};
+        return true;
+    }
+
     GameObject* Scene::GetMeshOwner(Renderer::MeshInstanceID mesh) const {
         const Renderer::MeshInstanceDesc* desc = m_RenderScene.GetMeshes().Get(mesh);
         return desc ? Get(UnpackObjectHandle(desc->Owner)) : nullptr;

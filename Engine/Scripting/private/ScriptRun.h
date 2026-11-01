@@ -1,5 +1,8 @@
 #pragma once
 
+#include "scripting/ScriptRunner.h"
+
+#include <assets/AssetTypes.h>
 #include <core/Handle.h>
 #include <core/Types.h>
 
@@ -19,7 +22,7 @@ namespace VKE::Scripting {
     // a time: the functions scripts call find their scene through GetCurrent.
     class ScriptRun {
     public:
-        explicit ScriptRun(Scene::Scene& scene);
+        ScriptRun(Scene::Scene& scene, const GameContext& context);
         ~ScriptRun();
 
         ScriptRun(const ScriptRun&) = delete;
@@ -28,6 +31,18 @@ namespace VKE::Scripting {
         // Null while no game runs.
         static ScriptRun* GetCurrent() { return s_Current; }
         Scene::Scene& GetScene() const { return m_Scene; }
+        const GameContext& GetContext() const { return m_Context; }
+        Scene::PrefabLibrary& GetPrefabs() const { return m_Context.Prefabs; }
+        const Platform::IInput& GetInput() const { return m_Context.Input; }
+
+        void SetInputArea(bool focused, f32 viewX, f32 viewY);
+        bool HasInputFocus() const { return m_InputFocused; }
+        f32 GetViewX() const { return m_ViewX; }
+        f32 GetViewY() const { return m_ViewY; }
+
+        f32 GetDeltaTime() const { return m_DeltaTime; }
+        f32 GetTime() const { return m_Time; }
+        i32 GetFrame() const { return m_Frame; }
 
         void Update(f32 deltaTime);
 
@@ -40,6 +55,12 @@ namespace VKE::Scripting {
         bool IsStopping() const { return m_Stopping > 0; }
         // Happens at the end of the frame.
         void QueueDestroy(Handle<Scene::GameObject> object);
+
+        // Scripts asked for these; the runner acts on them after the frame.
+        void RequestScene(Assets::AssetID scene) { m_RequestedScene = scene; }
+        Assets::AssetID GetRequestedScene() const { return m_RequestedScene; }
+        void RequestQuit() { m_QuitRequested = true; }
+        bool IsQuitRequested() const { return m_QuitRequested; }
 
     private:
         void StartNewScripts();
@@ -58,6 +79,7 @@ namespace VKE::Scripting {
         static ScriptRun* s_Current;
 
         Scene::Scene& m_Scene;
+        GameContext m_Context;
         // In the order they joined. A script that left is null until the end of the frame.
         std::vector<ScriptComponent*> m_Scripts;
         bool m_HasGaps = false;
@@ -65,6 +87,14 @@ namespace VKE::Scripting {
         // Reused for the scripts of an object receiving a contact.
         std::vector<ScriptComponent*> m_ContactScripts;
         u32 m_Stopping = 0;
+        Assets::AssetID m_RequestedScene;
+        bool m_QuitRequested = false;
+        bool m_InputFocused = true;
+        f32 m_ViewX = 0.0f;
+        f32 m_ViewY = 0.0f;
+        f32 m_DeltaTime = 0.0f;
+        f32 m_Time = 0.0f;
+        i32 m_Frame = 0;
     };
 
 } // namespace VKE::Scripting

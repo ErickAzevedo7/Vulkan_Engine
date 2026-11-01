@@ -2,11 +2,15 @@
 add_library(VKE_SDK INTERFACE)
 
 set(headers
+    public/vke/Components.h
+    public/vke/Game.h
+    public/vke/Input.h
     public/vke/Log.h
     public/vke/Marks.h
     public/vke/Math.h
     public/vke/Object.h
     public/vke/Script.h
+    public/vke/Transform.h
     public/vke/detail/GameInfo.h
     public/vke/detail/ScriptCalls.h
 )

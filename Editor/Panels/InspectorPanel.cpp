@@ -443,20 +443,14 @@ namespace VKE::Editor {
             return false;
         }
 
-        case PropertyType::Prefab: {
-            Fields::Label(label.c_str(), Sizes::LabelWidth);
-            Assets::AssetID& prefab = *static_cast<Assets::AssetID*>(value);
-            std::filesystem::path file = m_Assets.GetFile(prefab);
-            std::string name = !file.empty() ? file.stem().u8string() : prefab.IsValid() ? "Missing prefab" : "";
-            Assets::AssetID dropped;
-            auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Prefab; };
-            switch (Fields::Asset("##Value", Icons::Package, name, "Prefab", accepts, dropped)) {
-            case Fields::AssetAction::Drop: prefab = dropped; return true;
-            case Fields::AssetAction::Clear: prefab = {}; return true;
-            case Fields::AssetAction::None: break;
-            }
-            return false;
-        }
+        case PropertyType::Prefab:
+            return DrawAssetReference(label, value, Assets::AssetType::Prefab, Icons::Package, "Prefab");
+        case PropertyType::MeshAsset:
+            return DrawAssetReference(label, value, Assets::AssetType::Mesh, Icons::Box, "Mesh");
+        case PropertyType::MaterialAsset:
+            return DrawAssetReference(label, value, Assets::AssetType::Material, Icons::Palette, "Material");
+        case PropertyType::SceneAsset:
+            return DrawAssetReference(label, value, Assets::AssetType::Scene, Icons::Clapperboard, "Scene");
 
         case PropertyType::F32: {
             Fields::Label(label.c_str(), Sizes::LabelWidth);
@@ -501,6 +495,22 @@ namespace VKE::Editor {
             return DrawMaterials(*static_cast<std::vector<Handle<Assets::MaterialData>>*>(value));
 
         case PropertyType::Struct: break;
+        }
+        return false;
+    }
+
+    bool InspectorPanel::DrawAssetReference(const std::string& label, void* value, Assets::AssetType type,
+                                            const char* icon, const char* typeName) {
+        Fields::Label(label.c_str(), Sizes::LabelWidth);
+        Assets::AssetID& asset = *static_cast<Assets::AssetID*>(value);
+        std::filesystem::path file = m_Assets.GetFile(asset);
+        std::string name = !file.empty() ? file.stem().u8string() : asset.IsValid() ? "Missing asset" : "";
+        Assets::AssetID dropped;
+        auto accepts = [this, type](Assets::AssetID id) { return m_Assets.GetAnyType(id) == type; };
+        switch (Fields::Asset("##Value", icon, name, typeName, accepts, dropped)) {
+        case Fields::AssetAction::Drop: asset = dropped; return true;
+        case Fields::AssetAction::Clear: asset = {}; return true;
+        case Fields::AssetAction::None: break;
         }
         return false;
     }

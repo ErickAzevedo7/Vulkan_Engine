@@ -63,6 +63,9 @@ namespace VKE::Editor {
         bool DrawOverride(Scene::Component& component, const Scene::PropertyInfo& property, void* value, void* pristine,
                           f32 top);
         bool DrawProperty(Scene::Component& component, const Scene::PropertyInfo& property, void* value);
+        // A field holding the AssetID of an asset of `type`.
+        bool DrawAssetReference(const std::string& label, void* value, Assets::AssetType type, const char* icon,
+                                const char* typeName);
         bool DrawRotation(const char* label, const Scene::PropertyInfo& property, Quat& rotation);
         bool DrawMaterials(std::vector<Handle<Assets::MaterialData>>& materials);
         void DrawAddComponent(Scene::GameObject& object);

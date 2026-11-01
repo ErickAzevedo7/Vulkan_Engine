@@ -25,6 +25,9 @@ namespace vke::detail {
         Struct,
         Object,
         Prefab,
+        MeshAsset,
+        MaterialAsset,
+        SceneAsset,
     };
 
     enum class PropertyDisplay : unsigned char {

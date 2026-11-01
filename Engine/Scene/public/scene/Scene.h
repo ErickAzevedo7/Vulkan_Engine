@@ -35,6 +35,14 @@ namespace VKE::Scene {
         Vec3 Normal{0.0f};
     };
 
+    // Where a ray met a collider.
+    struct RaycastHit {
+        GameObject* Object = nullptr;
+        Vec3 Point{0.0f};
+        Vec3 Normal{0.0f};
+        f32 Distance = 0.0f;
+    };
+
     // Owns a hierarchy of GameObjects and the render scene and physics world their components fill.
     //
     // Components connect to those systems when added and disconnect when removed. Changes in
@@ -67,6 +75,10 @@ namespace VKE::Scene {
         // being edited or paused, instead of Update, or for what changed after Update in a frame.
         // Forgets the last update's contacts.
         void Sync();
+
+        // The nearest collider along a ray, as they were at the last sync. False if none is hit.
+        bool Raycast(const Vec3& origin, const Vec3& direction, f32 maxDistance, bool withTriggers,
+                     RaycastHit& outHit) const;
 
         // What touched what during the last Update, each pair once.
         const std::vector<Contact>& GetContacts() const { return m_Contacts; }

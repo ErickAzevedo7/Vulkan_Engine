@@ -58,6 +58,17 @@ namespace VKE::Physics {
 
     using BodyID = Handle<Body>;
 
+    // Where a ray first met a body.
+    struct RayHit {
+        BodyID Body;
+        Vec3 Point{0.0f};
+        // Against the ray.
+        Vec3 Normal{0.0f};
+        f32 Distance = 0.0f;
+        // BodyDesc::UserData.
+        u64 UserData = 0;
+    };
+
     enum class ContactPhase : u8 {
         // The bodies started touching in this step.
         Begin,

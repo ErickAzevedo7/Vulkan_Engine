@@ -164,10 +164,16 @@ namespace Reflect {
                     resolved.Kind = "Quat";
                 } else if (m_ForGame && type == "int") {
                     resolved.Kind = "I32";
-                } else if (m_ForGame && type == "ObjectRef") {
+                } else if (m_ForGame && (type == "ObjectRef" || type.rfind("ScriptRef<", 0) == 0)) {
                     resolved.Kind = "Object";
                 } else if (m_ForGame && type == "PrefabRef") {
                     resolved.Kind = "Prefab";
+                } else if (m_ForGame && type == "MeshRef") {
+                    resolved.Kind = "MeshAsset";
+                } else if (m_ForGame && type == "MaterialRef") {
+                    resolved.Kind = "MaterialAsset";
+                } else if (m_ForGame && type == "SceneRef") {
+                    resolved.Kind = "SceneAsset";
                 } else if (!m_ForGame && type == "Handle<Assets::MeshData>") {
                     resolved.Kind = "Mesh";
                 } else if (!m_ForGame && type == "std::vector<Handle<Assets::MaterialData>>") {

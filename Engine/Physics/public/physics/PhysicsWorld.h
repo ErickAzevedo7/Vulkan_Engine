@@ -34,6 +34,12 @@ namespace VKE::Physics {
         void DestroyBody(BodyID id);
         const BodyDesc* GetBody(BodyID id) const;
 
+        // The nearest body along a ray from `origin`, up to `maxDistance`. A body the ray starts
+        // inside isn't hit from within. False if nothing is hit. Bodies are where they were
+        // last set, without waiting for a step.
+        bool Raycast(const Vec3& origin, const Vec3& direction, f32 maxDistance, bool withTriggers,
+                     RayHit& outHit) const;
+
         void Step();
 
         // Results of the last Step. A moved body's new position is in GetBody(id)->Pose.

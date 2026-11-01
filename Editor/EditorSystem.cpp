@@ -57,6 +57,7 @@ namespace VKE::Editor {
           m_Viewport(m_Scene, assets, renderer, ui),
           m_AssetBrowser(m_Scene, m_MaterialEdits, ui),
           m_Game(m_Scene, renderer, ui) {
+        m_Scene.SetInput(platform.GetInput());
         m_GameModule.Load(m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
     }
 
@@ -157,6 +158,8 @@ namespace VKE::Editor {
         }
         DrawUnsavedDialog();
         UpdateTitle();
+
+        m_Scene.SetInputArea(m_Game.IsFocused(), m_Game.GetViewX(), m_Game.GetViewY());
 
         // Only now: the dialogs can replace the scene.
         m_Scene.Update(ft.GetDeltaF());

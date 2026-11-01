@@ -123,9 +123,26 @@ namespace VKE::Editor {
         if (m_PlaySnapshot.empty()) return false;
         m_DirtyAtPlay = m_Dirty;
         m_PlayMode = PlayMode::Playing;
-        m_Runner.Start(*m_Scene);
+        m_Runner.Start(*m_Scene, MakeGameContext());
         VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
         return true;
+    }
+
+    Scripting::GameContext EditorScene::MakeGameContext() {
+        return {m_Prefabs, *m_Input, [this](Assets::AssetID scene) { SwitchPlayedScene(scene); }, [this] { Stop(); }};
+    }
+
+    void EditorScene::SwitchPlayedScene(Assets::AssetID scene) {
+        auto loaded = MakeIunique<Scene::Scene>();
+        if (m_Assets.GetType(scene) != Assets::AssetType::Scene ||
+            !Scene::SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
+            VKE_CORE_ERROR("Editor: the game asked for scene {}, which can't be loaded", scene.ToString());
+            return;
+        }
+        m_Runner.Stop();
+        m_Scene = std::move(loaded);
+        m_Selected = {};
+        m_Runner.Start(*m_Scene, MakeGameContext());
     }
 
     void EditorScene::TogglePause() {

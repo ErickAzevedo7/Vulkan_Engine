@@ -1,9 +1,13 @@
 #pragma once
 
+#include <vke/Components.h>
+#include <vke/Game.h>
+#include <vke/Input.h>
 #include <vke/Log.h>
 #include <vke/Marks.h>
 #include <vke/Math.h>
 #include <vke/Object.h>
+#include <vke/Transform.h>
 
 namespace vke {
 
@@ -15,7 +19,7 @@ namespace vke {
     enum class StopReason {
         // The object was destroyed, or the script was taken off it.
         Destroyed,
-        // The game stopped.
+        // The game stopped, or went to another scene.
         GameEnded,
     };
 
@@ -52,6 +56,8 @@ namespace vke {
 
         // The object this script is on. Not set yet in the constructor: use OnStart.
         Object GetOwner() const { return m_Owner; }
+        // The Transform of that object.
+        Transform GetTransform() const { return Transform(m_Owner); }
 
     protected:
         Script() = default;

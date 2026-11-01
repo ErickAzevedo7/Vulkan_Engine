@@ -28,7 +28,10 @@ namespace VKE::Scene {
         case PropertyType::Bool: return As<bool>(a) == As<bool>(b);
         case PropertyType::I32: return As<i32>(a) == As<i32>(b);
         case PropertyType::Object: return As<ObjectID>(a) == As<ObjectID>(b);
-        case PropertyType::Prefab: return As<Assets::AssetID>(a) == As<Assets::AssetID>(b);
+        case PropertyType::Prefab:
+        case PropertyType::MeshAsset:
+        case PropertyType::MaterialAsset:
+        case PropertyType::SceneAsset: return As<Assets::AssetID>(a) == As<Assets::AssetID>(b);
         case PropertyType::F32: return As<f32>(a) == As<f32>(b);
         case PropertyType::Vec3: return As<Vec3>(a) == As<Vec3>(b);
         case PropertyType::Quat: return As<Quat>(a) == As<Quat>(b);
@@ -52,7 +55,10 @@ namespace VKE::Scene {
         case PropertyType::Bool: As<bool>(to) = As<bool>(from); break;
         case PropertyType::I32: As<i32>(to) = As<i32>(from); break;
         case PropertyType::Object: As<ObjectID>(to) = As<ObjectID>(from); break;
-        case PropertyType::Prefab: As<Assets::AssetID>(to) = As<Assets::AssetID>(from); break;
+        case PropertyType::Prefab:
+        case PropertyType::MeshAsset:
+        case PropertyType::MaterialAsset:
+        case PropertyType::SceneAsset: As<Assets::AssetID>(to) = As<Assets::AssetID>(from); break;
         case PropertyType::F32: As<f32>(to) = As<f32>(from); break;
         case PropertyType::Vec3: As<Vec3>(to) = As<Vec3>(from); break;
         case PropertyType::Quat: As<Quat>(to) = As<Quat>(from); break;

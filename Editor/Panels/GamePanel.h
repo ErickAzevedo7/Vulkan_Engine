@@ -35,12 +35,21 @@ namespace VKE::Editor {
         bool IsVisible() const { return m_Visible; }
         Renderer::ViewTextureID GetTexture() const { return m_Texture; }
 
+        // Whether the player is on the panel, so the keyboard and the mouse are the game's.
+        bool IsFocused() const { return m_Focused; }
+        // Where the view starts in the window, in pixels.
+        f32 GetViewX() const { return m_ViewX; }
+        f32 GetViewY() const { return m_ViewY; }
+
     private:
         EditorScene& m_Scene;
         Renderer::Renderer& m_Renderer;
         UI::UISystem& m_UI;
         Renderer::ViewTextureID m_Texture;
         bool m_Visible = false;
+        bool m_Focused = false;
+        f32 m_ViewX = 0.0f;
+        f32 m_ViewY = 0.0f;
     };
 
 } // namespace VKE::Editor

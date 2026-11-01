@@ -17,6 +17,10 @@ namespace VKE::Assets {
     class AssetManager;
 } // namespace VKE::Assets
 
+namespace VKE::Platform {
+    class IInput;
+} // namespace VKE::Platform
+
 namespace VKE::Scene {
     class GameObject;
     class Scene;
@@ -89,6 +93,10 @@ namespace VKE::Editor {
         void TogglePause();
         // Back to the scene as it was at Play, with the same object selected if it was there.
         void Stop();
+        // What scripts read the keyboard and the mouse from.
+        void SetInput(const Platform::IInput& input) { m_Input = &input; }
+        // Whether they are the game's now, and where its view starts in the window.
+        void SetInputArea(bool focused, f32 viewX, f32 viewY) { m_Runner.SetInputArea(focused, viewX, viewY); }
         // Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
         // per frame, before rendering.
         void Update(f32 deltaTime);
@@ -169,6 +177,9 @@ namespace VKE::Editor {
         bool Reload(Iunique<Scene::Scene>& scene, Handle<Scene::GameObject>& selected, const std::string& text,
                     const std::string& name);
         bool SavePrefab();
+        Scripting::GameContext MakeGameContext();
+        // A script asked for another scene. Stop still goes back to the one Play started from.
+        void SwitchPlayedScene(Assets::AssetID scene);
 
         Assets::AssetManager& m_Assets;
         Scene::PrefabLibrary m_Prefabs;
@@ -183,6 +194,7 @@ namespace VKE::Editor {
         Assets::AssetID m_SelectedAsset;
         WaitingScene m_Waiting;
         Assets::AssetID m_PrefabToOpen;
+        const Platform::IInput* m_Input = nullptr;
         // Last: it stops the scripts of a scene that is still there.
         Scripting::ScriptRunner m_Runner;
     };

@@ -2,7 +2,9 @@
 #include "ObjectHandles.h"
 #include "ScriptRun.h"
 
+#include <core/ObjectID.h>
 #include <scene/GameObject.h>
+#include <scene/Prefab.h>
 #include <scene/Scene.h>
 
 namespace VKE::Scripting {
@@ -12,6 +14,20 @@ namespace VKE::Scripting {
         ScriptRun* FindRun(const Scene::Component& component) {
             ScriptRun* run = ScriptRun::GetCurrent();
             return run && &run->GetScene() == &component.GetScene() ? run : nullptr;
+        }
+
+        void ResolveFields(const Scene::StructInfo& type, void* object, Scene::GameObject& owner) {
+            for (const Scene::PropertyInfo& property : type) {
+                void* value = property.Get(object);
+                if (property.Type == Scene::PropertyType::Struct) {
+                    ResolveFields(*property.Struct, value, owner);
+                } else if (property.Type == Scene::PropertyType::Object) {
+                    Scene::GameObject* target =
+                        Scene::PrefabLibrary::FindReferenced(owner, *static_cast<ObjectID*>(value));
+                    vke::detail::Bits::SetObject(*static_cast<vke::ObjectRef*>(value),
+                                                 target ? ToObject(target->GetHandle()) : vke::Object());
+                }
+            }
         }
     } // namespace
 
@@ -37,8 +53,17 @@ namespace VKE::Scripting {
         if (ScriptRun* run = FindRun(*this)) run->Remove(*this);
     }
 
+    void ScriptComponent::OnPropertiesChanged(const Assets::AssetManager&) {
+        if (m_Started) ResolveReferences();
+    }
+
+    void ScriptComponent::ResolveReferences() {
+        ResolveFields(m_Type.Properties, m_Instance, GetOwner());
+    }
+
     void ScriptComponent::CallStart() {
         m_Started = true;
+        ResolveReferences();
         m_Type.Calls->Start(m_Script);
     }
 

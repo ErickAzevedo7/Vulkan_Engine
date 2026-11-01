@@ -80,7 +80,10 @@ namespace VKE::Scene {
                     Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
                     break;
                 }
-                case PropertyType::Prefab: {
+                case PropertyType::Prefab:
+                case PropertyType::MeshAsset:
+                case PropertyType::MaterialAsset:
+                case PropertyType::SceneAsset: {
                     Assets::AssetID id = As<Assets::AssetID>(value);
                     Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
                     break;
@@ -199,7 +202,10 @@ namespace VKE::Scene {
                     if (ReadScalar(node, text, path)) As<ObjectID>(value) = ObjectID::Parse(text);
                     break;
                 }
-                case PropertyType::Prefab: {
+                case PropertyType::Prefab:
+                case PropertyType::MeshAsset:
+                case PropertyType::MaterialAsset:
+                case PropertyType::SceneAsset: {
                     std::string text;
                     if (ReadScalar(node, text, path)) As<Assets::AssetID>(value) = Assets::AssetID::Parse(text);
                     break;
