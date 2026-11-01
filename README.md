@@ -1,8 +1,10 @@
 ﻿# VKE
 
-VKE is a 3D game engine and editor written from scratch in C++17 on top of Vulkan. It has its own renderer, scene system, collision, asset pipeline and editor, and games are written as C++ scripts that reload while they run.
+VKE is a 3D game engine and editor built from the ground up in C++17 on top of Vulkan. It has its own renderer, scene system, collision, asset pipeline and editor, and games are written as C++ scripts that reload while they run.
 
 It began as a single Vulkan application and was rewritten as a set of separate modules. It is a personal project, built to learn how a full engine fits together, from the GPU abstraction up to the tools.
+
+This project was built with the help of AI. It was used to write and review code, design the editor’s interface and write documentation.
 
 ![The VKE editor with the Sponza scene open](media/editor.png)
 
