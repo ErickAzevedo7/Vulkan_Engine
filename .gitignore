@@ -368,4 +368,5 @@ vcpckg_instaled/
 .clangd
 compile_commands.json
 *.mat
+!Engine/Content/**/*.mat
 build/
