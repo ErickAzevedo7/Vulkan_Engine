@@ -28,7 +28,8 @@ namespace VKE::Scripting {
         // `component` as a script, or null.
         static ScriptComponent* From(Scene::Component& component);
 
-        Scene::ComponentTypeID GetTypeID() const override { return m_Type.ID; }
+        Scene::ComponentTypeID GetTypeID() const override { return m_TypeID; }
+        const std::string& GetTypeName() const { return m_Type->Name; }
         void* GetInstance() const { return m_Instance; }
         bool IsBroken() const { return m_Broken; }
 
@@ -41,10 +42,19 @@ namespace VKE::Scripting {
         void CallUpdate(f32 deltaTime);
         void CallLateUpdate(f32 deltaTime);
         void CallStop(vke::StopReason reason);
+        void CallReload();
         void CallCollision(vke::detail::ContactPhase phase, const vke::Collision& collision);
         void CallTrigger(vke::detail::ContactPhase phase, vke::Object other);
 
+        // For new code with the game running: the component stays on its object, and only the
+        // instance changes. Between these two the DLL can be replaced, and nothing else on this
+        // can be used. The second finds the type again by its ID; false if it's gone.
+        void DropInstance();
+        bool MakeInstance();
+
     private:
+        void CreateInstance();
+
         // Runs `call`, which is part of the function called `function`, unless the script is broken.
         template<typename Call>
         void Guard(const char* function, const Call& call);
@@ -56,7 +66,8 @@ namespace VKE::Scripting {
         void DisconnectFromSystems(Scene::SceneSystems& systems) override;
         void OnPropertiesChanged(const Assets::AssetManager& assets) override;
 
-        const ScriptType& m_Type;
+        const ScriptType* m_Type;
+        Scene::ComponentTypeID m_TypeID;
         void* m_Instance = nullptr;
         vke::Script* m_Script = nullptr;
         std::unique_ptr<char[]> m_FailedInstance;

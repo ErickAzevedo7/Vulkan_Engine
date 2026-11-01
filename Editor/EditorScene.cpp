@@ -203,6 +203,13 @@ namespace VKE::Editor {
 
     bool EditorScene::SwitchGame(Scripting::GameModule& game, const std::filesystem::path& library,
                                  const std::filesystem::path& workFolder) {
+        if (IsPlaying()) {
+            // A scene with unsaved changes has its copy for recovery since Play.
+            if (!game.Prepare(library, workFolder)) return false;
+            m_Runner.SwitchGame(game);
+            return true;
+        }
+
         bool prefab = IsEditingPrefab();
         Iunique<Scene::Scene>& sceneObjects = prefab ? m_Waiting.Objects : m_Scene;
         std::string sceneText = Scene::SceneSerializer::ToText(*sceneObjects, m_Prefabs);

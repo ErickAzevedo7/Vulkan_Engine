@@ -210,19 +210,16 @@ namespace VKE::Editor {
                     VKE_CORE_INFO("{}: {}", ConsolePanel::kCompilerCategory, message.Text);
                 }
             }
-            if (result->LibraryChanged) {
-                m_GameChanged = true;
-                VKE_CORE_INFO("Scripts: built in {:.1f} s", result->Seconds);
-            }
             if (!result->Succeeded) {
                 VKE_CORE_ERROR("{}: the build failed, and the last one stays in use", ConsolePanel::kCompilerCategory);
             }
+            if (result->LibraryChanged) {
+                VKE_CORE_INFO("Scripts: built in {:.1f} s", result->Seconds);
+                m_GameLoadFailed =
+                    !m_Scene.SwitchGame(m_GameModule, m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
+                if (!m_GameLoadFailed) VKE_CORE_INFO("Scripts: reloaded");
+            }
         }
-
-        if (!m_GameChanged || m_Scene.IsPlaying()) return;
-        m_GameChanged = false;
-        m_GameLoadFailed = !m_Scene.SwitchGame(m_GameModule, m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
-        if (!m_GameLoadFailed) VKE_CORE_INFO("Scripts: reloaded");
     }
 
     std::string EditorSystem::GetScriptStatus(u32& outColor) const {
@@ -231,10 +228,6 @@ namespace VKE::Editor {
         if (state == ScriptCompiler::State::Building) {
             outColor = Colors::Accent;
             return "Compiling scripts\xe2\x80\xa6";
-        }
-        if (m_GameChanged) {
-            outColor = Colors::Warning;
-            return "Scripts reload after Stop";
         }
         bool built = state == ScriptCompiler::State::Built;
         if (state == ScriptCompiler::State::Failed || m_GameLoadFailed || (built && !m_GameModule.IsLoaded())) {

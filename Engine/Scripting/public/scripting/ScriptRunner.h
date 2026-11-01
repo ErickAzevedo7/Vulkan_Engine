@@ -17,6 +17,7 @@ namespace VKE::Scene {
 
 namespace VKE::Scripting {
 
+    class GameModule;
     class ScriptRun;
 
     // What a game needs from the program running it.
@@ -51,11 +52,20 @@ namespace VKE::Scripting {
         // Tells every started script the game ended. Call before replacing the scene.
         void Stop();
 
+        // Moves the running game to the DLL `game` has prepared, between frames. Objects stay as
+        // they are, and each script on them gets an instance of the new code with the values of
+        // its properties, and an OnReload if it had started. A script the new code doesn't have
+        // gets OnStop and leaves its object. The context's functions can run at the end.
+        void SwitchGame(GameModule& game);
+
         // Whether the keyboard and the mouse are the game's, and where its view starts in the
         // window. They are, from the corner of the window, unless this says otherwise.
         void SetInputArea(bool focused, f32 viewX, f32 viewY);
 
     private:
+        // Does what the game asked for, or the crash a script had.
+        void ActOnRequests();
+
         Iunique<ScriptRun> m_Run;
         bool m_InputFocused = true;
         f32 m_ViewX = 0.0f;

@@ -3,6 +3,7 @@
 #include <core/Types.h>
 
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace VKE::Platform {
@@ -36,6 +37,8 @@ namespace VKE::Scripting {
         // Loading in two steps, to replace a game that may be in use. Prepare loads `library` next
         // to what is running and changes nothing; if it fails, logged, the running game goes on.
         bool Prepare(const std::filesystem::path& library, const std::filesystem::path& workFolder);
+        // Whether the prepared game has a script called `name`.
+        bool WillHaveScript(const std::string& name) const;
         // Replaces the running game with the prepared one. The rule of Unload applies to the old
         // game's objects, and objects of the new one can be made once this returns.
         void Switch();

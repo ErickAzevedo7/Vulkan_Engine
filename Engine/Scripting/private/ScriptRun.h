@@ -17,6 +17,7 @@ namespace VKE::Scene {
 
 namespace VKE::Scripting {
 
+    class GameModule;
     class ScriptComponent;
 
     // One run of a scene as a game. Exists between ScriptRunner::Start and Stop, and only one at
@@ -46,6 +47,8 @@ namespace VKE::Scripting {
         i32 GetFrame() const { return m_Frame; }
 
         void Update(f32 deltaTime);
+        // Between frames: see ScriptRunner::SwitchGame.
+        void SwitchGame(GameModule& game);
 
         // A script joined or left the scene. Leaving tells it to stop, if it had started.
         void Add(ScriptComponent& script);

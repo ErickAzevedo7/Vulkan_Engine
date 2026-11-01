@@ -580,6 +580,21 @@ namespace VKE::Scene {
         return LoadObjects(scene, assets, nullptr, root, name);
     }
 
+    std::string SceneSerializer::ComponentToText(Component& component, const Assets::AssetManager& assets) {
+        const ComponentTypeInfo* type = ComponentRegistry::Find(component.GetTypeID());
+        YAML::Emitter out;
+        PropertyWriter writer(out, assets, component.GetOwner().GetName());
+        writer.Write(*type->Properties, type->ToObject(&component), type->ToObject(type->Defaults.get()));
+        return out.c_str();
+    }
+
+    void SceneSerializer::LoadComponentText(Component& component, Assets::AssetManager& assets, const std::string& text) {
+        const ComponentTypeInfo* type = ComponentRegistry::Find(component.GetTypeID());
+        PropertyReader reader(assets, component.GetOwner().GetName());
+        reader.Read(*type->Properties, YAML::Load(text), type->ToObject(&component), std::string(type->Name) + ".");
+        component.ApplyPropertyChanges(assets);
+    }
+
     bool SceneSerializer::LoadObjects(Scene& scene, Assets::AssetManager& assets, PrefabLibrary* prefabs,
                                       const YAML::Node& root, const std::string& sourceName) {
         YAML::Node objectNodes = root["Objects"];

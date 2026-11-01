@@ -112,9 +112,10 @@ namespace VKE::Editor {
         // What a script that crashed in Play said, once; empty if none did since the last call.
         std::string TakeFault();
 
-        // Replaces the game with the DLL `library`, as GameModule::Prepare takes it. Every object
-        // is destroyed and made again from what it held, including a prefab open now, unsaved
-        // changes and selection. Not in Play. False, logged, if something can't be kept or the
+        // Replaces the game with the DLL `library`, as GameModule::Prepare takes it. In Play the
+        // objects stay and the scripts on them change, as ScriptRunner::SwitchGame does. Otherwise
+        // every object is destroyed and made again from what it held, including a prefab open
+        // now, unsaved changes and selection. False, logged, if something can't be kept or the
         // DLL can't be loaded, and then the running game stays if it can.
         bool SwitchGame(Scripting::GameModule& game, const std::filesystem::path& library,
                         const std::filesystem::path& workFolder);

@@ -16,7 +16,16 @@ namespace VKE::Scripting {
     void ScriptRunner::Update(f32 deltaTime) {
         if (!m_Run) return;
         m_Run->Update(deltaTime);
+        ActOnRequests();
+    }
 
+    void ScriptRunner::SwitchGame(GameModule& game) {
+        if (!m_Run) return;
+        m_Run->SwitchGame(game);
+        ActOnRequests();
+    }
+
+    void ScriptRunner::ActOnRequests() {
         // Copies: these can end the run, which owns the originals.
         if (m_Run->HasFault()) {
             auto fault = m_Run->GetContext().Fault;

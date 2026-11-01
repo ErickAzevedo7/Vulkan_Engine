@@ -70,6 +70,10 @@ namespace vke {
         virtual void OnLateUpdate(float deltaTime) {}
         // Once, when the script is done, if OnStart ran.
         virtual void OnStop(StopReason reason) {}
+        // When the game's code changed with the game running, in place of OnStart, which doesn't
+        // run again. The fields marked VKE_PROPERTY kept their values, and the others are back as
+        // the constructor leaves them: set up again here what OnStart set up in them.
+        virtual void OnReload() {}
 
         // While this object touches a solid collider: the first frame, every frame after it, and
         // when they part. The object needs a collider too, and one of the two must be movable.

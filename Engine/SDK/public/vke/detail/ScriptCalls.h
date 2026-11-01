@@ -16,6 +16,7 @@ namespace vke::detail {
             [](Script* script, float deltaTime) { script->OnUpdate(deltaTime); },
             [](Script* script, float deltaTime) { script->OnLateUpdate(deltaTime); },
             [](Script* script, StopReason reason) { script->OnStop(reason); },
+            [](Script* script) { script->OnReload(); },
             [](Script* script, ContactPhase phase, const Collision& collision) {
                 switch (phase) {
                 case ContactPhase::Start: script->OnCollisionStart(collision); break;

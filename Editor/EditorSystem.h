@@ -105,8 +105,6 @@ namespace VKE::Editor {
         UI::UISystem& m_UI;
 
         ScriptCompiler m_ScriptCompiler;
-        // A new DLL waits here for Play to end.
-        bool m_GameChanged = false;
         bool m_GameLoadFailed = false;
         u32 m_ScriptErrors = 0;
         // Before the scene, which holds objects of the game's types.

@@ -238,6 +238,14 @@ namespace VKE::Scripting {
         return true;
     }
 
+    bool GameModule::WillHaveScript(const std::string& name) const {
+        if (!m_Prepared) return false;
+        for (unsigned i = 0; i < m_Prepared->Game->ScriptCount; ++i) {
+            if (name == m_Prepared->Game->Scripts[i].Name) return true;
+        }
+        return false;
+    }
+
     void GameModule::Switch() {
         if (!m_Prepared) return;
         Iunique<PreparedGame> prepared = std::move(m_Prepared);
@@ -269,6 +277,8 @@ namespace VKE::Scripting {
             entry.ToObject = [](Scene::Component* component) {
                 return static_cast<ScriptComponent*>(component)->GetInstance();
             };
+            // Components take their ID from the type when they are made, these first of all.
+            type->ID = Scene::ComponentRegistry::FindOrAddMissing(type->Name).ID;
             auto defaults = MakeIunique<ScriptComponent>(*type);
             if (defaults->IsBroken()) {
                 VKE_CORE_ERROR("Scripts: script '{}' can't be used, and objects keep its values until it can",

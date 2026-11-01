@@ -13,6 +13,7 @@ namespace YAML {
 
 namespace VKE::Scene {
 
+    class Component;
     class GameObject;
     class PrefabLibrary;
     class Scene;
@@ -46,6 +47,12 @@ namespace VKE::Scene {
         static std::string PrefabToText(GameObject& root, const Assets::AssetManager& assets);
         static bool LoadPrefabText(Scene& scene, Assets::AssetManager& assets, const std::string& text,
                                    const std::string& name);
+
+        // The values of one component, for moving them to a new component on the same object.
+        // Only what differs from the type's defaults goes in the text, so loading it into a
+        // component of a changed type gives what's left out the new defaults.
+        static std::string ComponentToText(Component& component, const Assets::AssetManager& assets);
+        static void LoadComponentText(Component& component, Assets::AssetManager& assets, const std::string& text);
 
     private:
         // Without `prefabs`, instances are left empty, as in a prefab's own file.

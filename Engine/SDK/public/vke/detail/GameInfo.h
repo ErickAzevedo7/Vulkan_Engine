@@ -96,6 +96,7 @@ namespace vke::detail {
         void (*Update)(Script* script, float deltaTime);
         void (*LateUpdate)(Script* script, float deltaTime);
         void (*Stop)(Script* script, StopReason reason);
+        void (*Reload)(Script* script);
         void (*Collision)(Script* script, ContactPhase phase, const vke::Collision& collision);
         void (*Trigger)(Script* script, ContactPhase phase, Object other);
     };

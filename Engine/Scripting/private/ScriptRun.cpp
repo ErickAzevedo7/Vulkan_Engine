@@ -1,10 +1,13 @@
 #include "ScriptRun.h"
 #include "ObjectHandles.h"
 #include "ScriptComponent.h"
+#include "scripting/GameModule.h"
 
 #include <core/Assert.h>
 #include <scene/GameObject.h>
+#include <scene/Prefab.h>
 #include <scene/Scene.h>
+#include <scene/SceneSerializer.h>
 
 #include <vke/Script.h>
 
@@ -48,9 +51,7 @@ namespace VKE::Scripting {
     }
 
     ScriptRun::~ScriptRun() {
-        // After a fault the scripts' state can't be trusted.
         for (ScriptComponent* script : m_Scripts) {
-            if (m_HasFault) break;
             if (script) StopScript(*script, true);
         }
         s_Current = nullptr;
@@ -89,6 +90,46 @@ namespace VKE::Scripting {
         CompactScripts();
         // Sends what the scripts changed after the physics step.
         m_Scene.Sync();
+    }
+
+    void ScriptRun::SwitchGame(GameModule& game) {
+        struct KeptScript {
+            ScriptComponent* Script;
+            std::string Name;
+            std::string Values;
+        };
+
+        // A script the new code doesn't have ends now, while its own code is there.
+        for (size_t i = 0; i < m_Scripts.size(); ++i) {
+            ScriptComponent* script = m_Scripts[i];
+            if (script && !game.WillHaveScript(script->GetTypeName())) {
+                script->GetOwner().RemoveComponent(script->GetTypeID());
+            }
+        }
+
+        Assets::AssetManager& assets = GetPrefabs().GetAssets();
+        std::vector<KeptScript> kept;
+        for (ScriptComponent* script : m_Scripts) {
+            if (!script) continue;
+            kept.push_back({script, script->GetTypeName(), Scene::SceneSerializer::ComponentToText(*script, assets)});
+            script->DropInstance();
+        }
+        GetPrefabs().ForgetAll();
+        game.Switch();
+
+        for (KeptScript& script : kept) {
+            if (script.Script->MakeInstance() && !script.Script->IsBroken()) {
+                Scene::SceneSerializer::LoadComponentText(*script.Script, assets, script.Values);
+            } else {
+                ReportFault("Script '" + script.Name + "' on '" + script.Script->GetOwner().GetName() +
+                            "' crashed in its constructor");
+            }
+        }
+
+        // Once they are all back, as they can reach each other.
+        for (KeptScript& script : kept) {
+            if (!m_HasFault && script.Script->IsStarted()) script.Script->CallReload();
+        }
     }
 
     void ScriptRun::Add(ScriptComponent& script) {
@@ -171,7 +212,8 @@ namespace VKE::Scripting {
     }
 
     void ScriptRun::StopScript(ScriptComponent& script, bool gameEnded) {
-        if (!script.IsStarted()) return;
+        // After a fault the scripts' state can't be trusted.
+        if (!script.IsStarted() || m_HasFault) return;
         ++m_Stopping;
         script.CallStop(gameEnded ? vke::StopReason::GameEnded : vke::StopReason::Destroyed);
         --m_Stopping;
