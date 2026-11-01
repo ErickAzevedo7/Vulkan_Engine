@@ -7,6 +7,8 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include <algorithm>
+
 namespace VKE::Platform::Process {
 
     namespace {
@@ -84,6 +86,111 @@ namespace VKE::Platform::Process {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
         return true;
+    }
+
+    Iunique<Child> Child::Start(const Desc& desc) {
+        SECURITY_ATTRIBUTES inherited{sizeof(inherited), nullptr, TRUE};
+        HANDLE readEnd = nullptr;
+        HANDLE writeEnd = nullptr;
+        if (!CreatePipe(&readEnd, &writeEnd, &inherited, 0)) {
+            VKE_CORE_ERROR("Process::Child: couldn't make a pipe (error {})", GetLastError());
+            return nullptr;
+        }
+        SetHandleInformation(readEnd, HANDLE_FLAG_INHERIT, 0);
+
+        // Closing the job ends everything in it, even if this program dies first.
+        HANDLE job = CreateJobObjectW(nullptr, nullptr);
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+
+        std::wstring commandLine;
+        AppendQuoted(commandLine, desc.Executable.wstring());
+        for (const std::string& argument : desc.Arguments) {
+            commandLine += L' ';
+            AppendQuoted(commandLine, ToWide(argument));
+        }
+
+        // Each variable ends in a zero, and an empty one ends the block.
+        std::wstring environment;
+        for (const std::string& variable : desc.Environment) {
+            environment += ToWide(variable);
+            environment += L'\0';
+        }
+        environment += L'\0';
+
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdOutput = writeEnd;
+        startup.hStdError = writeEnd;
+        PROCESS_INFORMATION process{};
+        // Suspended until it's in the job, so nothing it starts escapes.
+        BOOL started = CreateProcessW(desc.Executable.c_str(), commandLine.data(), nullptr, nullptr, TRUE,
+                                      CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+                                      desc.Environment.empty() ? nullptr : environment.data(),
+                                      desc.Folder.empty() ? nullptr : desc.Folder.c_str(), &startup, &process);
+        DWORD error = GetLastError();
+        CloseHandle(writeEnd);
+        if (!started) {
+            VKE_CORE_ERROR("Process::Child: couldn't start '{}' (error {})", desc.Executable.u8string(), error);
+            CloseHandle(readEnd);
+            CloseHandle(job);
+            return nullptr;
+        }
+        AssignProcessToJobObject(job, process.hProcess);
+        ResumeThread(process.hThread);
+        CloseHandle(process.hThread);
+        return Iunique<Child>(new Child(process.hProcess, job, readEnd));
+    }
+
+    Child::~Child() {
+        CloseHandle(static_cast<HANDLE>(m_Job));
+        CloseHandle(static_cast<HANDLE>(m_Process));
+        CloseHandle(static_cast<HANDLE>(m_Output));
+    }
+
+    bool Child::Read(std::string& out) {
+        HANDLE process = static_cast<HANDLE>(m_Process);
+        HANDLE output = static_cast<HANDLE>(m_Output);
+        char buffer[4096];
+        while (true) {
+            // Looks first and waits on the program, not on the pipe: something the program left
+            // running, like the compiler's symbol server, can keep the pipe open long after it ended.
+            bool ended = WaitForSingleObject(process, 0) == WAIT_OBJECT_0;
+            DWORD available = 0;
+            bool open = PeekNamedPipe(output, nullptr, 0, nullptr, &available, nullptr);
+            if (open && available > 0) {
+                DWORD read = 0;
+                DWORD wanted = std::min<DWORD>(available, sizeof(buffer));
+                if (!ReadFile(output, buffer, wanted, &read, nullptr)) return false;
+                out.append(buffer, read);
+                return true;
+            }
+            if (ended || !open) return false;
+            WaitForSingleObject(process, 15);
+        }
+    }
+
+    int Child::GetExitCode() const {
+        DWORD code = 0;
+        GetExitCodeProcess(static_cast<HANDLE>(m_Process), &code);
+        return static_cast<int>(code);
+    }
+
+    void Child::Stop() {
+        TerminateJobObject(static_cast<HANDLE>(m_Job), 1);
+    }
+
+    std::string ConsoleTextToUtf8(const std::string& text) {
+        if (text.empty()) return text;
+        int size = static_cast<int>(text.size());
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), size, nullptr, 0) > 0) return text;
+
+        int length = MultiByteToWideChar(CP_OEMCP, 0, text.data(), size, nullptr, 0);
+        std::wstring wide(static_cast<size_t>(length), L'\0');
+        MultiByteToWideChar(CP_OEMCP, 0, text.data(), size, wide.data(), length);
+        return ToUtf8(wide.c_str());
     }
 
 } // namespace VKE::Platform::Process

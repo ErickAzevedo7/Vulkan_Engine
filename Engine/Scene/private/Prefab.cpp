@@ -89,6 +89,10 @@ namespace VKE::Scene {
         m_Prefabs.erase(prefab);
     }
 
+    void PrefabLibrary::ForgetAll() {
+        m_Prefabs.clear();
+    }
+
     Assets::AssetID PrefabLibrary::Create(GameObject& root, const std::filesystem::path& file) {
         if (HasParts(root)) {
             VKE_CORE_ERROR("Prefabs: '{}' has an instance of a prefab in it; prefabs can't go inside prefabs",

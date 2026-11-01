@@ -14,9 +14,17 @@
 #include <vke/detail/GameInfo.h>
 
 #include <cstddef>
+#include <fstream>
 #include <unordered_map>
 
 namespace VKE::Scripting {
+
+    struct PreparedGame {
+        Iunique<Platform::DynamicLibrary> Library;
+        std::filesystem::path Copy;
+        std::filesystem::path Source;
+        const vke::detail::GameInfo* Game = nullptr;
+    };
 
     namespace {
         // Fields of these types are read as the engine's own.
@@ -28,6 +36,8 @@ namespace VKE::Scripting {
         static_assert(sizeof(vke::SceneRef) == sizeof(Assets::AssetID));
 
         constexpr const char* kLoadFunction = "VkeLoadGame";
+        // Exists only while a DLL loads: finding it means the program ended in the middle of that.
+        constexpr const char* kLoadingFile = "Loading.txt";
         using LoadFunction = const vke::detail::GameInfo* (*)(const vke::detail::ApiTable*);
 
         Scene::PropertyType Convert(vke::detail::PropertyType type) {
@@ -113,19 +123,51 @@ namespace VKE::Scripting {
             for (auto it = std::filesystem::directory_iterator(workFolder, ec);
                  !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
                 std::error_code ignored;
-                std::filesystem::remove(it->path(), ignored);
+                if (it->path().filename() != kLoadingFile) std::filesystem::remove(it->path(), ignored);
             }
+        }
+
+        // Unloading runs the destructors of the game's globals.
+        void UnloadLibrary(Iunique<Platform::DynamicLibrary>& library, const std::filesystem::path& source) {
+            std::string fault;
+            bool survived = Platform::GuardedCall(
+                [](void* data) { static_cast<Iunique<Platform::DynamicLibrary>*>(data)->reset(); }, &library, fault);
+            if (survived) return;
+            VKE_CORE_ERROR("Scripts: '{}' crashed while unloading: {}", source.u8string(), fault);
+            library.release();
+        }
+
+        void Discard(Iunique<PreparedGame>& prepared) {
+            if (!prepared) return;
+            UnloadLibrary(prepared->Library, prepared->Source);
+            std::error_code ignored;
+            std::filesystem::remove(prepared->Copy, ignored);
+            prepared.reset();
         }
     } // namespace
 
     GameModule::GameModule() = default;
 
     GameModule::~GameModule() {
+        Discard(m_Prepared);
         Unload();
     }
 
     bool GameModule::Load(const std::filesystem::path& library, const std::filesystem::path& workFolder) {
         Unload();
+        std::error_code ec;
+        if (std::filesystem::remove(workFolder / kLoadingFile, ec)) {
+            VKE_CORE_ERROR("Scripts: '{}' took the program down the last time it was loaded; it's left out this time",
+                           library.u8string());
+            return false;
+        }
+        if (!Prepare(library, workFolder)) return false;
+        Switch();
+        return true;
+    }
+
+    bool GameModule::Prepare(const std::filesystem::path& library, const std::filesystem::path& workFolder) {
+        Discard(m_Prepared);
 
         std::error_code ec;
         if (!std::filesystem::exists(library, ec)) {
@@ -143,6 +185,7 @@ namespace VKE::Scripting {
         }
 
         // Loading runs the constructors of the game's globals.
+        std::ofstream(workFolder / kLoadingFile).put('\n');
         Iunique<Platform::DynamicLibrary> loaded;
         const vke::detail::GameInfo* game = nullptr;
         LoadFunction load = nullptr;
@@ -163,6 +206,7 @@ namespace VKE::Scripting {
                 if (call.Load) call.Game = call.Load(&s_Api);
             },
             &call, fault);
+        std::filesystem::remove(workFolder / kLoadingFile, ec);
         if (!survived) {
             VKE_CORE_ERROR("Scripts: '{}' crashed while loading: {}", library.u8string(), fault);
             loaded.release();
@@ -186,8 +230,22 @@ namespace VKE::Scripting {
             return false;
         }
 
-        m_Library = std::move(loaded);
-        m_RunningCopy = std::move(copy);
+        m_Prepared = MakeIunique<PreparedGame>();
+        m_Prepared->Library = std::move(loaded);
+        m_Prepared->Copy = std::move(copy);
+        m_Prepared->Source = library;
+        m_Prepared->Game = game;
+        return true;
+    }
+
+    void GameModule::Switch() {
+        if (!m_Prepared) return;
+        Iunique<PreparedGame> prepared = std::move(m_Prepared);
+        Unload();
+
+        const vke::detail::GameInfo* game = prepared->Game;
+        m_Library = std::move(prepared->Library);
+        m_RunningCopy = prepared->Copy;
         for (unsigned i = 0; i < game->ScriptCount; ++i) {
             const vke::detail::ScriptTypeInfo& info = game->Scripts[i];
             auto type = MakeIunique<ScriptType>();
@@ -227,8 +285,7 @@ namespace VKE::Scripting {
             }
             m_Types.push_back(std::move(type));
         }
-        VKE_CORE_INFO("Scripts: loaded {} script types from '{}'", m_Types.size(), library.u8string());
-        return true;
+        VKE_CORE_INFO("Scripts: loaded {} script types from '{}'", m_Types.size(), prepared->Source.u8string());
     }
 
     void GameModule::Unload() {
@@ -237,7 +294,7 @@ namespace VKE::Scripting {
             Scene::ComponentRegistry::ReleaseExternal(type->ID);
         }
         m_Types.clear();
-        m_Library.reset();
+        UnloadLibrary(m_Library, m_RunningCopy);
 
         std::error_code ignored;
         std::filesystem::remove(m_RunningCopy, ignored);

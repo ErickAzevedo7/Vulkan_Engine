@@ -25,6 +25,7 @@ function(vke_add_game target)
     add_library(${target} SHARED ${sources} "${tables}")
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${VKE_SDK_DIR}/include")
     target_compile_features(${target} PRIVATE cxx_std_17)
+    target_compile_options(${target} PRIVATE /W3)
     set_target_properties(${target} PROPERTIES
         OUTPUT_NAME "Game"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.vke/bin"

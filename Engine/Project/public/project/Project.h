@@ -40,6 +40,8 @@ namespace VKE::Project {
         // The game's code: a scripts/ folder, built into a DLL in the .vke folder.
         std::filesystem::path GetScriptsFolder() const { return m_Folder / "scripts"; }
         std::filesystem::path GetGameLibrary() const { return GetSettingsFolder() / "bin" / "Game.dll"; }
+        // What the build of the game's code keeps between runs.
+        std::filesystem::path GetGameBuildFolder() const { return GetSettingsFolder() / "build"; }
         // Where a program keeps the copy of the DLL it runs.
         std::filesystem::path GetGameWorkFolder() const { return GetSettingsFolder() / "run"; }
 

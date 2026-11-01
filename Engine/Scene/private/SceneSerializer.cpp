@@ -533,8 +533,7 @@ namespace VKE::Scene {
         return LoadObjects(scene, prefabs.GetAssets(), &prefabs, root, name);
     }
 
-    bool SceneSerializer::SavePrefab(GameObject& root, const Assets::AssetManager& assets,
-                                     const std::filesystem::path& file) {
+    std::string SceneSerializer::PrefabToText(GameObject& root, const Assets::AssetManager& assets) {
         std::vector<GameObject*> objects;
         CollectPreOrder(root, objects);
 
@@ -547,10 +546,14 @@ namespace VKE::Scene {
         }
         out << YAML::EndSeq;
         out << YAML::EndMap;
+        return ToFileText(out);
+    }
 
-        std::string text = ToFileText(out);
+    bool SceneSerializer::SavePrefab(GameObject& root, const Assets::AssetManager& assets,
+                                     const std::filesystem::path& file) {
+        std::string text = PrefabToText(root, assets);
         if (text.empty() || !WriteFile(text, file)) return false;
-        VKE_CORE_INFO("SceneSerializer: saved {} objects to '{}'", objects.size(), file.string());
+        VKE_CORE_INFO("SceneSerializer: saved the prefab '{}' to '{}'", root.GetName(), file.string());
         return true;
     }
 
@@ -563,6 +566,18 @@ namespace VKE::Scene {
             return false;
         }
         return LoadObjects(scene, assets, nullptr, root, file.string());
+    }
+
+    bool SceneSerializer::LoadPrefabText(Scene& scene, Assets::AssetManager& assets, const std::string& text,
+                                         const std::string& name) {
+        YAML::Node root;
+        try {
+            root = YAML::Load(text);
+        } catch (const YAML::Exception& error) {
+            VKE_CORE_ERROR("SceneSerializer: '{}': {}", name, error.what());
+            return false;
+        }
+        return LoadObjects(scene, assets, nullptr, root, name);
     }
 
     bool SceneSerializer::LoadObjects(Scene& scene, Assets::AssetManager& assets, PrefabLibrary* prefabs,

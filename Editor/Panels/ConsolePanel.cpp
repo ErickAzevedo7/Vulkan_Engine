@@ -1,4 +1,5 @@
 #include "ConsolePanel.h"
+#include "DevTools.h"
 #include "Widgets.h"
 
 #include <ui/Icons.h>
@@ -59,6 +60,22 @@ namespace VKE::Editor {
             });
             return it != text.end();
         }
+
+        // The file and line of "file(line): text" or "file(line,column): text". A path can have
+        // parentheses of its own, so this looks for the ones that end the location.
+        bool ParseSource(const std::string& message, std::string& outFile, u32& outLine) {
+            for (size_t close = message.find("):"); close != std::string::npos; close = message.find("):", close + 1)) {
+                size_t open = message.rfind('(', close);
+                if (open == std::string::npos || open == 0 || open + 1 == close) continue;
+                size_t digits = open + 1;
+                while (digits < close && std::isdigit(static_cast<unsigned char>(message[digits]))) ++digits;
+                if (digits == open + 1 || (digits != close && message[digits] != ',')) continue;
+                outFile = message.substr(0, open);
+                outLine = static_cast<u32>(std::strtoul(message.c_str() + open + 1, nullptr, 10));
+                return true;
+            }
+            return false;
+        }
     } // namespace
 
     const char* ConsolePanel::GetWindowName() {
@@ -80,7 +97,9 @@ namespace VKE::Editor {
                     continue;
                 }
             }
-            m_Rows.push_back({std::move(entry), 1});
+            Row row{std::move(entry), 1};
+            if (row.Entry.Category == kCompilerCategory) ParseSource(row.Entry.Message, row.File, row.Line);
+            m_Rows.push_back(std::move(row));
             if (m_Rows.size() > kMaxRows) {
                 m_Rows.pop_front();
                 if (m_Selected >= 0) --m_Selected;
@@ -91,6 +110,16 @@ namespace VKE::Editor {
 
     const LogEntry* ConsolePanel::GetLast() const {
         return m_Rows.empty() ? nullptr : &m_Rows.back().Entry;
+    }
+
+    void ConsolePanel::RemoveCategory(const std::string& category) {
+        auto removed = std::remove_if(m_Rows.begin(), m_Rows.end(), [&](const Row& row) {
+            if (row.Entry.Category != category) return false;
+            m_Counts[static_cast<size_t>(row.Entry.Level)] -= row.Count;
+            return true;
+        });
+        if (removed != m_Rows.end()) m_Selected = -1;
+        m_Rows.erase(removed, m_Rows.end());
     }
 
     bool ConsolePanel::Passes(const Row& row) const {
@@ -183,6 +212,13 @@ namespace VKE::Editor {
                     if (ImGui::Selectable("##row", selected, ImGuiSelectableFlags_None,
                                           ImVec2(width, Sizes::ConsoleRowHeight))) {
                         m_Selected = static_cast<i64>(index);
+                    }
+                    if (!row.File.empty() && ImGui::IsItemHovered()) {
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                        ImGui::SetTooltip("Double-click to open %s at line %u", row.File.c_str(), row.Line);
+                        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                            OpenInCodeEditor(m_SourceFolder / std::filesystem::u8path(row.File), row.Line);
+                        }
                     }
                     std::string time = FormatTime(entry.Time);
                     if (ImGui::BeginPopupContextItem("##rowmenu")) {

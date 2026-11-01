@@ -2,6 +2,7 @@ add_executable(Editor
     EditorApp.cpp
     EditorSystem.cpp
     EditorScene.cpp
+    DevTools.cpp
     Display.cpp
     Fields.cpp
     LogCapture.cpp
@@ -9,6 +10,7 @@ add_executable(Editor
     ProjectHub.cpp
     ProjectTemplates.cpp
     RecentProjects.cpp
+    ScriptCompiler.cpp
     Widgets.cpp
     Panels/ConsolePanel.cpp
     Panels/HierarchyPanel.cpp

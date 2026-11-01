@@ -50,6 +50,7 @@ namespace VKE::Editor {
           m_Assets(assets),
           m_Renderer(renderer),
           m_UI(ui),
+          m_ScriptCompiler(m_Project, Platform::FileSystem::GetExecutablePath().parent_path() / "SDK"),
           m_Scene(assets),
           m_MaterialEdits(assets),
           m_Hierarchy(m_Scene),
@@ -88,9 +89,13 @@ namespace VKE::Editor {
 
         m_Scene.SetRecoveryFile(m_Project.GetSettingsFolder() / "Recovery.yaml");
         m_OpenRecoveryDialog = m_Scene.HasRecovery();
+
+        m_Console.SetSourceFolder(m_Project.GetScriptsFolder());
+        m_ScriptCompiler.Start();
     }
 
     void EditorSystem::OnShutdown() {
+        m_ScriptCompiler.Stop();
         SaveEditorState();
         m_Game.Destroy();
         m_Viewport.Destroy();
@@ -163,6 +168,7 @@ namespace VKE::Editor {
         DrawRecoveryDialog();
         DrawFaultDialog();
         UpdateTitle();
+        UpdateScripts();
 
         m_Scene.SetInputArea(m_Game.IsFocused(), m_Game.GetViewX(), m_Game.GetViewY());
 
@@ -187,6 +193,56 @@ namespace VKE::Editor {
         } else {
             m_UI.Render();
         }
+    }
+
+    void EditorSystem::UpdateScripts() {
+        if (std::optional<ScriptCompiler::Result> result = m_ScriptCompiler.TakeResult()) {
+            m_Console.RemoveCategory(ConsolePanel::kCompilerCategory);
+            m_ScriptErrors = 0;
+            m_GameLoadFailed = false;
+            for (const ScriptCompiler::Message& message : result->Messages) {
+                if (message.Level == LogLevel::Error) {
+                    ++m_ScriptErrors;
+                    VKE_CORE_ERROR("{}: {}", ConsolePanel::kCompilerCategory, message.Text);
+                } else if (message.Level == LogLevel::Warning) {
+                    VKE_CORE_WARN("{}: {}", ConsolePanel::kCompilerCategory, message.Text);
+                } else {
+                    VKE_CORE_INFO("{}: {}", ConsolePanel::kCompilerCategory, message.Text);
+                }
+            }
+            if (result->LibraryChanged) {
+                m_GameChanged = true;
+                VKE_CORE_INFO("Scripts: built in {:.1f} s", result->Seconds);
+            }
+            if (!result->Succeeded) {
+                VKE_CORE_ERROR("{}: the build failed, and the last one stays in use", ConsolePanel::kCompilerCategory);
+            }
+        }
+
+        if (!m_GameChanged || m_Scene.IsPlaying()) return;
+        m_GameChanged = false;
+        m_GameLoadFailed = !m_Scene.SwitchGame(m_GameModule, m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
+        if (!m_GameLoadFailed) VKE_CORE_INFO("Scripts: reloaded");
+    }
+
+    std::string EditorSystem::GetScriptStatus(u32& outColor) const {
+        ScriptCompiler::State state = m_ScriptCompiler.GetState();
+        outColor = Colors::TextMuted;
+        if (state == ScriptCompiler::State::Building) {
+            outColor = Colors::Accent;
+            return "Compiling scripts\xe2\x80\xa6";
+        }
+        if (m_GameChanged) {
+            outColor = Colors::Warning;
+            return "Scripts reload after Stop";
+        }
+        bool built = state == ScriptCompiler::State::Built;
+        if (state == ScriptCompiler::State::Failed || m_GameLoadFailed || (built && !m_GameModule.IsLoaded())) {
+            outColor = Colors::Danger;
+            if (m_ScriptErrors == 0) return "Scripts not loaded";
+            return std::to_string(m_ScriptErrors) + (m_ScriptErrors == 1 ? " script error" : " script errors");
+        }
+        return built ? "Scripts ready" : "";
     }
 
     void EditorSystem::UpdateFrameStats(f32 deltaTime) {
@@ -515,6 +571,11 @@ namespace VKE::Editor {
         f32 rightWidth = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, frame).x +
                          mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, objects.c_str()).x +
                          mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, mode).x + 2.0f * gap;
+        u32 scriptColor = Colors::TextMuted;
+        std::string scripts = GetScriptStatus(scriptColor);
+        if (!scripts.empty()) {
+            rightWidth += small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, scripts.c_str()).x + gap;
+        }
 
         if (const LogEntry* last = m_Console.GetLast()) {
             const char* icon = last->Level == LogLevel::Error     ? Icons::CircleX
@@ -530,8 +591,12 @@ namespace VKE::Editor {
                           last->Message.c_str(), nullptr, 0.0f, &clip);
         }
 
-        // Frame time, object count and mode on the right.
+        // The scripts, frame time, object count and mode on the right.
         f32 right = min.x + width - Sizes::Space4 - rightWidth;
+        if (!scripts.empty()) {
+            draw->AddText(small, small->FontSize, ImVec2(right, textY), UI::ToImColor(scriptColor), scripts.c_str());
+            right += small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, scripts.c_str()).x + gap;
+        }
         f32 monoY = min.y + std::floor((Sizes::StatusBarHeight - mono->FontSize) * 0.5f);
         for (const char* text : {static_cast<const char*>(frame), objects.c_str(), mode}) {
             draw->AddText(mono, mono->FontSize, ImVec2(right, monoY), UI::ToImColor(Colors::TextMuted), text);
@@ -600,7 +665,7 @@ namespace VKE::Editor {
 
         Widgets::DialogHeader("Restore unsaved changes?");
         ImGui::PushTextWrapPos(0.0f);
-        Widgets::Text("The editor closed during Play, and the scene had changes that weren't saved.",
+        Widgets::Text("The editor closed while running scripts, and the scene had changes that weren't saved.",
                       Colors::TextMuted);
         ImGui::PopTextWrapPos();
         ImGui::Dummy(ImVec2(0.0f, Sizes::Space5));

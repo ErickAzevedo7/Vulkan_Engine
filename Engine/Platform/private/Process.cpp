@@ -16,4 +16,26 @@ namespace VKE::Platform::Process {
         return false;
     }
 
+    Iunique<Child> Child::Start(const Desc& desc) {
+        VKE_CORE_WARN("Process::Child: can't start '{}' on this system", desc.Executable.u8string());
+        return nullptr;
+    }
+
+    Child::~Child() = default;
+
+    bool Child::Read(std::string&) {
+        return false;
+    }
+
+    int Child::GetExitCode() const {
+        return -1;
+    }
+
+    void Child::Stop() {
+    }
+
+    std::string ConsoleTextToUtf8(const std::string& text) {
+        return text;
+    }
+
 } // namespace VKE::Platform::Process

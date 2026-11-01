@@ -42,6 +42,10 @@ namespace VKE::Scene {
         // for `root`. Loading adds them with the IDs they were saved with.
         static bool SavePrefab(GameObject& root, const Assets::AssetManager& assets, const std::filesystem::path& file);
         static bool LoadPrefab(Scene& scene, Assets::AssetManager& assets, const std::filesystem::path& file);
+        // The same in memory. PrefabToText is empty if the objects can't be written.
+        static std::string PrefabToText(GameObject& root, const Assets::AssetManager& assets);
+        static bool LoadPrefabText(Scene& scene, Assets::AssetManager& assets, const std::string& text,
+                                   const std::string& name);
 
     private:
         // Without `prefabs`, instances are left empty, as in a prefab's own file.

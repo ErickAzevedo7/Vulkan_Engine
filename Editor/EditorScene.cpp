@@ -10,6 +10,7 @@
 #include <scene/components/CameraComponent.h>
 #include <scene/components/LightComponent.h>
 #include <scene/components/MeshComponent.h>
+#include <scripting/GameModule.h>
 
 #include <yaml-cpp/yaml.h>
 
@@ -44,6 +45,15 @@ namespace VKE::Editor {
                                        .lexically_relative(std::filesystem::weakly_canonical(folder, ec))
                                        .generic_string();
             return !ec && !relative.empty() && relative != "." && relative.rfind("..", 0) != 0;
+        }
+
+        ObjectID GetObjectID(const Scene::GameObject* object) {
+            return object ? object->GetID() : ObjectID();
+        }
+
+        Handle<Scene::GameObject> FindHandle(Scene::Scene& scene, ObjectID id) {
+            Scene::GameObject* object = id.IsValid() ? scene.FindByID(id) : nullptr;
+            return object ? object->GetHandle() : Handle<Scene::GameObject>();
         }
     } // namespace
 
@@ -126,7 +136,7 @@ namespace VKE::Editor {
         if (m_PlaySnapshot.empty()) return false;
         m_DirtyAtPlay = m_Dirty;
         m_PlayMode = PlayMode::Playing;
-        if (m_Dirty) WriteRecovery(m_PlaySnapshot);
+        if (m_Dirty) WriteRecovery(m_PlaySnapshot, m_ID);
         m_Runner.Start(*m_Scene, MakeGameContext());
         VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
         return true;
@@ -140,10 +150,10 @@ namespace VKE::Editor {
                 }};
     }
 
-    void EditorScene::WriteRecovery(const std::string& text) const {
+    void EditorScene::WriteRecovery(const std::string& text, Assets::AssetID scene) const {
         YAML::Emitter out;
         out << YAML::BeginMap;
-        out << YAML::Key << "Scene" << YAML::Value << YAML::DoubleQuoted << m_ID.ToString();
+        out << YAML::Key << "Scene" << YAML::Value << YAML::DoubleQuoted << scene.ToString();
         out << YAML::Key << "Text" << YAML::Value << YAML::Literal << text;
         out << YAML::EndMap;
         std::ofstream stream(m_RecoveryFile, std::ios::binary | std::ios::trunc);
@@ -189,6 +199,71 @@ namespace VKE::Editor {
         std::string fault;
         fault.swap(m_Fault);
         return fault;
+    }
+
+    bool EditorScene::SwitchGame(Scripting::GameModule& game, const std::filesystem::path& library,
+                                 const std::filesystem::path& workFolder) {
+        bool prefab = IsEditingPrefab();
+        Iunique<Scene::Scene>& sceneObjects = prefab ? m_Waiting.Objects : m_Scene;
+        std::string sceneText = Scene::SceneSerializer::ToText(*sceneObjects, m_Prefabs);
+        std::string prefabText =
+            prefab ? Scene::SceneSerializer::PrefabToText(*m_Scene->GetRootObjects().front(), m_Assets) : std::string();
+        if (sceneText.empty() || (prefab && prefabText.empty())) {
+            VKE_CORE_ERROR("Editor: the scene can't be kept, so the new scripts aren't loaded");
+            return false;
+        }
+
+        // The new game's globals and constructors run from here on, and they can take the editor down.
+        Assets::AssetID sceneID = prefab ? m_Waiting.ID : m_ID;
+        bool sceneDirty = prefab ? m_Waiting.Dirty : m_Dirty;
+        if (sceneDirty) WriteRecovery(sceneText, sceneID);
+        if (!game.Prepare(library, workFolder)) {
+            if (sceneDirty) DiscardRecovery();
+            return false;
+        }
+
+        ObjectID selected = GetObjectID(GetSelected());
+        ObjectID waitingSelected = prefab ? GetObjectID(m_Waiting.Objects->Get(m_Waiting.Selected)) : ObjectID();
+
+        m_Scene.reset();
+        m_Waiting.Objects.reset();
+        m_Prefabs.ForgetAll();
+        game.Switch();
+
+        auto loadedScene = MakeIunique<Scene::Scene>();
+        if (!Scene::SceneSerializer::LoadText(*loadedScene, m_Prefabs, sceneText, "the scene before the reload")) {
+            // Not saved over what's on disk; the copy for recovery stays for the next start.
+            VKE_CORE_ERROR("Editor: the scene can't be made again after the reload, and the editor keeps it empty");
+            m_Scene = std::move(loadedScene);
+            m_ID = {};
+            m_Waiting = {};
+            m_Selected = {};
+            return false;
+        }
+
+        auto loadedPrefab = MakeIunique<Scene::Scene>();
+        bool prefabLoaded =
+            prefab && Scene::SceneSerializer::LoadPrefabText(*loadedPrefab, m_Assets, prefabText, "the open prefab");
+        if (prefab && (!prefabLoaded || loadedPrefab->GetRootObjects().empty())) {
+            VKE_CORE_ERROR("Editor: the open prefab can't be made again after the reload, and it was closed");
+            m_ID = sceneID;
+            m_Dirty = sceneDirty;
+            m_Waiting = {};
+            m_Scene = std::move(loadedScene);
+            m_Selected = FindHandle(*m_Scene, waitingSelected);
+            return false;
+        }
+
+        if (prefab) {
+            m_Waiting.Selected = FindHandle(*loadedScene, waitingSelected);
+            m_Waiting.Objects = std::move(loadedScene);
+            m_Scene = std::move(loadedPrefab);
+        } else {
+            m_Scene = std::move(loadedScene);
+        }
+        m_Selected = FindHandle(*m_Scene, selected);
+        if (sceneDirty) DiscardRecovery();
+        return true;
     }
 
     void EditorScene::SwitchPlayedScene(Assets::AssetID scene) {

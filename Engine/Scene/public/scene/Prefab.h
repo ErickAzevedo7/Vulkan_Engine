@@ -50,6 +50,8 @@ namespace VKE::Scene {
         Component* GetPart(const Component& component);
         // The prefab is read from its file again the next time it is needed.
         void Forget(Assets::AssetID prefab);
+        // The same for every prefab, which also destroys the objects kept of them.
+        void ForgetAll();
 
         // Writes `root` and everything below it to `file`, which becomes a prefab with those
         // objects' IDs as its parts'. `root` stays as it is. Invalid, logged, if an object is

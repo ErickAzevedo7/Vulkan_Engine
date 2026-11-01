@@ -2,6 +2,7 @@
 
 #include "EditorScene.h"
 #include "MaterialEdits.h"
+#include "ScriptCompiler.h"
 #include "Panels/AssetBrowserPanel.h"
 #include "Panels/ConsolePanel.h"
 #include "Panels/GamePanel.h"
@@ -83,6 +84,10 @@ namespace VKE::Editor {
         void StartPlay();
         void StopPlay();
         void DrawStatusBar();
+        // The build of the scripts: what it says goes to the Console, and a new DLL gets loaded.
+        void UpdateScripts();
+        // What the status bar says about the scripts, with its color; empty for nothing.
+        std::string GetScriptStatus(u32& outColor) const;
         void DrawDockSpace();
         void DrawUnsavedDialog();
         void DrawRecoveryDialog();
@@ -99,6 +104,11 @@ namespace VKE::Editor {
         Renderer::Renderer& m_Renderer;
         UI::UISystem& m_UI;
 
+        ScriptCompiler m_ScriptCompiler;
+        // A new DLL waits here for Play to end.
+        bool m_GameChanged = false;
+        bool m_GameLoadFailed = false;
+        u32 m_ScriptErrors = 0;
         // Before the scene, which holds objects of the game's types.
         Scripting::GameModule m_GameModule;
         EditorScene m_Scene;

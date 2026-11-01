@@ -26,6 +26,10 @@ namespace VKE::Scene {
     class Scene;
 } // namespace VKE::Scene
 
+namespace VKE::Scripting {
+    class GameModule;
+} // namespace VKE::Scripting
+
 namespace VKE::Editor {
 
     // The engine's shapes, in Content/Shapes.
@@ -108,6 +112,13 @@ namespace VKE::Editor {
         // What a script that crashed in Play said, once; empty if none did since the last call.
         std::string TakeFault();
 
+        // Replaces the game with the DLL `library`, as GameModule::Prepare takes it. Every object
+        // is destroyed and made again from what it held, including a prefab open now, unsaved
+        // changes and selection. Not in Play. False, logged, if something can't be kept or the
+        // DLL can't be loaded, and then the running game stays if it can.
+        bool SwitchGame(Scripting::GameModule& game, const std::filesystem::path& library,
+                        const std::filesystem::path& workFolder);
+
         // Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
         // per frame, before rendering.
         void Update(f32 deltaTime);
@@ -188,7 +199,7 @@ namespace VKE::Editor {
         bool Reload(Iunique<Scene::Scene>& scene, Handle<Scene::GameObject>& selected, const std::string& text,
                     const std::string& name);
         bool SavePrefab();
-        void WriteRecovery(const std::string& text) const;
+        void WriteRecovery(const std::string& text, Assets::AssetID scene) const;
         Scripting::GameContext MakeGameContext();
         // A script asked for another scene. Stop still goes back to the one Play started from.
         void SwitchPlayedScene(Assets::AssetID scene);
