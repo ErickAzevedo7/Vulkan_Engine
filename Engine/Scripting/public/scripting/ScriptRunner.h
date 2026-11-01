@@ -4,6 +4,7 @@
 #include <core/Types.h>
 
 #include <functional>
+#include <string>
 
 namespace VKE::Platform {
     class IInput;
@@ -26,6 +27,9 @@ namespace VKE::Scripting {
         std::function<void(Assets::AssetID scene)> LoadScene;
         // A script asked to end the game.
         std::function<void()> Quit;
+        // A script crashed, as `message` says, and no script runs anymore. The memory may be
+        // damaged: end the game, without saving anything from it.
+        std::function<void(const std::string& message)> Fault;
     };
 
     // Runs a scene as a game: its scripts' OnStart, OnUpdate and the rest, with the scene's own

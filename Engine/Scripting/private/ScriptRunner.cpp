@@ -18,7 +18,11 @@ namespace VKE::Scripting {
         m_Run->Update(deltaTime);
 
         // Copies: these can end the run, which owns the originals.
-        if (m_Run->IsQuitRequested()) {
+        if (m_Run->HasFault()) {
+            auto fault = m_Run->GetContext().Fault;
+            std::string message = m_Run->GetFault();
+            fault(message);
+        } else if (m_Run->IsQuitRequested()) {
             auto quit = m_Run->GetContext().Quit;
             quit();
         } else if (Assets::AssetID scene = m_Run->GetRequestedScene(); scene.IsValid()) {

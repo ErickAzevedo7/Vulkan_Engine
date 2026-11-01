@@ -104,6 +104,7 @@ namespace Reflect {
                             << "(); },\n             [](void* script) { delete static_cast<::"
                             << definition.QualifiedName << "*>(script); },\n             [](void* script) -> Script* { "
                             << "return static_cast<::" << definition.QualifiedName << "*>(script); },\n             "
+                            << "sizeof(::" << definition.QualifiedName << "), "
                             << "UsesUpdate<::" << definition.QualifiedName << ">(), UsesLateUpdate<::"
                             << definition.QualifiedName << ">()},\n";
                 }

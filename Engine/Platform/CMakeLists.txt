@@ -17,6 +17,7 @@ if(WIN32)
         private/windows/WindowsFileDialog.cpp
         private/windows/WindowsProcess.cpp
         private/windows/WindowsDynamicLibrary.cpp
+        private/windows/WindowsGuardedCall.cpp
     )
     target_link_libraries(VKE_Platform PRIVATE ole32 shell32)
 else()
@@ -24,6 +25,7 @@ else()
         private/FileDialog.cpp
         private/Process.cpp
         private/DynamicLibrary.cpp
+        private/GuardedCall.cpp
     )
 endif()
 

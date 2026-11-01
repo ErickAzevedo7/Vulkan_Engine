@@ -6,6 +6,7 @@
 #include <core/Handle.h>
 #include <core/Types.h>
 
+#include <string>
 #include <vector>
 
 namespace VKE::Scene {
@@ -62,6 +63,11 @@ namespace VKE::Scripting {
         void RequestQuit() { m_QuitRequested = true; }
         bool IsQuitRequested() const { return m_QuitRequested; }
 
+        // A script crashed. No script runs after this. The first report is the one kept.
+        void ReportFault(std::string message);
+        bool HasFault() const { return m_HasFault; }
+        const std::string& GetFault() const { return m_Fault; }
+
     private:
         void StartNewScripts();
         void DeliverContacts();
@@ -89,6 +95,8 @@ namespace VKE::Scripting {
         u32 m_Stopping = 0;
         Assets::AssetID m_RequestedScene;
         bool m_QuitRequested = false;
+        bool m_HasFault = false;
+        std::string m_Fault;
         bool m_InputFocused = true;
         f32 m_ViewX = 0.0f;
         f32 m_ViewY = 0.0f;

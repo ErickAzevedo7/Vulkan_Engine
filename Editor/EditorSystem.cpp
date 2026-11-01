@@ -85,6 +85,9 @@ namespace VKE::Editor {
             if (!opened && scene.IsValid() && m_Assets.GetType(scene) == Assets::AssetType::Scene) opened = OpenScene(scene);
         }
         if (!opened) m_Scene.New();
+
+        m_Scene.SetRecoveryFile(m_Project.GetSettingsFolder() / "Recovery.yaml");
+        m_OpenRecoveryDialog = m_Scene.HasRecovery();
     }
 
     void EditorSystem::OnShutdown() {
@@ -157,12 +160,18 @@ namespace VKE::Editor {
             Request(Action::OpenPrefab, prefab);
         }
         DrawUnsavedDialog();
+        DrawRecoveryDialog();
+        DrawFaultDialog();
         UpdateTitle();
 
         m_Scene.SetInputArea(m_Game.IsFocused(), m_Game.GetViewX(), m_Game.GetViewY());
 
         // Only now: the dialogs can replace the scene.
         m_Scene.Update(ft.GetDeltaF());
+        if (std::string fault = m_Scene.TakeFault(); !fault.empty()) {
+            m_FaultMessage = std::move(fault);
+            m_OpenFaultDialog = true;
+        }
         Scene::Scene& scene = m_Scene.GetScene();
 
         if (m_Renderer.BeginFrame()) {
@@ -568,6 +577,86 @@ namespace VKE::Editor {
             ImGui::DockBuilderFinish(dockspace);
         }
         ImGui::DockSpaceOverViewport(dockspace, viewport);
+    }
+
+    void EditorSystem::DrawRecoveryDialog() {
+        const char* id = "Recovery##Dialog";
+        if (m_OpenRecoveryDialog) {
+            ImGui::OpenPopup(id);
+            m_OpenRecoveryDialog = false;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+                                       viewport->WorkPos.y + viewport->WorkSize.y * 0.35f),
+                                ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
+        Widgets::PushDialogStyle();
+        bool open = ImGui::BeginPopupModal(id, nullptr,
+                                           ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+        Widgets::PopDialogStyle();
+        if (!open) return;
+
+        Widgets::DialogHeader("Restore unsaved changes?");
+        ImGui::PushTextWrapPos(0.0f);
+        Widgets::Text("The editor closed during Play, and the scene had changes that weren't saved.",
+                      Colors::TextMuted);
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space5));
+
+        ImGui::PushFont(GetFont(TextStyle::UIMedium));
+        const ImGuiStyle& style = ImGui::GetStyle();
+        f32 discardWidth = ImGui::CalcTextSize("Discard").x + 2.0f * style.FramePadding.x;
+        f32 restoreWidth = ImGui::CalcTextSize("Restore").x + 2.0f * style.FramePadding.x;
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - discardWidth - restoreWidth - Sizes::Space4);
+        bool discard = ImGui::Button("Discard");
+        ImGui::PopFont();
+        ImGui::SameLine(0.0f, Sizes::Space4);
+        bool restore = Widgets::PrimaryButton("Restore") || ImGui::IsKeyPressed(ImGuiKey_Enter);
+        if (discard || restore) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+
+        if (restore) m_Scene.RestoreRecovery();
+        if (discard) m_Scene.DiscardRecovery();
+    }
+
+    void EditorSystem::DrawFaultDialog() {
+        const char* id = "Script crash##Dialog";
+        if (m_OpenFaultDialog) {
+            ImGui::OpenPopup(id);
+            m_OpenFaultDialog = false;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+                                       viewport->WorkPos.y + viewport->WorkSize.y * 0.35f),
+                                ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f));
+        Widgets::PushDialogStyle();
+        bool open = ImGui::BeginPopupModal(id, nullptr,
+                                           ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+        Widgets::PopDialogStyle();
+        if (!open) return;
+
+        bool close = Widgets::DialogHeader("A script crashed") || ImGui::IsKeyPressed(ImGuiKey_Escape);
+        ImGui::PushTextWrapPos(0.0f);
+        Widgets::Text(m_FaultMessage.c_str(), Colors::Text);
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
+        Widgets::Text("The game was stopped and the scene is as it was at Play. The script may have damaged the "
+                      "editor's memory: save your work and restart the editor.",
+                      Colors::TextMuted);
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0.0f, Sizes::Space5));
+
+        ImGui::PushFont(GetFont(TextStyle::UIMedium));
+        f32 okWidth = ImGui::CalcTextSize("OK").x + 2.0f * ImGui::GetStyle().FramePadding.x;
+        ImGui::PopFont();
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - okWidth);
+        close |= Widgets::PrimaryButton("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter);
+        if (close) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 
     void EditorSystem::DrawUnsavedDialog() {

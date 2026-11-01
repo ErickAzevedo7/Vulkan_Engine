@@ -97,6 +97,17 @@ namespace VKE::Editor {
         void SetInput(const Platform::IInput& input) { m_Input = &input; }
         // Whether they are the game's now, and where its view starts in the window.
         void SetInputArea(bool focused, f32 viewX, f32 viewY) { m_Runner.SetInputArea(focused, viewX, viewY); }
+        // Where the scene is kept during Play if it has unsaved changes, in case the game takes
+        // the editor down. Removed on Stop, so finding it means that happened.
+        void SetRecoveryFile(std::filesystem::path file) { m_RecoveryFile = std::move(file); }
+        bool HasRecovery() const;
+        // Opens the scene kept there, with its changes unsaved. False, logged, if it can't be read.
+        bool RestoreRecovery();
+        void DiscardRecovery();
+
+        // What a script that crashed in Play said, once; empty if none did since the last call.
+        std::string TakeFault();
+
         // Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
         // per frame, before rendering.
         void Update(f32 deltaTime);
@@ -177,6 +188,7 @@ namespace VKE::Editor {
         bool Reload(Iunique<Scene::Scene>& scene, Handle<Scene::GameObject>& selected, const std::string& text,
                     const std::string& name);
         bool SavePrefab();
+        void WriteRecovery(const std::string& text) const;
         Scripting::GameContext MakeGameContext();
         // A script asked for another scene. Stop still goes back to the one Play started from.
         void SwitchPlayedScene(Assets::AssetID scene);
@@ -195,6 +207,8 @@ namespace VKE::Editor {
         WaitingScene m_Waiting;
         Assets::AssetID m_PrefabToOpen;
         const Platform::IInput* m_Input = nullptr;
+        std::filesystem::path m_RecoveryFile;
+        std::string m_Fault;
         // Last: it stops the scripts of a scene that is still there.
         Scripting::ScriptRunner m_Runner;
     };

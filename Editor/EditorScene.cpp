@@ -11,7 +11,10 @@
 #include <scene/components/LightComponent.h>
 #include <scene/components/MeshComponent.h>
 
+#include <yaml-cpp/yaml.h>
+
 #include <cmath>
+#include <fstream>
 
 namespace VKE::Editor {
 
@@ -123,13 +126,69 @@ namespace VKE::Editor {
         if (m_PlaySnapshot.empty()) return false;
         m_DirtyAtPlay = m_Dirty;
         m_PlayMode = PlayMode::Playing;
+        if (m_Dirty) WriteRecovery(m_PlaySnapshot);
         m_Runner.Start(*m_Scene, MakeGameContext());
         VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
         return true;
     }
 
     Scripting::GameContext EditorScene::MakeGameContext() {
-        return {m_Prefabs, *m_Input, [this](Assets::AssetID scene) { SwitchPlayedScene(scene); }, [this] { Stop(); }};
+        return {m_Prefabs, *m_Input, [this](Assets::AssetID scene) { SwitchPlayedScene(scene); }, [this] { Stop(); },
+                [this](const std::string& message) {
+                    m_Fault = message;
+                    Stop();
+                }};
+    }
+
+    void EditorScene::WriteRecovery(const std::string& text) const {
+        YAML::Emitter out;
+        out << YAML::BeginMap;
+        out << YAML::Key << "Scene" << YAML::Value << YAML::DoubleQuoted << m_ID.ToString();
+        out << YAML::Key << "Text" << YAML::Value << YAML::Literal << text;
+        out << YAML::EndMap;
+        std::ofstream stream(m_RecoveryFile, std::ios::binary | std::ios::trunc);
+        stream << out.c_str() << '\n';
+        if (!stream) VKE_CORE_WARN("Editor: couldn't write '{}'", m_RecoveryFile.u8string());
+    }
+
+    bool EditorScene::HasRecovery() const {
+        std::error_code ec;
+        return std::filesystem::exists(m_RecoveryFile, ec);
+    }
+
+    bool EditorScene::RestoreRecovery() {
+        YAML::Node root;
+        try {
+            root = YAML::LoadFile(m_RecoveryFile.string());
+        } catch (const YAML::Exception& error) {
+            VKE_CORE_ERROR("Editor: the recovered scene can't be read: {}", error.what());
+            return false;
+        }
+        std::string text = root["Text"] && root["Text"].IsScalar() ? root["Text"].Scalar() : std::string();
+        auto loaded = MakeIunique<Scene::Scene>();
+        if (!Scene::SceneSerializer::LoadText(*loaded, m_Prefabs, text, "the recovered scene")) return false;
+
+        Assets::AssetID id;
+        if (root["Scene"] && root["Scene"].IsScalar()) id = Assets::AssetID::Parse(root["Scene"].Scalar());
+        m_Scene = std::move(loaded);
+        m_ID = m_Assets.GetType(id) == Assets::AssetType::Scene ? id : Assets::AssetID();
+        ++m_OpenCount;
+        m_Dirty = true;
+        m_Selected = {};
+        DiscardRecovery();
+        VKE_CORE_INFO("Editor: restored the unsaved changes of {}", GetFileName());
+        return true;
+    }
+
+    void EditorScene::DiscardRecovery() {
+        std::error_code ec;
+        std::filesystem::remove(m_RecoveryFile, ec);
+    }
+
+    std::string EditorScene::TakeFault() {
+        std::string fault;
+        fault.swap(m_Fault);
+        return fault;
     }
 
     void EditorScene::SwitchPlayedScene(Assets::AssetID scene) {
@@ -153,6 +212,7 @@ namespace VKE::Editor {
     void EditorScene::Stop() {
         if (!IsPlaying()) return;
         m_Runner.Stop();
+        DiscardRecovery();
         if (!Reload(m_Scene, m_Selected, m_PlaySnapshot, "the scene kept at Play")) {
             VKE_CORE_ERROR("Editor: the scene kept at Play can't be restored; what is open stays");
             return;

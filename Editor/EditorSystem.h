@@ -85,6 +85,8 @@ namespace VKE::Editor {
         void DrawStatusBar();
         void DrawDockSpace();
         void DrawUnsavedDialog();
+        void DrawRecoveryDialog();
+        void DrawFaultDialog();
         void UpdateTitle();
         void UpdateFrameStats(f32 deltaTime);
 
@@ -122,6 +124,10 @@ namespace VKE::Editor {
         Action m_PendingAction = Action::None;
         Assets::AssetID m_PendingAsset;
         bool m_OpenUnsavedDialog = false;
+        bool m_OpenRecoveryDialog = false;
+        // What crashed in Play, while the dialog about it shows.
+        std::string m_FaultMessage;
+        bool m_OpenFaultDialog = false;
         // What goes on once the open prefab is closed.
         Action m_AfterPrefab = Action::None;
         Assets::AssetID m_AfterPrefabAsset;

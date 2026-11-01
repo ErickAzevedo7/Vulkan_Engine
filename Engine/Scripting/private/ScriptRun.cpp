@@ -48,7 +48,9 @@ namespace VKE::Scripting {
     }
 
     ScriptRun::~ScriptRun() {
+        // After a fault the scripts' state can't be trusted.
         for (ScriptComponent* script : m_Scripts) {
+            if (m_HasFault) break;
             if (script) StopScript(*script, true);
         }
         s_Current = nullptr;
@@ -59,7 +61,7 @@ namespace VKE::Scripting {
         // By index, and only up to the scripts there are now: a script added meanwhile starts
         // next frame, and adding can move the list.
         size_t count = m_Scripts.size();
-        for (size_t i = 0; i < count; ++i) {
+        for (size_t i = 0; i < count && !m_HasFault; ++i) {
             ScriptComponent* script = m_Scripts[i];
             if (script && script->IsStarted() && script->GetOwner().IsActiveInHierarchy()) call(*script);
         }
@@ -78,9 +80,11 @@ namespace VKE::Scripting {
 
         StartNewScripts();
         ForEachRunning([&](ScriptComponent& script) { script.CallUpdate(deltaTime); });
+        if (m_HasFault) return;
         m_Scene.Update();
         DeliverContacts();
         ForEachRunning([&](ScriptComponent& script) { script.CallLateUpdate(deltaTime); });
+        if (m_HasFault) return;
         DestroyQueued();
         CompactScripts();
         // Sends what the scripts changed after the physics step.
@@ -102,9 +106,15 @@ namespace VKE::Scripting {
         m_ToDestroy.push_back(object);
     }
 
+    void ScriptRun::ReportFault(std::string message) {
+        if (m_HasFault) return;
+        m_HasFault = true;
+        m_Fault = std::move(message);
+    }
+
     void ScriptRun::StartNewScripts() {
         size_t count = m_Scripts.size();
-        for (size_t i = 0; i < count; ++i) {
+        for (size_t i = 0; i < count && !m_HasFault; ++i) {
             ScriptComponent* script = m_Scripts[i];
             if (script && !script->IsStarted() && script->GetOwner().IsActiveInHierarchy()) script->CallStart();
         }
@@ -112,6 +122,7 @@ namespace VKE::Scripting {
 
     void ScriptRun::DeliverContacts() {
         for (const Scene::Contact& contact : m_Scene.GetContacts()) {
+            if (m_HasFault) return;
             DeliverContact(contact, contact.A, contact.B, false);
             DeliverContact(contact, contact.B, contact.A, true);
         }
@@ -131,7 +142,7 @@ namespace VKE::Scripting {
         vke::detail::ContactPhase phase = ToPhase(contact.Phase);
         vke::Object otherObject = ToObject(other);
         for (ScriptComponent* script : m_ContactScripts) {
-            if (!script->IsStarted()) continue;
+            if (!script->IsStarted() || m_HasFault) continue;
             if (contact.IsTrigger) {
                 script->CallTrigger(phase, otherObject);
             } else {

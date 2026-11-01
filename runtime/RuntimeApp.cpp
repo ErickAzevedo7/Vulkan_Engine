@@ -56,7 +56,7 @@ namespace {
             m_Runner.Stop();
             m_Scene = std::move(loaded);
             m_Runner.Start(*m_Scene, {m_Prefabs, m_Input, [this](VKE::Assets::AssetID next) { LoadScene(next); },
-                                      [] { VKE::RequestExit(); }});
+                                      [] { VKE::RequestExit(); }, [](const std::string&) { VKE::RequestExit(); }});
             return true;
         }
 

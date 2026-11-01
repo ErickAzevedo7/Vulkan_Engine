@@ -77,6 +77,7 @@ namespace vke::detail {
         void* (*Create)();
         void (*Destroy)(void* script);
         Script* (*ToScript)(void* script);
+        unsigned Size;
         // Whether the type overrides these. The ones that don't aren't called every frame.
         bool UsesUpdate;
         bool UsesLateUpdate;

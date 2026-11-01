@@ -19,6 +19,9 @@ namespace VKE::Scripting {
         void* (*Create)() = nullptr;
         void (*Destroy)(void* script) = nullptr;
         vke::Script* (*ToScript)(void* script) = nullptr;
+        size_t Size = 0;
+        // The registry's default-constructed instance, which an instance that failed copies.
+        void* DefaultInstance = nullptr;
         const vke::detail::ScriptCalls* Calls = nullptr;
         bool UsesUpdate = false;
         bool UsesLateUpdate = false;

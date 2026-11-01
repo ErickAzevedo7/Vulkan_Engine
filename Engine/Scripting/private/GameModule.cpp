@@ -7,6 +7,7 @@
 #include <core/ObjectID.h>
 #include <math/MathTypes.h>
 #include <platform/DynamicLibrary.h>
+#include <platform/GuardedCall.h>
 
 #include <vke/Object.h>
 #include <vke/detail/ApiBindings.h>
@@ -141,18 +142,42 @@ namespace VKE::Scripting {
             return false;
         }
 
-        Iunique<Platform::DynamicLibrary> loaded = Platform::DynamicLibrary::Load(copy);
-        auto load = loaded ? reinterpret_cast<LoadFunction>(loaded->GetSymbol(kLoadFunction)) : nullptr;
+        // Loading runs the constructors of the game's globals.
+        Iunique<Platform::DynamicLibrary> loaded;
+        const vke::detail::GameInfo* game = nullptr;
+        LoadFunction load = nullptr;
+        std::string fault;
+        struct LoadCall {
+            const std::filesystem::path& Copy;
+            Iunique<Platform::DynamicLibrary>& Loaded;
+            LoadFunction& Load;
+            const vke::detail::GameInfo*& Game;
+        } call{copy, loaded, load, game};
+        bool survived = Platform::GuardedCall(
+            [](void* data) {
+                LoadCall& call = *static_cast<LoadCall*>(data);
+                call.Loaded = Platform::DynamicLibrary::Load(call.Copy);
+                if (call.Loaded) call.Load = reinterpret_cast<LoadFunction>(call.Loaded->GetSymbol(kLoadFunction));
+                // Lives as long as the process: a game can keep calling through it until unloaded.
+                static const vke::detail::ApiTable s_Api = vke::detail::MakeApiTable();
+                if (call.Load) call.Game = call.Load(&s_Api);
+            },
+            &call, fault);
+        if (!survived) {
+            VKE_CORE_ERROR("Scripts: '{}' crashed while loading: {}", library.u8string(), fault);
+            loaded.release();
+            return false;
+        }
         if (!load) {
-            VKE_CORE_ERROR("Scripts: '{}' isn't a game built with the SDK", library.u8string());
+            // Windows refuses a library whose globals crash, which ends up here too.
+            VKE_CORE_ERROR(loaded ? "Scripts: '{}' isn't a game built with the SDK"
+                                  : "Scripts: '{}' can't be loaded; a global variable's constructor may have crashed",
+                           library.u8string());
             loaded.reset();
             std::filesystem::remove(copy, ec);
             return false;
         }
 
-        // Lives as long as the process: a game can keep calling through it until it is unloaded.
-        static const vke::detail::ApiTable s_Api = vke::detail::MakeApiTable();
-        const vke::detail::GameInfo* game = load(&s_Api);
         if (game->ApiVersion != vke::detail::kApiVersion) {
             VKE_CORE_ERROR("Scripts: '{}' was built with another version of the SDK; build it again",
                            library.u8string());
@@ -170,6 +195,7 @@ namespace VKE::Scripting {
             type->Create = info.Create;
             type->Destroy = info.Destroy;
             type->ToScript = info.ToScript;
+            type->Size = info.Size;
             type->Calls = game->Calls;
             type->UsesUpdate = info.UsesUpdate;
             type->UsesLateUpdate = info.UsesLateUpdate;
@@ -185,7 +211,14 @@ namespace VKE::Scripting {
             entry.ToObject = [](Scene::Component* component) {
                 return static_cast<ScriptComponent*>(component)->GetInstance();
             };
-            entry.Defaults.reset(new ScriptComponent(*type));
+            auto defaults = MakeIunique<ScriptComponent>(*type);
+            if (defaults->IsBroken()) {
+                VKE_CORE_ERROR("Scripts: script '{}' can't be used, and objects keep its values until it can",
+                               type->Name);
+                continue;
+            }
+            type->DefaultInstance = defaults->GetInstance();
+            entry.Defaults = std::move(defaults);
 
             type->ID = Scene::ComponentRegistry::RegisterExternal(std::move(entry));
             if (type->ID == Scene::kInvalidComponentType) {
