@@ -11,7 +11,7 @@ target_link_libraries(Sandbox PRIVATE
 # TODO(Phase 6): promote to the root CMakeLists.txt once Editor/Runtime exist.
 target_compile_definitions(Sandbox PRIVATE VKE_PLATFORM_WINDOWS)
 
-# Started with --project <folder>; the test assets are in Vulkan_Engine/projects, which has a
+# Started with --project <folder>; the test assets are outside the repo, in a folder that has a
 # Sandbox.vkproject. VS Code passes it from .vscode/launch.json.
 set_target_properties(Sandbox PROPERTIES FOLDER "Apps")
 

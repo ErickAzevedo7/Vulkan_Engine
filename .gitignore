@@ -365,13 +365,7 @@ FodyWeavers.xsd
 
 .vscode/
 vcpckg_instaled/
-Vulkan_Engine/vcpkg_installed
-Vulkan_Engine/assets
-GameScripts/registerScripts.cpp
 .clangd
 compile_commands.json
-editor_config.json
-*.iscene
-projects
 *.mat
 build/

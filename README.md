@@ -60,17 +60,17 @@ No manual package list is needed.
 ## 4. Build and Run (Visual Studio)
 
 1. Open `Vulkan_Engine` in **Visual Studio**:
-   - `File` → `Open` → `Project/Solution...`
-   - Select `Vulkan_Engine.sln` (if present), or open the folder if using CMake.
+   - `File` → `Open` → `Folder...`
+   - Visual Studio configures the project from `CMakeLists.txt`. It needs `VCPKG_ROOT` set.
 
 2. Select configuration:
    - `x64-Debug` or `x64-Release`.
 
 3. Build:
-   - `Build` → `Build Solution`.
+   - `Build` → `Build All`.
 
 4. Run:
-   - Set the main executable as the startup project.
+   - Select `Editor.exe` as the startup item.
    - Press `F5` to run with debugger or `Ctrl+F5` to run without.
 
 ---
