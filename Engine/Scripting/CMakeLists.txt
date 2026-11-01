@@ -2,7 +2,11 @@ add_library(VKE_Scripting STATIC)
 
 target_sources(VKE_Scripting PRIVATE
     private/GameModule.cpp
+    private/ScriptComponent.cpp
+    private/ScriptRun.cpp
+    private/ScriptRunner.cpp
     private/api/LogApi.cpp
+    private/api/ObjectApi.cpp
 )
 
 target_include_directories(VKE_Scripting

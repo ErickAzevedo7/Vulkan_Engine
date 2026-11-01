@@ -123,6 +123,7 @@ namespace VKE::Editor {
         if (m_PlaySnapshot.empty()) return false;
         m_DirtyAtPlay = m_Dirty;
         m_PlayMode = PlayMode::Playing;
+        m_Runner.Start(*m_Scene);
         VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
         return true;
     }
@@ -134,6 +135,7 @@ namespace VKE::Editor {
 
     void EditorScene::Stop() {
         if (!IsPlaying()) return;
+        m_Runner.Stop();
         if (!Reload(m_Scene, m_Selected, m_PlaySnapshot, "the scene kept at Play")) {
             VKE_CORE_ERROR("Editor: the scene kept at Play can't be restored; what is open stays");
             return;
@@ -157,9 +159,9 @@ namespace VKE::Editor {
         return true;
     }
 
-    void EditorScene::Update() {
+    void EditorScene::Update(f32 deltaTime) {
         if (m_PlayMode == PlayMode::Playing) {
-            m_Scene->Update();
+            m_Runner.Update(deltaTime);
         } else {
             m_Scene->Sync();
         }

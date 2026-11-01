@@ -13,6 +13,7 @@
 #include <scene/Scene.h>
 #include <scene/SceneSerializer.h>
 #include <scripting/GameModule.h>
+#include <scripting/ScriptRunner.h>
 
 namespace {
 
@@ -35,11 +36,13 @@ namespace {
             VKE::Scene::PrefabLibrary prefabs(m_Assets);
             if (!VKE::Scene::SceneSerializer::Load(m_Scene, prefabs, m_Assets.GetFile(m_StartScene))) {
                 VKE::RequestExit();
+                return;
             }
+            m_Runner.Start(m_Scene);
         }
 
-        void OnUpdate(VKE::FrameTime) override {
-            m_Scene.Update();
+        void OnUpdate(VKE::FrameTime ft) override {
+            m_Runner.Update(ft.GetDeltaF());
             m_Renderer.Render(m_Scene.GetRenderScene(), m_Scene.GetView());
         }
 
@@ -54,6 +57,7 @@ namespace {
         // Before the scene, which holds objects of the game's types.
         VKE::Scripting::GameModule m_Game;
         VKE::Scene::Scene m_Scene;
+        VKE::Scripting::ScriptRunner m_Runner;
     };
 
 } // namespace

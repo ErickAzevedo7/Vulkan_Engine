@@ -163,6 +163,10 @@ namespace VKE::Scripting {
             type->Name = info.Name;
             type->Create = info.Create;
             type->Destroy = info.Destroy;
+            type->ToScript = info.ToScript;
+            type->Calls = game->Calls;
+            type->UsesUpdate = info.UsesUpdate;
+            type->UsesLateUpdate = info.UsesLateUpdate;
             type->Properties = TableConverter(*type).ConvertStruct(*info.Properties);
 
             Scene::ComponentTypeInfo entry;

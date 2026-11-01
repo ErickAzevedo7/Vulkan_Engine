@@ -453,9 +453,15 @@ namespace Reflect {
                 ++m_Pos;
                 ApiFunctionDef function;
                 function.Location = {m_File, mark.Line};
-                for (const Scope& scope : m_Scopes) {
-                    if (scope.Kind != ScopeKind::Namespace) Fail(mark, "VKE_API goes on a function in a namespace");
-                    function.Namespace += (function.Namespace.empty() ? "" : "::") + scope.Name;
+                for (size_t i = 0; i < m_Scopes.size(); ++i) {
+                    const Scope& scope = m_Scopes[i];
+                    if (scope.Kind == ScopeKind::Class && i + 1 == m_Scopes.size()) {
+                        function.Class = scope.Name;
+                    } else if (scope.Kind == ScopeKind::Namespace) {
+                        function.Namespace += (function.Namespace.empty() ? "" : "::") + scope.Name;
+                    } else {
+                        Fail(mark, "VKE_API goes on a function in a namespace, or in a class right inside one");
+                    }
                 }
                 if (function.Namespace != "vke" && function.Namespace.rfind("vke::", 0) != 0) {
                     Fail(mark, "VKE_API goes on a function in namespace vke");
@@ -466,7 +472,11 @@ namespace Reflect {
                     if (Peek().Kind == TokenKind::End || IsSymbol(";")) {
                         Fail(mark, "VKE_API must be followed by a function");
                     }
-                    head.push_back(Peek().Text);
+                    if (IsIdentifier("static")) {
+                        function.IsStatic = true;
+                    } else {
+                        head.push_back(Peek().Text);
+                    }
                     ++m_Pos;
                 }
                 if (head.size() < 2) Fail(mark, "VKE_API must be followed by a return type and a name");
@@ -502,6 +512,10 @@ namespace Reflect {
                 }
                 finish();
                 ++m_Pos;
+                if (IsIdentifier("const")) {
+                    function.IsConst = true;
+                    ++m_Pos;
+                }
                 if (!IsSymbol(";")) Fail(mark, "VKE_API goes on a declaration; the generator writes the body");
                 m_Model.Functions.push_back(std::move(function));
             }

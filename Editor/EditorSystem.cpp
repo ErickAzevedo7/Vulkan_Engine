@@ -159,7 +159,7 @@ namespace VKE::Editor {
         UpdateTitle();
 
         // Only now: the dialogs can replace the scene.
-        m_Scene.Update();
+        m_Scene.Update(ft.GetDeltaF());
         Scene::Scene& scene = m_Scene.GetScene();
 
         if (m_Renderer.BeginFrame()) {

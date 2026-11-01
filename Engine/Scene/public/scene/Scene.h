@@ -64,7 +64,8 @@ namespace VKE::Scene {
         // scene. Call it once per frame, before rendering.
         void Update();
         // Only sends the changes on, with no physics step: nothing moves by itself. For a scene
-        // being edited or paused. Call it instead of Update.
+        // being edited or paused, instead of Update, or for what changed after Update in a frame.
+        // Forgets the last update's contacts.
         void Sync();
 
         // What touched what during the last Update, each pair once.

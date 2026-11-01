@@ -3,6 +3,8 @@
 #include <scene/ComponentRegistry.h>
 #include <scene/Properties.h>
 
+#include <vke/detail/GameInfo.h>
+
 #include <deque>
 #include <string>
 #include <vector>
@@ -16,6 +18,10 @@ namespace VKE::Scripting {
         Scene::ComponentTypeID ID = Scene::kInvalidComponentType;
         void* (*Create)() = nullptr;
         void (*Destroy)(void* script) = nullptr;
+        vke::Script* (*ToScript)(void* script) = nullptr;
+        const vke::detail::ScriptCalls* Calls = nullptr;
+        bool UsesUpdate = false;
+        bool UsesLateUpdate = false;
         Scene::StructInfo Properties = {nullptr, nullptr, 0};
 
         // What Properties points at.

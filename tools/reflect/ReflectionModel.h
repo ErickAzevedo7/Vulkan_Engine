@@ -58,6 +58,11 @@ namespace Reflect {
     struct ApiFunctionDef {
         // The namespaces around it, from the global one: "vke::Log".
         std::string Namespace;
+        // The class it is a member of, if any. Without IsStatic, the object goes first in the
+        // table, by value.
+        std::string Class;
+        bool IsStatic = false;
+        bool IsConst = false;
         std::string Name;
         std::string ReturnType;
         std::vector<ParameterDef> Parameters;

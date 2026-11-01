@@ -102,13 +102,16 @@ namespace Reflect {
                     entries << "            {\"" << definition.Name << "\", &k" << definition.Name
                             << ",\n             []() -> void* { return new ::" << definition.QualifiedName
                             << "(); },\n             [](void* script) { delete static_cast<::"
-                            << definition.QualifiedName << "*>(script); }},\n";
+                            << definition.QualifiedName << "*>(script); },\n             [](void* script) -> Script* { "
+                            << "return static_cast<::" << definition.QualifiedName << "*>(script); },\n             "
+                            << "UsesUpdate<::" << definition.QualifiedName << ">(), UsesLateUpdate<::"
+                            << definition.QualifiedName << ">()},\n";
                 }
                 if (scripts > 0) {
                     m_Out << "        static const ScriptTypeInfo kScripts[] = {\n" << entries.str() << "        };\n";
                 }
                 m_Out << "        static const GameInfo kGame = {kApiVersion, "
-                      << (scripts > 0 ? "kScripts" : "nullptr") << ", " << scripts << "};\n";
+                      << (scripts > 0 ? "kScripts" : "nullptr") << ", " << scripts << ", &GetCalls()};\n";
                 m_Out << "        return kGame;\n    }\n\n} // namespace vke::detail\n\n";
                 m_Out << "#include <vke/detail/ApiCalls.inl>\n\n";
                 m_Out << "extern \"C\" __declspec(dllexport) const vke::detail::GameInfo* VkeLoadGame(\n"
@@ -262,14 +265,20 @@ namespace Reflect {
             std::vector<const StructDef*> m_StructOrder;
         };
 
-        // "Log_Info" for vke::Log::Info: the function's name in the engine's table.
+        // "Log_Info" for vke::Log::Info and "Object_IsValid" for vke::Object::IsValid: the
+        // function's name in the engine's table.
         std::string GetEntryName(const ApiFunctionDef& function) {
             std::string path = function.Namespace == "vke" ? "" : function.Namespace.substr(5) + "::";
+            if (!function.Class.empty()) path += function.Class + "::";
             return ReplaceAll(path, "::", "_") + function.Name;
         }
 
-        std::string GetParameters(const ApiFunctionDef& function) {
-            std::string text;
+        bool TakesObject(const ApiFunctionDef& function) {
+            return !function.Class.empty() && !function.IsStatic;
+        }
+
+        std::string GetParameters(const ApiFunctionDef& function, bool withObject) {
+            std::string text = withObject && TakesObject(function) ? function.Class + " self" : "";
             for (const ParameterDef& parameter : function.Parameters) {
                 text += (text.empty() ? "" : ", ") + parameter.Type + " " + parameter.Name;
             }
@@ -277,7 +286,7 @@ namespace Reflect {
         }
 
         std::string GetArguments(const ApiFunctionDef& function) {
-            std::string text;
+            std::string text = TakesObject(function) ? "*this" : "";
             for (const ParameterDef& parameter : function.Parameters) {
                 text += (text.empty() ? "" : ", ") + parameter.Name;
             }
@@ -296,7 +305,7 @@ namespace Reflect {
             out << "    // What the engine gives a game when it loads it.\n    struct ApiTable {\n";
             for (const ApiFunctionDef& function : model.Functions) {
                 out << "        " << function.ReturnType << " (*" << GetEntryName(function) << ")("
-                    << GetParameters(function) << ");\n";
+                    << GetParameters(function, true) << ");\n";
             }
             out << "    };\n\n    extern const ApiTable* g_Api;\n\n} // namespace vke::detail\n";
             return out.str();
@@ -308,8 +317,9 @@ namespace Reflect {
             out << "const vke::detail::ApiTable* vke::detail::g_Api = nullptr;\n\n";
             for (const ApiFunctionDef& function : model.Functions) {
                 out << "namespace " << function.Namespace << " {\n";
-                out << "    " << function.ReturnType << " " << function.Name << "(" << GetParameters(function)
-                    << ") {\n";
+                std::string scope = function.Class.empty() ? "" : function.Class + "::";
+                out << "    " << function.ReturnType << " " << scope << function.Name << "("
+                    << GetParameters(function, false) << ")" << (function.IsConst ? " const" : "") << " {\n";
                 out << "        " << (function.ReturnType == "void" ? "" : "return ") << "::vke::detail::g_Api->"
                     << GetEntryName(function) << "(" << GetArguments(function) << ");\n";
                 out << "    }\n}\n\n";
@@ -324,8 +334,8 @@ namespace Reflect {
             out << "// What the engine writes by hand, in Engine/Scripting/private/api, one per function of the SDK.\n";
             out << "namespace vke::api {\n";
             for (const ApiFunctionDef& function : model.Functions) {
-                out << "    " << function.ReturnType << " " << GetEntryName(function) << "(" << GetParameters(function)
-                    << ");\n";
+                out << "    " << function.ReturnType << " " << GetEntryName(function) << "("
+                    << GetParameters(function, true) << ");\n";
             }
             out << "} // namespace vke::api\n\nnamespace vke::detail {\n\n";
             out << "    inline ApiTable MakeApiTable() {\n        ApiTable table{};\n";

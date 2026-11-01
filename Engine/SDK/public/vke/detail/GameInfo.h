@@ -6,6 +6,13 @@
 // written by the tool that reads the marks. Plain types only, so the two sides don't have to be
 // built by the same compiler or in the same configuration.
 
+namespace vke {
+    struct Collision;
+    class Object;
+    class Script;
+    enum class StopReason;
+} // namespace vke
+
 namespace vke::detail {
 
     enum class PropertyType : unsigned char {
@@ -66,6 +73,27 @@ namespace vke::detail {
         const StructInfo* Properties;
         void* (*Create)();
         void (*Destroy)(void* script);
+        Script* (*ToScript)(void* script);
+        // Whether the type overrides these. The ones that don't aren't called every frame.
+        bool UsesUpdate;
+        bool UsesLateUpdate;
+    };
+
+    enum class ContactPhase : unsigned char {
+        Start,
+        Stay,
+        End,
+    };
+
+    // How the engine calls a script of any type.
+    struct ScriptCalls {
+        void (*SetOwner)(Script* script, Object owner);
+        void (*Start)(Script* script);
+        void (*Update)(Script* script, float deltaTime);
+        void (*LateUpdate)(Script* script, float deltaTime);
+        void (*Stop)(Script* script, StopReason reason);
+        void (*Collision)(Script* script, ContactPhase phase, const vke::Collision& collision);
+        void (*Trigger)(Script* script, ContactPhase phase, Object other);
     };
 
     struct GameInfo {
@@ -73,11 +101,17 @@ namespace vke::detail {
         unsigned ApiVersion;
         const ScriptTypeInfo* Scripts;
         unsigned ScriptCount;
+        const ScriptCalls* Calls;
     };
 
-    // Written by the tool, which is why every script befriends it.
+    // Reaches what scripts keep private. Partly written by the tool that reads the marks.
     struct ScriptTables {
         static const GameInfo& GetGame();
+        static const ScriptCalls& GetCalls();
+        template<typename T>
+        static constexpr bool UsesUpdate();
+        template<typename T>
+        static constexpr bool UsesLateUpdate();
     };
 
 } // namespace vke::detail

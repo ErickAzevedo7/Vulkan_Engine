@@ -8,6 +8,7 @@ set(headers
     public/vke/Object.h
     public/vke/Script.h
     public/vke/detail/GameInfo.h
+    public/vke/detail/ScriptCalls.h
 )
 
 set(generated "${CMAKE_CURRENT_BINARY_DIR}/generated")

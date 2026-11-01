@@ -7,6 +7,7 @@
 #include <math/MathTypes.h>
 #include <renderer/RenderTypes.h>
 #include <scene/Prefab.h>
+#include <scripting/ScriptRunner.h>
 
 #include <filesystem>
 #include <functional>
@@ -42,8 +43,8 @@ namespace VKE::Editor {
     // The scene open in the editor: its objects, the scene asset it was opened from and is
     // saved to, whether it changed since, and what is selected: an object or an asset.
     //
-    // Play keeps the scene as text in memory and runs it; Stop puts that text back, so everything
-    // that happened in between is lost.
+    // Play keeps the scene as text in memory and runs it with its scripts; Stop puts that text
+    // back, so everything that happened in between is lost.
     //
     // A prefab can be opened in place of the scene, which waits in memory: the objects are then
     // the prefab's, and Save writes the prefab and remakes the scene's instances from it.
@@ -88,8 +89,9 @@ namespace VKE::Editor {
         void TogglePause();
         // Back to the scene as it was at Play, with the same object selected if it was there.
         void Stop();
-        // Runs the frame's update for the mode. Call it once per frame, before rendering.
-        void Update();
+        // Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
+        // per frame, before rendering.
+        void Update(f32 deltaTime);
 
         // Changes when another scene is opened, but not when Stop restores this one.
         u32 GetOpenCount() const { return m_OpenCount; }
@@ -181,6 +183,8 @@ namespace VKE::Editor {
         Assets::AssetID m_SelectedAsset;
         WaitingScene m_Waiting;
         Assets::AssetID m_PrefabToOpen;
+        // Last: it stops the scripts of a scene that is still there.
+        Scripting::ScriptRunner m_Runner;
     };
 
 } // namespace VKE::Editor
