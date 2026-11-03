@@ -24,7 +24,6 @@ add_subdirectory(tools/reflect)
 # Engine library (all modules)
 add_subdirectory(engine)
 
-# Executables — will be uncommented as phases are completed
+# Executables
 add_subdirectory(Editor)
 add_subdirectory(runtime)
-add_subdirectory(sandbox)

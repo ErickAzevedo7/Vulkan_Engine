@@ -61,7 +61,6 @@ VKE runs on Windows only for now. It doesn't play skeletal animation yet, has no
 | `Engine/SDK/` | The API that game scripts can see |
 | `Editor/` | The editor application |
 | `runtime/` | The standalone player |
-| `sandbox/` | A small app for testing engine features |
 | `tools/` | Build tools, including the reflection generator |
 
 ## Building

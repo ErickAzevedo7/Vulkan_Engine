@@ -177,7 +177,7 @@ namespace VKE::RHI {
 
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "Vulkan Engine — Sandbox";
+        appInfo.pApplicationName = "VKE";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "Vulkan Engine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);

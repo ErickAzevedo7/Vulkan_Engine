@@ -8,9 +8,8 @@ namespace VKE::RHI {
 
     VulkanShader::VulkanShader(VulkanDevice& device, const std::string& spirvPath, ShaderStageKind stage)
         : m_Device(device), m_Stage(stage) {
-        // Pre-compiled SPIR-V only — no runtime GLSL compilation, same as the
-        // legacy engine's VulkanCore::createShaderModule. See
-        // sandbox/CMakeLists.txt for the glslc build step that produces these.
+        // Pre-compiled SPIR-V only, with no GLSL compilation at runtime. The build
+        // compiles the shaders; see vke_add_shaders in cmake/VkeShaders.cmake.
         std::vector<Byte> code = Platform::FileSystem::ReadFileBytes(spirvPath);
         VKE_CORE_ASSERT(!code.empty(), "Failed to read shader file");
 

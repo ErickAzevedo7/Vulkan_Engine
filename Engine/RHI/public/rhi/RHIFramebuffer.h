@@ -9,9 +9,9 @@ namespace VKE::RHI {
     class RHIRenderPass;
 
     // A set of attachment image views bound to a specific RHIRenderPass.
-    // The sandbox creates one RHIFramebuffer per swapchain image (each
-    // wrapping that image's native view from RHISwapchain::GetImageView);
-    // an offscreen render target uses the same interface against a
+    // A window uses one RHIFramebuffer per swapchain image (each wrapping
+    // that image's native view from RHISwapchain::GetImageView); an
+    // offscreen render target uses the same interface against a
     // render-pass-compatible RHIRenderPass.
     class RHIFramebuffer {
     public:
