@@ -8,33 +8,32 @@
 
 namespace VKE::Physics {
 
-    // A box in world space: center, unit axes and half the size along each axis.
-    struct OrientedBox {
-        Vec3 Center{0.0f};
-        Vec3 Axes[3] = {Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f)};
-        Vec3 HalfExtents{0.5f};
-    };
+// A box in world space: center, unit axes and half the size along each axis.
+struct OrientedBox {
+	Vec3 Center{ 0.0f };
+	Vec3 Axes[3] = { Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f) };
+	Vec3 HalfExtents{ 0.5f };
+};
 
-    // How far two shapes overlap along the axis where they overlap least, found by the
-    // separating axis test.
-    struct Penetration {
-        // Moves the first shape out of the second.
-        Vec3 Normal{0.0f};
-        // Positive when the shapes overlap; down to -margin when they only come that close.
-        f32 Depth = 0.0f;
-    };
+// How far two shapes overlap along the axis where they overlap least, found by the
+// separating axis test.
+struct Penetration {
+	// Moves the first shape out of the second.
+	Vec3 Normal{ 0.0f };
+	// Positive when the shapes overlap; down to -margin when they only come that close.
+	f32 Depth = 0.0f;
+};
 
-    AABB GetBounds(const OrientedBox& box);
+AABB GetBounds(const OrientedBox &box);
 
-    // Whether `point`, moved along the triangle's normal onto its plane, lands inside it.
-    bool IsOverTriangle(const Vec3& point, const Triangle& triangle);
+// Whether `point`, moved along the triangle's normal onto its plane, lands inside it.
+bool IsOverTriangle(const Vec3 &point, const Triangle &triangle);
 
-    // Each returns false when the shapes are farther apart than `margin`.
-    bool TestBoxBox(const OrientedBox& a, const OrientedBox& b, f32 margin, Penetration& out);
-    // With `alongFace`, `out` is measured along the triangle's normal, which holds a box on a
-    // surface it stands over without catching on the edges between that surface's triangles.
-    // Otherwise it is the axis of least overlap, the smallest push that separates them.
-    bool TestBoxTriangle(const OrientedBox& box, const Triangle& triangle, f32 margin, bool alongFace,
-                         Penetration& out);
+// Each returns false when the shapes are farther apart than `margin`.
+bool TestBoxBox(const OrientedBox &a, const OrientedBox &b, f32 margin, Penetration &out);
+// With `alongFace`, `out` is measured along the triangle's normal, which holds a box on a
+// surface it stands over without catching on the edges between that surface's triangles.
+// Otherwise it is the axis of least overlap, the smallest push that separates them.
+bool TestBoxTriangle(const OrientedBox &box, const Triangle &triangle, f32 margin, bool alongFace, Penetration &out);
 
 } // namespace VKE::Physics

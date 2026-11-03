@@ -7,11 +7,11 @@
 
 namespace VKE::Editor {
 
-    class TransformGizmo;
+class TransformGizmo;
 
-    // Draws the gizmo's handles for `pose` over everything, in the axis colors, with the
-    // hovered or dragged handle in the accent color.
-    void DrawTransformGizmo(const TransformGizmo& gizmo, const ScreenView& view, const GizmoPose& pose,
-                            Renderer::WorldDrawList& list);
+// Draws the gizmo's handles for `pose` over everything, in the axis colors, with the
+// hovered or dragged handle in the accent color.
+void DrawTransformGizmo(
+		const TransformGizmo &gizmo, const ScreenView &view, const GizmoPose &pose, Renderer::WorldDrawList &list);
 
 } // namespace VKE::Editor

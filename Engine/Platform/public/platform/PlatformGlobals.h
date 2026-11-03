@@ -4,13 +4,13 @@
 // Populated by PlatformSystem::OnInitialize, cleared in OnShutdown.
 
 namespace VKE::Platform {
-    class IWindow;
-    class IInput;
+class IWindow;
+class IInput;
 } // namespace VKE::Platform
 
 namespace VKE {
 
-    extern Platform::IWindow* Window;
-    extern Platform::IInput* Input;
+extern Platform::IWindow *Window;
+extern Platform::IInput *Input;
 
 } // namespace VKE

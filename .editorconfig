@@ -1,6 +1,12 @@
 
 [*]
 
+[*.{h,hpp,cpp}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+max_line_length = 120
+
 # ReSharper properties
 resharper_cpp_brace_style = end_of_line
 resharper_requires_expression_braces = end_of_line

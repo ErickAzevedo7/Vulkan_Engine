@@ -5,9 +5,9 @@
 
 namespace VKE::Platform {
 
-    bool GuardedCall(void (*call)(void* data), void* data, std::string&) {
-        call(data);
-        return true;
-    }
+bool GuardedCall(void (*call)(void *data), void *data, std::string &) {
+	call(data);
+	return true;
+}
 
 } // namespace VKE::Platform

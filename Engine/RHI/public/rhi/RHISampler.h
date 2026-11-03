@@ -5,14 +5,14 @@
 
 namespace VKE::RHI {
 
-    class RHIDevice;
+class RHIDevice;
 
-    // Filtering and addressing state used to sample textures.
-    class RHISampler {
-    public:
-        virtual ~RHISampler() = default;
+// Filtering and addressing state used to sample textures.
+class RHISampler {
+public:
+	virtual ~RHISampler() = default;
 
-        static Iunique<RHISampler> Create(RHIDevice& device, const SamplerDesc& desc);
-    };
+	static Iunique<RHISampler> Create(RHIDevice &device, const SamplerDesc &desc);
+};
 
 } // namespace VKE::RHI

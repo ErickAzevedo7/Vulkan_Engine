@@ -5,18 +5,17 @@
 
 #ifdef VKE_PLATFORM_WINDOWS
 
-extern VKE::Application* VKE::CreateApplication();
+extern VKE::Application *VKE::CreateApplication();
 
-int main(int argc, char** argv)
-{
-    VKE::Log::Init();
-    VKE_CORE_WARN("Initialized Log!");
+int main(int argc, char **argv) {
+	VKE::Log::Init();
+	VKE_CORE_WARN("Initialized Log!");
 
-    auto app = VKE::CreateApplication();
-    app->Run();
-    delete app;
+	auto app = VKE::CreateApplication();
+	app->Run();
+	delete app;
 
-    return 0;
+	return 0;
 }
 
 #endif // VKE_PLATFORM_WINDOWS

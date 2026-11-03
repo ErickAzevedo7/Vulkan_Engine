@@ -2,7 +2,7 @@
 
 namespace VKE {
 
-    Platform::IWindow* Window = nullptr;
-    Platform::IInput* Input = nullptr;
+Platform::IWindow *Window = nullptr;
+Platform::IInput *Input = nullptr;
 
 } // namespace VKE

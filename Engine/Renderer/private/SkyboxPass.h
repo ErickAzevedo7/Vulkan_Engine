@@ -9,16 +9,16 @@
 
 namespace VKE::Renderer {
 
-    // Fills whatever the scene did not cover with the environment cubemap.
-    class SkyboxPass {
-    public:
-        SkyboxPass(RHI::RHIDevice& device, RHI::RHIRenderPass& scenePass, RHI::RHIBindGroupLayout& frameLayout,
-                   RHI::RHIBindGroupLayout& environmentLayout);
+// Fills whatever the scene did not cover with the environment cubemap.
+class SkyboxPass {
+public:
+	SkyboxPass(RHI::RHIDevice &device, RHI::RHIRenderPass &scenePass, RHI::RHIBindGroupLayout &frameLayout,
+			RHI::RHIBindGroupLayout &environmentLayout);
 
-        void Record(RHI::RHICommandBuffer& cmd, RHI::RHIBindGroup& frameGroup, RHI::RHIBindGroup& environmentGroup);
+	void Record(RHI::RHICommandBuffer &cmd, RHI::RHIBindGroup &frameGroup, RHI::RHIBindGroup &environmentGroup);
 
-    private:
-        Iunique<RHI::RHIPipeline> m_Pipeline;
-    };
+private:
+	Iunique<RHI::RHIPipeline> m_Pipeline;
+};
 
 } // namespace VKE::Renderer

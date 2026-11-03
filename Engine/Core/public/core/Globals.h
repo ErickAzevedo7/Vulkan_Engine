@@ -4,7 +4,7 @@
 
 namespace VKE {
 
-    // Request the engine to stop at the end of the current frame.
-    void RequestExit();
+// Request the engine to stop at the end of the current frame.
+void RequestExit();
 
 } // namespace VKE

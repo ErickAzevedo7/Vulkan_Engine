@@ -1,92 +1,78 @@
-# Vulkan Engine C++ Code Formatting Style
-# Based on LLVM style with customizations
+# VKE C++ formatting.
+# Based on Godot Engine's .clang-format (MIT, github.com/godotengine/godot).
+# Changing this file means formatting the whole code base: tools/check.ps1 -All, then clang-format -i.
 
 BasedOnStyle: LLVM
 
-# Indentation
-IndentWidth: 4
-TabWidth: 4
+# Indentation: tabs, 4 wide
 UseTab: Always
-ContinuationIndentWidth: 4
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 8
+ConstructorInitializerIndentWidth: 8
 AccessModifierOffset: -4
+IndentCaseLabels: true
 
-# Line Length
+# VKE keeps a 120-column limit
 ColumnLimit: 120
 
-# Pointer and Reference Alignment
-PointerAlignment: Left
-ReferenceAlignment: Left
-
-# Braces
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: Never
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  AfterStruct: false
-  AfterUnion: false
-  BeforeCatch: false
-  BeforeElse: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-
-# Spacing
-SpaceAfterCStyleCast: false
-SpaceAfterTemplateKeyword: false
-SpaceBeforeAssignmentOperators: true
-SpaceBeforeParens: ControlStatements
-SpaceInEmptyParentheses: false
-SpacesInAngles: false
-SpacesInCStyleCastParentheses: false
-SpacesInContainerLiterals: false
-SpacesInParentheses: false
-SpacesInSquareBrackets: false
-
-# Function Parameters and Arguments
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowAllArgumentsOnNextLine: true
-BinPackArguments: false
-BinPackParameters: false
-AlignAfterOpenBracket: Align
-
-# Include Sorting
-SortIncludes: CaseInsensitive
-IncludeBlocks: Regroup
-IncludeCategories:
-  # System/STL headers
-  - Regex: "^<.*>"
-    Priority: 1
-  # Third-party library headers (angle brackets, lowercase)
-  - Regex: "^<[a-z_/]+>"
-    Priority: 2
-  # Project headers (quoted includes)
-  - Regex: '^".*\.h"'
-    Priority: 3
-
 # Alignment
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignOperands: true
-AlignTrailingComments: false
+AlignAfterOpenBracket: DontAlign
+AlignEscapedNewlines: DontAlign # Aligning leads to long diffs
+AlignOperands: DontAlign
+AlignTrailingComments:
+  Kind: Never
+  OverEmptyLines: 0
 
-# Breaking
-AllowShortBlocksOnASingleLine: Never
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
-AlwaysBreakAfterReturnType: None
-AlwaysBreakBeforeMultilineStrings: false
-BreakBeforeBinaryOperators: None
-BreakBeforeTernaryOperators: true
-BreakConstructorInitializers: BeforeColon
-BreakInheritanceList: BeforeColon
+# Short forms
+AllowShortFunctionsOnASingleLine: Inline
+AllowAllParametersOfDeclarationOnNextLine: false
 
-# Other
+# Constructors
+BreakConstructorInitializers: AfterColon
+PackConstructorInitializers: NextLine
+
+# Code rewrites: braces on every control statement, no stray semicolons, const before the type
+InsertBraces: true
+RemoveSemicolon: true
+QualifierAlignment: Left
+
+# Braced lists get inner spaces: { 1, 2 }
+Cpp11BracedListStyle: false
+
 KeepEmptyLinesAtTheStartOfBlocks: false
-MaxEmptyLinesToKeep: 1
-NamespaceIndentation: None
-ReflowComments: true
+
+# The engine's macros, so the rewrites above read declarations right.
+# Reflection marks come before a declaration; VKE_COMPONENT/VKE_SCRIPT/VKE_ENUM_FLAGS stand alone, without ';'.
+AttributeMacros:
+  - VKE_API
+  - VKE_PROPERTY
+  - VKE_STRUCT
+  - VKE_ENUM
+StatementMacros:
+  - VKE_COMPONENT
+  - VKE_SCRIPT
+  - VKE_ENUM_FLAGS
+
+# Comments may have no space after // (disabled code)
+SpacesInLineCommentPrefix:
+  Minimum: 0
+  Maximum: -1
+
+# Includes, in groups: the file's own header, local headers, engine modules,
+# windows.h (other Windows headers need it first), libraries, standard library.
+IncludeBlocks: Regroup
+MainIncludeChar: Any
+IncludeCategories:
+  - Regex: ^".*"$
+    Priority: 10
+  - Regex: ^<(assets|core|events|math|physics|platform|project|reflection|renderer|rhi|scene|scripting|ui|vke)/.*>$
+    Priority: 20
+  - Regex: ^<[Ww]indows\.h>$
+    Priority: 50
+  - Regex: ^<.*\.(h|hpp)>$
+    Priority: 60
+  - Regex: ^<.*>$
+    Priority: 70
+
+Standard: c++17

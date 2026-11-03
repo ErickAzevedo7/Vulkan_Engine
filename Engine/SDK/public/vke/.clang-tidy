@@ -1,0 +1,4 @@
+# The SDK is what game scripts read: public data is camelCase (hit.point, v.x), like the scripts that use it.
+InheritParentConfig: true
+CheckOptions:
+  readability-identifier-naming.PublicMemberCase: camelBack

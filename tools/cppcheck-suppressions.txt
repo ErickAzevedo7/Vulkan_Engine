@@ -1,0 +1,12 @@
+// Cppcheck suppressions, read by tools/check.ps1. One "id:file" per line, for false positives only.
+
+// Cppcheck doesn't follow Iunique to std::unique_ptr: the object outlives the local that owned it.
+danglingLifetime:*/scene/private/GameObject.cpp
+danglingLifetime:*/scene/private/Scene.cpp
+returnReference:*/scene/private/Scene.cpp
+
+// The vector grows inside the loop; a node's parent always comes before it.
+containerOutOfBounds:*/scene/private/ModelInstantiation.cpp
+
+// Libraries the build pulls in through vcpkg.
+*:*/vcpkg_installed/*

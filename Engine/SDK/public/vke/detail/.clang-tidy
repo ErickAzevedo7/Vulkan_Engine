@@ -1,0 +1,4 @@
+# The engine's side of the table: engine naming again (PascalCase public data).
+InheritParentConfig: true
+CheckOptions:
+  readability-identifier-naming.PublicMemberCase: CamelCase

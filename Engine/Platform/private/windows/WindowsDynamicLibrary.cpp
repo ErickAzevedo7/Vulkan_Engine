@@ -8,21 +8,21 @@
 
 namespace VKE::Platform {
 
-    Iunique<DynamicLibrary> DynamicLibrary::Load(const std::filesystem::path& file) {
-        HMODULE handle = LoadLibraryW(file.c_str());
-        if (!handle) {
-            VKE_CORE_ERROR("DynamicLibrary: couldn't load '{}' (error {})", file.u8string(), GetLastError());
-            return nullptr;
-        }
-        return Iunique<DynamicLibrary>(new DynamicLibrary(handle));
-    }
+Iunique<DynamicLibrary> DynamicLibrary::Load(const std::filesystem::path &file) {
+	HMODULE handle = LoadLibraryW(file.c_str());
+	if (!handle) {
+		VKE_CORE_ERROR("DynamicLibrary: couldn't load '{}' (error {})", file.u8string(), GetLastError());
+		return nullptr;
+	}
+	return Iunique<DynamicLibrary>(new DynamicLibrary(handle));
+}
 
-    DynamicLibrary::~DynamicLibrary() {
-        FreeLibrary(static_cast<HMODULE>(m_Handle));
-    }
+DynamicLibrary::~DynamicLibrary() {
+	FreeLibrary(static_cast<HMODULE>(m_Handle));
+}
 
-    void* DynamicLibrary::GetSymbol(const char* name) const {
-        return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(m_Handle), name));
-    }
+void *DynamicLibrary::GetSymbol(const char *name) const {
+	return reinterpret_cast<void *>(GetProcAddress(static_cast<HMODULE>(m_Handle), name));
+}
 
 } // namespace VKE::Platform
