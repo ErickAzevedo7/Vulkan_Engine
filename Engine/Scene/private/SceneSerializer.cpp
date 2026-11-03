@@ -662,8 +662,8 @@ bool SceneSerializer::LoadObjects(Scene &scene, Assets::AssetManager &assets, Pr
 	// First every object, so parents can be found by ID whatever their place in the file.
 	struct Loaded {
 		YAML::Node Node;
-		GameObject *Object;
-		bool IsInstance;
+		GameObject *Object = nullptr;
+		bool IsInstance = false;
 	};
 	std::vector<Loaded> loaded;
 	std::unordered_map<ObjectID, GameObject *> byID;

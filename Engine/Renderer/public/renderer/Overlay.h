@@ -51,7 +51,7 @@ struct OverlayVertex {
 	Vec2 Position;
 	Vec2 UV;
 	// R, G, B, A bytes in that order in memory, sRGB-encoded like CSS colors.
-	u32 Color;
+	u32 Color = 0;
 };
 static_assert(sizeof(OverlayVertex) == 20, "OverlayVertex must match the overlay pipeline's vertex input");
 

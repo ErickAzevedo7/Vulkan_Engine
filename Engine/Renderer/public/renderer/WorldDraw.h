@@ -50,9 +50,9 @@ struct WorldVertex {
 	// 0 at the segment's start and 1 at its end.
 	Vec2 UV;
 	// R, G, B, A bytes in that order in memory, sRGB-encoded like CSS colors.
-	u32 Color;
+	u32 Color = 0;
 	// Lines: in pixels. Unused by triangles.
-	f32 Width;
+	f32 Width = 0.0f;
 };
 static_assert(sizeof(WorldVertex) == 40, "WorldVertex must match the world pipeline's vertex input");
 

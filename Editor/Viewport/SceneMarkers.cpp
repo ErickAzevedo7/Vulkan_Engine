@@ -153,10 +153,10 @@ const MarkerIcon *SceneMarkers::GetIcon(const Scene::GameObject &object) const {
 void SceneMarkers::DrawIcons(const Scene::Scene &scene, const Scene::GameObject *selected, const ScreenView &view,
 		Renderer::WorldDrawList &list) const {
 	struct Entry {
-		const Scene::GameObject *Object;
-		const MarkerIcon *Icon;
+		const Scene::GameObject *Object = nullptr;
+		const MarkerIcon *Icon = nullptr;
 		Vec3 Position;
-		f32 Depth;
+		f32 Depth = 0.0f;
 	};
 	std::vector<Entry> entries;
 	ForEachObject(scene, [&](Scene::GameObject &object) {

@@ -8,5 +8,8 @@ returnReference:*/scene/private/Scene.cpp
 // The vector grows inside the loop; a node's parent always comes before it.
 containerOutOfBounds:*/scene/private/ModelInstantiation.cpp
 
+// Reference members: bound when the struct is built, they can't have a default value.
+uninitMemberVarNoCtor:*/scripting/public/scripting/ScriptRunner.h
+
 // Libraries the build pulls in through vcpkg.
 *:*/vcpkg_installed/*

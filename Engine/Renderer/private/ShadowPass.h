@@ -51,9 +51,9 @@ private:
 		Mat4 ViewProjection;
 		ShadowTile Tile;
 		// Lights with a range only see the items that touch this sphere.
-		bool CullToRange;
+		bool CullToRange = false;
 		Vec3 Position;
-		f32 Range;
+		f32 Range = 0.0f;
 	};
 
 	Iunique<RHI::RHIRenderPass> m_RenderPass;

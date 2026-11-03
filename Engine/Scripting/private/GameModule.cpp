@@ -153,7 +153,8 @@ void UnloadLibrary(Iunique<Platform::DynamicLibrary> &library, const std::filesy
 		return;
 	}
 	VKE_CORE_ERROR("Scripts: '{}' crashed while unloading: {}", source.u8string(), fault);
-	library.release();
+	// Leaked on purpose: unloading a library that crashed could crash again.
+	(void)library.release();
 }
 
 void Discard(Iunique<PreparedGame> &prepared) {
@@ -236,7 +237,8 @@ bool GameModule::Prepare(const std::filesystem::path &library, const std::filesy
 	std::filesystem::remove(workFolder / kLoadingFile, ec);
 	if (!survived) {
 		VKE_CORE_ERROR("Scripts: '{}' crashed while loading: {}", library.u8string(), fault);
-		loaded.release();
+		// Leaked on purpose: unloading a library that crashed could crash again.
+		(void)loaded.release();
 		return false;
 	}
 	if (!load) {

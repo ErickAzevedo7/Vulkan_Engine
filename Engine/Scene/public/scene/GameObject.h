@@ -151,7 +151,7 @@ private:
 	friend class Scene;
 
 	struct ComponentEntry {
-		ComponentTypeID Type;
+		ComponentTypeID Type{};
 		Iunique<Component> Instance;
 	};
 

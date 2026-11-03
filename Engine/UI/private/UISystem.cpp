@@ -32,9 +32,9 @@ std::array<ImFont *, static_cast<size_t>(TextStyle::Count)> s_Fonts{};
 // One text style: which font file, at what size in CSS pixels (the em), and the
 // size of the icons merged into it, 0 for none.
 struct FontStyle {
-	const char *File;
-	f32 Size;
-	f32 IconSize;
+	const char *File = nullptr;
+	f32 Size = 0.0f;
+	f32 IconSize = 0.0f;
 };
 
 // Indexed by TextStyle. Sizes from the design system's type styles and icon tokens.
