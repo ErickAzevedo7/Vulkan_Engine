@@ -5,6 +5,9 @@
 
 #include <core/Log.h>
 
+#include <algorithm>
+#include <cctype>
+#include <string>
 #include <unordered_set>
 
 namespace VKE {
@@ -18,6 +21,37 @@ TextureData MakeSolidTexture(const char *name, u8 r, u8 g, u8 b) {
 	texture.ColorSpace = ColorSpace::Linear;
 	texture.Pixels = { r, g, b, 255 };
 	return texture;
+}
+
+const char *ToString(ColorSpace colorSpace) {
+	return colorSpace == ColorSpace::SRGB ? "sRGB" : "linear";
+}
+
+// For a texture that has no color space yet and isn't loaded for a material slot: linear for
+// HDR images and names that say the pixels are data, sRGB for the rest.
+ColorSpace GuessColorSpace(const std::filesystem::path &file) {
+	std::string ext = file.extension().u8string();
+	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+	if (ext == ".hdr" || ext == ".exr") {
+		return ColorSpace::Linear;
+	}
+	std::string name = file.stem().u8string();
+	std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+	static const char *const kDataWords[] = { "normal", "nrm", "rough", "metal", "occlusion", "orm", "mask", "height",
+		"displace", "bump" };
+	for (const char *word : kDataWords) {
+		if (name.find(word) != std::string::npos) {
+			return ColorSpace::Linear;
+		}
+	}
+	static const char *const kDataSuffixes[] = { "_n", "_ao", "_r", "_m" };
+	for (const char *suffix : kDataSuffixes) {
+		size_t length = std::char_traits<char>::length(suffix);
+		if (name.size() > length && name.compare(name.size() - length, length, suffix) == 0) {
+			return ColorSpace::Linear;
+		}
+	}
+	return ColorSpace::SRGB;
 }
 
 // Names inside a model file can repeat; later ones get "#2", "#3", ... in the order seen.
@@ -272,32 +306,37 @@ void AssetManager::AssignSubAssets(AssetID id, const ModelData &model) {
 	}
 }
 
-Handle<TextureData> AssetManager::LoadTexture(AssetID id, ColorSpace use) {
-	const AssetEntry *entry = m_Catalog->Find(id);
-	if (!entry || entry->Type != AssetType::Texture) {
-		if (id.IsValid()) {
-			VKE_CORE_ERROR("AssetManager: no texture has the ID {}", id.ToString());
+Handle<TextureData> AssetManager::LoadTexture(AssetID id, std::optional<ColorSpace> use) {
+	Handle<TextureData> handle = m_Textures.FindLoaded(id);
+	if (!handle.IsValid()) {
+		const AssetEntry *entry = m_Catalog->Find(id);
+		if (!entry || entry->Type != AssetType::Texture) {
+			if (id.IsValid()) {
+				VKE_CORE_ERROR("AssetManager: no texture has the ID {}", id.ToString());
+			}
+			return {};
 		}
-		return {};
-	}
 
-	ColorSpace colorSpace = entry->ColorSpace == TextureColorSpace::SRGB ? ColorSpace::SRGB
-			: entry->ColorSpace == TextureColorSpace::Linear			 ? ColorSpace::Linear
-																		 : use;
-	// The same image is a different texture in each color space.
-	TextureKey key{ id, colorSpace };
-	if (Handle<TextureData> loaded = m_Textures.FindLoaded(key); loaded.IsValid()) {
-		return loaded;
-	}
+		std::filesystem::path file = m_Catalog->GetFile(*entry);
+		ColorSpace colorSpace = entry->ColorSpace ? *entry->ColorSpace : use ? *use : GuessColorSpace(file);
+		if (!entry->ColorSpace) {
+			m_Catalog->SetColorSpace(id, colorSpace);
+		}
 
-	TextureData texture;
-	if (!Importers::ImportTexture(m_Catalog->GetFile(*entry), colorSpace, texture)) {
-		VKE_CORE_ERROR("AssetManager: failed to load texture '{}'", entry->Path);
-		return {};
+		TextureData texture;
+		if (!Importers::ImportTexture(file, colorSpace, texture)) {
+			VKE_CORE_ERROR("AssetManager: failed to load texture '{}'", entry->Path);
+			return {};
+		}
+		// Read as it is anyway: the texture has one color space. Said once, when it is read; the
+		// Inspector shows every slot that reads it in the other.
+		if (use && texture.PixelType == PixelType::UNorm8 && texture.ColorSpace != *use) {
+			VKE_CORE_WARN("AssetManager: texture '{}' is {} but is used as {}; change its color space in the Inspector",
+					entry->Path, ToString(texture.ColorSpace), ToString(*use));
+		}
+		handle = AddTexture(std::move(texture));
+		m_Textures.SetLoaded(id, handle);
 	}
-
-	Handle<TextureData> handle = AddTexture(std::move(texture));
-	m_Textures.SetLoaded(key, handle);
 	return handle;
 }
 
@@ -351,40 +390,41 @@ Handle<MeshData> AssetManager::LoadMesh(AssetID id) {
 	return m_Meshes.FindLoaded(id);
 }
 
-Handle<TextureData> AssetManager::FindLoadedTexture(AssetID id) const {
-	Handle<TextureData> linear = m_Textures.FindLoaded({ id, ColorSpace::Linear });
-	return linear.IsValid() ? linear : m_Textures.FindLoaded({ id, ColorSpace::SRGB });
-}
-
-TextureColorSpace AssetManager::GetColorSpace(AssetID texture) const {
+ColorSpace AssetManager::GetColorSpace(AssetID texture) const {
 	const AssetEntry *entry = m_Catalog->Find(texture);
-	return entry ? entry->ColorSpace : TextureColorSpace::FromUse;
+	if (!entry || entry->Type != AssetType::Texture) {
+		return ColorSpace::SRGB;
+	}
+	return entry->ColorSpace ? *entry->ColorSpace : GuessColorSpace(m_Catalog->GetFile(*entry));
 }
 
-bool AssetManager::SetColorSpace(AssetID texture, TextureColorSpace colorSpace) {
-	if (!m_Catalog->SetColorSpace(texture, colorSpace)) {
+bool AssetManager::SetColorSpace(AssetID texture, ColorSpace colorSpace) {
+	if (GetType(texture) != AssetType::Texture || !IsWritable(texture)) {
 		return false;
 	}
+	m_Catalog->SetColorSpace(texture, colorSpace);
+	Handle<TextureData> old = m_Textures.FindLoaded(texture);
+	if (!old.IsValid() || GetTexture(old)->ColorSpace == colorSpace) {
+		return true;
+	}
 
-	// Materials holding the texture take it again, in the space they read it in now.
+	TextureData data;
+	if (!Importers::ImportTexture(GetFile(texture), colorSpace, data)) {
+		VKE_CORE_ERROR("AssetManager: failed to load texture '{}'", GetFile(texture).u8string());
+		return false;
+	}
+	Handle<TextureData> loaded = AddTexture(std::move(data));
+	m_Textures.SetLoaded(texture, loaded);
+
+	// Materials holding the texture take the new one; the renderer remakes them.
 	for (const auto &[id, handle] : m_Materials.GetLoaded()) {
 		MaterialData *material = m_Materials.Get(handle);
-		if (!material) {
-			continue;
-		}
 		bool changed = false;
-		for (u32 slot = 0; slot < static_cast<u32>(MaterialTexture::Count); ++slot) {
-			Handle<TextureData> &used = material->Textures[slot];
-			if (GetID(used) != texture) {
-				continue;
+		for (Handle<TextureData> &used : material->Textures) {
+			if (used == old) {
+				used = loaded;
+				changed = true;
 			}
-			MaterialTexture use = static_cast<MaterialTexture>(slot);
-			Handle<TextureData> loaded = LoadTexture(texture, GetSlotColorSpace(use));
-			if (!loaded.IsValid() || loaded == used) {
-				continue;
-			}
-			used = loaded;
-			changed = true;
 		}
 		if (changed) {
 			++material->Revision;

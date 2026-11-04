@@ -60,26 +60,19 @@ const char *ToString(AssetType type) {
 	return "";
 }
 
-const char *ToString(TextureColorSpace colorSpace) {
-	switch (colorSpace) {
-		case TextureColorSpace::FromUse:
-			return "FromUse";
-		case TextureColorSpace::SRGB:
-			return "SRGB";
-		case TextureColorSpace::Linear:
-			return "Linear";
-	}
-	return "";
+const char *ToString(ColorSpace colorSpace) {
+	return colorSpace == ColorSpace::SRGB ? "SRGB" : "Linear";
 }
 
-TextureColorSpace ParseColorSpace(const std::string &text) {
+// Anything else, such as the FromUse of older files, leaves it to the first load.
+std::optional<ColorSpace> ParseColorSpace(const std::string &text) {
 	if (text == "SRGB") {
-		return TextureColorSpace::SRGB;
+		return ColorSpace::SRGB;
 	}
 	if (text == "Linear") {
-		return TextureColorSpace::Linear;
+		return ColorSpace::Linear;
 	}
-	return TextureColorSpace::FromUse;
+	return std::nullopt;
 }
 
 void ReadSubAssets(const YAML::Node &node, std::map<std::string, AssetID> &out) {
@@ -194,13 +187,15 @@ void AssetCatalog::Removed(const std::filesystem::path &path) {
 	}
 }
 
-bool AssetCatalog::SetColorSpace(AssetID id, TextureColorSpace colorSpace) {
+bool AssetCatalog::SetColorSpace(AssetID id, ColorSpace colorSpace) {
 	auto it = m_Entries.find(id);
-	if (it == m_Entries.end() || it->second.Type != AssetType::Texture || m_Roots[it->second.Root].ReadOnly) {
+	if (it == m_Entries.end() || it->second.Type != AssetType::Texture) {
 		return false;
 	}
 	it->second.ColorSpace = colorSpace;
-	WriteMetadata(it->second);
+	if (!m_Roots[it->second.Root].ReadOnly) {
+		WriteMetadata(it->second);
+	}
 	return true;
 }
 
@@ -405,8 +400,8 @@ void AssetCatalog::WriteMetadata(const AssetEntry &entry) const {
 	out << YAML::BeginMap;
 	out << YAML::Key << "ID" << YAML::Value << YAML::DoubleQuoted << entry.ID.ToString();
 	out << YAML::Key << "Type" << YAML::Value << ToString(entry.Type);
-	if (entry.Type == AssetType::Texture) {
-		out << YAML::Key << "ColorSpace" << YAML::Value << ToString(entry.ColorSpace);
+	if (entry.Type == AssetType::Texture && entry.ColorSpace) {
+		out << YAML::Key << "ColorSpace" << YAML::Value << ToString(*entry.ColorSpace);
 	}
 	WriteSubAssets(out, "Meshes", entry.Meshes);
 	WriteSubAssets(out, "Materials", entry.Materials);

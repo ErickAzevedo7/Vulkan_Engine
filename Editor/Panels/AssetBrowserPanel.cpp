@@ -1092,9 +1092,7 @@ u64 AssetBrowserPanel::GetThumbnail(AssetID texture, bool visible) {
 			return 0;
 		}
 		m_LoadedThumbnail = true;
-		ColorSpace space =
-				assets.GetColorSpace(texture) == TextureColorSpace::Linear ? ColorSpace::Linear : ColorSpace::SRGB;
-		handle = assets.LoadTexture(texture, space);
+		handle = assets.LoadTexture(texture);
 		if (!handle.IsValid()) {
 			return 0;
 		}

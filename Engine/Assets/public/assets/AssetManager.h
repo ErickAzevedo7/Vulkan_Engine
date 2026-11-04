@@ -78,20 +78,22 @@ public:
 	// Each returns an invalid handle if the asset can't be loaded.
 	// A model brings the meshes and materials inside it.
 	Handle<ModelData> LoadModel(AssetID id);
-	// `use` is the color space the caller reads the texture in; the texture's .vkasset can
-	// fix another one.
-	Handle<TextureData> LoadTexture(AssetID id, ColorSpace use);
+	// In the texture's color space, kept in its .vkasset. A texture without one yet takes `use`,
+	// the space the caller reads it in, or else one guessed from its file name, and keeps it.
+	// One in another space than `use` is read in its own, with a warning.
+	Handle<TextureData> LoadTexture(AssetID id, std::optional<ColorSpace> use = std::nullopt);
 	// A .mat file, or a material inside a model.
 	Handle<MaterialData> LoadMaterial(AssetID id);
 	// A mesh inside a model, which is loaded with it.
 	Handle<MeshData> LoadMesh(AssetID id);
 
-	// The texture loaded from the asset, in either color space, or invalid if it wasn't loaded.
-	Handle<TextureData> FindLoadedTexture(AssetID id) const;
-	TextureColorSpace GetColorSpace(AssetID texture) const;
-	// Writes the setting to the texture's .vkasset and loads the texture again in the space
-	// each loaded material reads it in now. False for read-only textures.
-	bool SetColorSpace(AssetID texture, TextureColorSpace colorSpace);
+	// The texture loaded from the asset, or invalid if it wasn't loaded.
+	Handle<TextureData> FindLoadedTexture(AssetID id) const { return m_Textures.FindLoaded(id); }
+	// The texture's color space, or the one it would get from its name if it has none yet.
+	ColorSpace GetColorSpace(AssetID texture) const;
+	// Writes the color space to the texture's .vkasset and, if it was loaded, loads it again
+	// for the materials using it. False for read-only textures.
+	bool SetColorSpace(AssetID texture, ColorSpace colorSpace);
 
 	// Writes a .mat file with the default material's values and returns its ID; invalid,
 	// logged, if it can't.
@@ -106,7 +108,7 @@ public:
 
 	// The same, for code that knows the file.
 	Handle<ModelData> LoadModel(const std::string &path) { return LoadModel(FindAsset(path)); }
-	Handle<TextureData> LoadTexture(const std::string &path, ColorSpace use) {
+	Handle<TextureData> LoadTexture(const std::string &path, std::optional<ColorSpace> use = std::nullopt) {
 		return LoadTexture(FindAsset(path), use);
 	}
 	Handle<MaterialData> LoadMaterial(const std::string &path) { return LoadMaterial(FindAsset(path)); }
@@ -153,7 +155,7 @@ private:
 
 	AssetStore<ModelData> m_Models;
 	AssetStore<MeshData> m_Meshes;
-	AssetStore<TextureData, TextureKey, TextureKeyHash> m_Textures;
+	AssetStore<TextureData> m_Textures;
 	AssetStore<MaterialData> m_Materials;
 
 	std::array<Handle<TextureData>, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures{};

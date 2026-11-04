@@ -908,17 +908,36 @@ void InspectorPanel::DrawMaterial(AssetID asset) {
 			}
 
 			ImGui::SameLine(0.0f, Sizes::Space3);
-			ColorSpace space =
-					textureData && textureID.IsValid() ? textureData->ColorSpace : GetSlotColorSpace(slot.Texture);
+			ColorSpace expected = GetSlotColorSpace(slot.Texture);
+			ColorSpace space = textureData && textureID.IsValid() ? textureData->ColorSpace : expected;
+			// HDR images are always linear and fit any slot.
+			bool mismatch = textureData && textureID.IsValid() && textureData->PixelType == PixelType::UNorm8 &&
+					space != expected;
 			// Centered on the field's height.
 			ImGui::SetCursorPosY(
 					ImGui::GetCursorPosY() + std::floor((Sizes::ControlHeight - ImGui::GetTextLineHeight()) * 0.5f));
-			Widgets::Badge(space == ColorSpace::SRGB ? "SRGB" : "LINEAR", Colors::TextMuted);
+			Widgets::Badge(
+					space == ColorSpace::SRGB ? "SRGB" : "LINEAR", mismatch ? Colors::Warning : Colors::TextMuted);
+
+			// The texture is read in its own color space: offer to change it to the slot's.
+			if (mismatch) {
+				ImGui::Dummy(ImVec2(Sizes::LabelWidth, 0.0f));
+				ImGui::SameLine(0.0f, 0.0f);
+				ImGui::AlignTextToFramePadding();
+				Widgets::Text(
+						expected == ColorSpace::SRGB ? "This slot reads sRGB colors." : "This slot reads linear data.",
+						Colors::Warning, TextStyle::UISmall);
+				ImGui::SameLine(0.0f, Sizes::Space3);
+				ImGui::BeginDisabled(!m_Assets.IsWritable(textureID));
+				if (Widgets::GhostButton(expected == ColorSpace::SRGB ? "Make it sRGB" : "Make it linear")) {
+					m_Assets.SetColorSpace(textureID, expected);
+				}
+				ImGui::EndDisabled();
+			}
 			ImGui::PopID();
 		}
 		ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
-		Widgets::Text(
-				"Color space follows the slot. Override it on the texture.", Colors::TextFaint, TextStyle::UISmall);
+		Widgets::Text("Each texture has one color space, set on the texture.", Colors::TextFaint, TextStyle::UISmall);
 		ImGui::PopTextWrapPos();
 		EndAssetBlock();
 	}
@@ -932,15 +951,13 @@ void InspectorPanel::DrawMaterial(AssetID asset) {
 u64 InspectorPanel::GetTextureImage(AssetID texture) {
 	Handle<TextureData> handle = m_Assets.FindLoadedTexture(texture);
 	if (!handle.IsValid()) {
-		ColorSpace space =
-				m_Assets.GetColorSpace(texture) == TextureColorSpace::Linear ? ColorSpace::Linear : ColorSpace::SRGB;
-		handle = m_Assets.LoadTexture(texture, space);
+		handle = m_Assets.LoadTexture(texture);
 	}
 	return handle.IsValid() ? m_UI.GetTextureID(OverlayTexture::FromAsset(handle)) : 0;
 }
 
 void InspectorPanel::DrawTexture(AssetID asset) {
-	static const std::vector<std::string> kSpaces = { "From use", "sRGB", "Linear" };
+	static const std::vector<std::string> kSpaces = { "sRGB", "Linear" };
 	u64 image = GetTextureImage(asset);
 	const TextureData *data = m_Assets.GetTexture(m_Assets.FindLoadedTexture(asset));
 
@@ -975,14 +992,14 @@ void InspectorPanel::DrawTexture(AssetID asset) {
 
 		// Kept in the .vkasset: changing it loads the texture again where materials use it.
 		Fields::Label("Color space", Sizes::LabelWidth);
-		int current = static_cast<int>(m_Assets.GetColorSpace(asset));
+		int current = m_Assets.GetColorSpace(asset) == ColorSpace::SRGB ? 0 : 1;
 		ImGui::BeginDisabled(!m_Assets.IsWritable(asset));
 		if (Fields::Choice("##ColorSpace", kSpaces, current)) {
-			m_Assets.SetColorSpace(asset, static_cast<TextureColorSpace>(current));
+			m_Assets.SetColorSpace(asset, current == 0 ? ColorSpace::SRGB : ColorSpace::Linear);
 		}
 		ImGui::EndDisabled();
 		ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
-		Widgets::Text("From use: sRGB in the albedo and emissive slots, linear in the others.", Colors::TextFaint,
+		Widgets::Text("sRGB for colors, linear for data such as normals, roughness and masks.", Colors::TextFaint,
 				TextStyle::UISmall);
 		ImGui::PopTextWrapPos();
 		EndAssetBlock();

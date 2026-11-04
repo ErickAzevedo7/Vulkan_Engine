@@ -107,14 +107,6 @@ enum class ColorSpace {
 	SRGB,
 };
 
-// A texture's color space setting, kept in its .vkasset.
-enum class TextureColorSpace : u8 {
-	// Whatever the material or model using it asks for: sRGB for color, linear for data.
-	FromUse,
-	SRGB,
-	Linear,
-};
-
 enum class PixelType {
 	UNorm8,
 	// Used by .hdr images, whose values go above 1.
@@ -159,7 +151,8 @@ struct MaterialData {
 	u32 Revision = 0;
 };
 
-// The color space each material texture slot is read in, when the texture doesn't fix one.
+// The color space a material texture slot expects. A texture in the other one is still read
+// in its own: a texture has one color space, kept in its .vkasset.
 inline ColorSpace GetSlotColorSpace(MaterialTexture slot) {
 	return slot == MaterialTexture::Albedo || slot == MaterialTexture::Emissive ? ColorSpace::SRGB : ColorSpace::Linear;
 }

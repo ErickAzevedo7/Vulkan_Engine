@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -19,7 +20,8 @@ struct AssetEntry {
 	u32 Root = 0;
 	// Relative to that root, with forward slashes.
 	std::string Path;
-	TextureColorSpace ColorSpace = TextureColorSpace::FromUse;
+	// Textures: none until the texture is first loaded, which decides it.
+	std::optional<VKE::ColorSpace> ColorSpace;
 	// Models: the meshes and materials inside the file, by their names there.
 	std::map<std::string, AssetID> Meshes;
 	std::map<std::string, AssetID> Materials;
@@ -57,7 +59,9 @@ public:
 	void Removed(const std::filesystem::path &path);
 
 	// Writes the setting to the texture's .vkasset. False for other assets and read-only roots.
-	bool SetColorSpace(AssetID id, TextureColorSpace colorSpace);
+	// Kept in the .vkasset when the root is writable; only in memory when it isn't. False if
+	// `id` isn't a texture.
+	bool SetColorSpace(AssetID id, ColorSpace colorSpace);
 
 	const std::vector<AssetRoot> &GetRoots() const { return m_Roots; }
 
