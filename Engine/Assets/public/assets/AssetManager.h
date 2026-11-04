@@ -1,15 +1,15 @@
 #pragma once
 
+#include <assets/AssetStore.h>
 #include <assets/AssetTypes.h>
 #include <core/Handle.h>
-#include <core/SlotMap.h>
 #include <core/System.h>
 
 #include <array>
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <type_traits>
 
 namespace VKE {
 
@@ -113,10 +113,7 @@ public:
 
 	// The ID an asset was loaded from, the same as its data's ID. Invalid for assets added in
 	// code, which only exist while the program runs.
-	AssetID GetID(Handle<ModelData> handle) const;
-	AssetID GetID(Handle<MeshData> handle) const;
-	AssetID GetID(Handle<TextureData> handle) const;
-	AssetID GetID(Handle<MaterialData> handle) const;
+	template <typename T> AssetID GetID(Handle<T> handle) const { return GetStore<T>().GetID(handle); }
 
 	// Assets added in code get no ID, whatever the data says.
 	Handle<MeshData> AddMesh(MeshData mesh);
@@ -134,6 +131,19 @@ public:
 	}
 
 private:
+	template <typename T> const auto &GetStore() const {
+		if constexpr (std::is_same_v<T, ModelData>) {
+			return m_Models;
+		} else if constexpr (std::is_same_v<T, MeshData>) {
+			return m_Meshes;
+		} else if constexpr (std::is_same_v<T, TextureData>) {
+			return m_Textures;
+		} else {
+			static_assert(std::is_same_v<T, MaterialData>, "not an asset type");
+			return m_Materials;
+		}
+	}
+
 	void CreateDefaultTextures();
 	void FillDefaultTextures(MaterialData &material) const;
 	// Gives IDs to the meshes and materials of a model just imported from the asset `id`.
@@ -141,17 +151,10 @@ private:
 
 	Iunique<AssetCatalog> m_Catalog;
 
-	SlotMap<ModelData> m_Models;
-	SlotMap<MeshData> m_Meshes;
-	SlotMap<TextureData> m_Textures;
-	SlotMap<MaterialData> m_Materials;
-
-	// What has been loaded from each asset.
-	std::unordered_map<AssetID, Handle<ModelData>> m_LoadedModels;
-	std::unordered_map<AssetID, Handle<MeshData>> m_LoadedMeshes;
-	std::unordered_map<AssetID, Handle<MaterialData>> m_LoadedMaterials;
-	// One texture per color space it is read in.
-	std::unordered_map<AssetID, std::array<Handle<TextureData>, 2>> m_LoadedTextures;
+	AssetStore<ModelData> m_Models;
+	AssetStore<MeshData> m_Meshes;
+	AssetStore<TextureData, TextureKey, TextureKeyHash> m_Textures;
+	AssetStore<MaterialData> m_Materials;
 
 	std::array<Handle<TextureData>, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures{};
 };

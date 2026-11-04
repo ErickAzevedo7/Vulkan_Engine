@@ -36,11 +36,6 @@ std::vector<std::string> MakeUniqueNames(const std::vector<std::string> &names, 
 	}
 	return unique;
 }
-
-template <typename T> Handle<T> FindLoaded(const std::unordered_map<AssetID, Handle<T>> &loaded, AssetID id) {
-	auto it = loaded.find(id);
-	return it != loaded.end() ? it->second : Handle<T>{};
-}
 } // namespace
 
 AssetManager::AssetManager(std::vector<AssetRoot> roots) : m_Catalog(MakeIunique<AssetCatalog>(std::move(roots))) {
@@ -169,7 +164,7 @@ bool AssetManager::Move(const std::filesystem::path &from, const std::filesystem
 	m_Catalog->Moved(from, to);
 
 	// A material named after its file follows it.
-	if (MaterialData *material = m_Materials.Get(FindLoaded(m_LoadedMaterials, moved))) {
+	if (MaterialData *material = m_Materials.Get(m_Materials.FindLoaded(moved))) {
 		if (material->Name == from.stem().u8string()) {
 			material->Name = to.stem().u8string();
 		}
@@ -200,8 +195,8 @@ bool AssetManager::Delete(const std::filesystem::path &path) {
 }
 
 Handle<ModelData> AssetManager::LoadModel(AssetID id) {
-	if (auto it = m_LoadedModels.find(id); it != m_LoadedModels.end()) {
-		return it->second;
+	if (Handle<ModelData> loaded = m_Models.FindLoaded(id); loaded.IsValid()) {
+		return loaded;
 	}
 
 	const AssetEntry *entry = m_Catalog->Find(id);
@@ -231,9 +226,8 @@ Handle<ModelData> AssetManager::LoadModel(AssetID id) {
 			meshCount, vertexCount);
 
 	AssignSubAssets(id, model);
-	model.ID = id;
-	Handle<ModelData> handle = m_Models.Emplace(std::move(model));
-	m_LoadedModels[id] = handle;
+	Handle<ModelData> handle = m_Models.Add(std::move(model));
+	m_Models.SetLoaded(id, handle);
 	return handle;
 }
 
@@ -271,14 +265,10 @@ void AssetManager::AssignSubAssets(AssetID id, const ModelData &model) {
 	m_Catalog->AssignSubAssets(
 			id, MakeUniqueNames(meshNames, "Mesh"), MakeUniqueNames(materialNames, "Material"), meshIDs, materialIDs);
 	for (size_t i = 0; i < meshes.size(); ++i) {
-		m_LoadedMeshes[meshIDs[i]] = meshes[i];
-		m_Meshes.Get(meshes[i])->ID = meshIDs[i];
+		m_Meshes.SetLoaded(meshIDs[i], meshes[i]);
 	}
 	for (size_t i = 0; i < materials.size(); ++i) {
-		m_LoadedMaterials[materialIDs[i]] = materials[i];
-		if (MaterialData *material = m_Materials.Get(materials[i])) {
-			material->ID = materialIDs[i];
-		}
+		m_Materials.SetLoaded(materialIDs[i], materials[i]);
 	}
 }
 
@@ -295,9 +285,9 @@ Handle<TextureData> AssetManager::LoadTexture(AssetID id, ColorSpace use) {
 			: entry->ColorSpace == TextureColorSpace::Linear			 ? ColorSpace::Linear
 																		 : use;
 	// The same image is a different texture in each color space.
-	Handle<TextureData> &slot = m_LoadedTextures[id][colorSpace == ColorSpace::SRGB ? 1 : 0];
-	if (m_Textures.Contains(slot)) {
-		return slot;
+	TextureKey key{ id, colorSpace };
+	if (Handle<TextureData> loaded = m_Textures.FindLoaded(key); loaded.IsValid()) {
+		return loaded;
 	}
 
 	TextureData texture;
@@ -306,14 +296,14 @@ Handle<TextureData> AssetManager::LoadTexture(AssetID id, ColorSpace use) {
 		return {};
 	}
 
-	slot = AddTexture(std::move(texture));
-	m_Textures.Get(slot)->ID = id;
-	return slot;
+	Handle<TextureData> handle = AddTexture(std::move(texture));
+	m_Textures.SetLoaded(key, handle);
+	return handle;
 }
 
 Handle<MaterialData> AssetManager::LoadMaterial(AssetID id) {
-	if (auto it = m_LoadedMaterials.find(id); it != m_LoadedMaterials.end()) {
-		return it->second;
+	if (Handle<MaterialData> loaded = m_Materials.FindLoaded(id); loaded.IsValid()) {
+		return loaded;
 	}
 
 	// A material inside a model comes with the model.
@@ -322,8 +312,7 @@ Handle<MaterialData> AssetManager::LoadMaterial(AssetID id) {
 			return {};
 		}
 		LoadModel(subAsset->Model);
-		auto it = m_LoadedMaterials.find(id);
-		return it != m_LoadedMaterials.end() ? it->second : Handle<MaterialData>{};
+		return m_Materials.FindLoaded(id);
 	}
 
 	const AssetEntry *entry = m_Catalog->Find(id);
@@ -341,14 +330,13 @@ Handle<MaterialData> AssetManager::LoadMaterial(AssetID id) {
 	}
 
 	Handle<MaterialData> handle = AddMaterial(std::move(material));
-	m_Materials.Get(handle)->ID = id;
-	m_LoadedMaterials[id] = handle;
+	m_Materials.SetLoaded(id, handle);
 	return handle;
 }
 
 Handle<MeshData> AssetManager::LoadMesh(AssetID id) {
-	if (auto it = m_LoadedMeshes.find(id); it != m_LoadedMeshes.end()) {
-		return it->second;
+	if (Handle<MeshData> loaded = m_Meshes.FindLoaded(id); loaded.IsValid()) {
+		return loaded;
 	}
 
 	const SubAssetEntry *subAsset = m_Catalog->FindSubAsset(id);
@@ -360,21 +348,12 @@ Handle<MeshData> AssetManager::LoadMesh(AssetID id) {
 	}
 
 	LoadModel(subAsset->Model);
-	auto it = m_LoadedMeshes.find(id);
-	return it != m_LoadedMeshes.end() ? it->second : Handle<MeshData>{};
+	return m_Meshes.FindLoaded(id);
 }
 
 Handle<TextureData> AssetManager::FindLoadedTexture(AssetID id) const {
-	auto it = m_LoadedTextures.find(id);
-	if (it == m_LoadedTextures.end()) {
-		return {};
-	}
-	for (Handle<TextureData> texture : it->second) {
-		if (m_Textures.Contains(texture)) {
-			return texture;
-		}
-	}
-	return {};
+	Handle<TextureData> linear = m_Textures.FindLoaded({ id, ColorSpace::Linear });
+	return linear.IsValid() ? linear : m_Textures.FindLoaded({ id, ColorSpace::SRGB });
 }
 
 TextureColorSpace AssetManager::GetColorSpace(AssetID texture) const {
@@ -388,7 +367,7 @@ bool AssetManager::SetColorSpace(AssetID texture, TextureColorSpace colorSpace) 
 	}
 
 	// Materials holding the texture take it again, in the space they read it in now.
-	for (auto &[id, handle] : m_LoadedMaterials) {
+	for (const auto &[id, handle] : m_Materials.GetLoaded()) {
 		MaterialData *material = m_Materials.Get(handle);
 		if (!material) {
 			continue;
@@ -448,7 +427,7 @@ void AssetManager::UpdateMaterial(Handle<MaterialData> handle, MaterialData mate
 }
 
 bool AssetManager::SaveMaterial(AssetID id) {
-	const MaterialData *material = GetMaterial(FindLoaded(m_LoadedMaterials, id));
+	const MaterialData *material = GetMaterial(m_Materials.FindLoaded(id));
 	if (!material || GetType(id) != AssetType::Material || !IsWritable(id)) {
 		return false;
 	}
@@ -456,8 +435,8 @@ bool AssetManager::SaveMaterial(AssetID id) {
 }
 
 bool AssetManager::ReloadMaterial(AssetID id) {
-	Handle<MaterialData> handle = FindLoaded(m_LoadedMaterials, id);
-	if (!m_Materials.Contains(handle) || GetType(id) != AssetType::Material) {
+	Handle<MaterialData> handle = m_Materials.FindLoaded(id);
+	if (!handle.IsValid() || GetType(id) != AssetType::Material) {
 		return false;
 	}
 	MaterialData material;
@@ -468,46 +447,23 @@ bool AssetManager::ReloadMaterial(AssetID id) {
 	return true;
 }
 
-AssetID AssetManager::GetID(Handle<ModelData> handle) const {
-	const ModelData *model = GetModel(handle);
-	return model ? model->ID : AssetID{};
-}
-
-AssetID AssetManager::GetID(Handle<MeshData> handle) const {
-	const MeshData *mesh = GetMesh(handle);
-	return mesh ? mesh->ID : AssetID{};
-}
-
-AssetID AssetManager::GetID(Handle<TextureData> handle) const {
-	const TextureData *texture = GetTexture(handle);
-	return texture ? texture->ID : AssetID{};
-}
-
-AssetID AssetManager::GetID(Handle<MaterialData> handle) const {
-	const MaterialData *material = GetMaterial(handle);
-	return material ? material->ID : AssetID{};
-}
-
 Handle<MeshData> AssetManager::AddMesh(MeshData mesh) {
-	mesh.ID = {};
 	// Geometry is only drawn through submeshes, so a mesh with none gets one covering it all.
 	if (mesh.Submeshes.empty() && !mesh.Indices.empty()) {
 		Submesh submesh;
 		submesh.IndexCount = static_cast<u32>(mesh.Indices.size());
 		mesh.Submeshes.push_back(submesh);
 	}
-	return m_Meshes.Emplace(std::move(mesh));
+	return m_Meshes.Add(std::move(mesh));
 }
 
 Handle<TextureData> AssetManager::AddTexture(TextureData texture) {
-	texture.ID = {};
-	return m_Textures.Emplace(std::move(texture));
+	return m_Textures.Add(std::move(texture));
 }
 
 Handle<MaterialData> AssetManager::AddMaterial(MaterialData material) {
-	material.ID = {};
 	FillDefaultTextures(material);
-	return m_Materials.Emplace(std::move(material));
+	return m_Materials.Add(std::move(material));
 }
 
 void AssetManager::FillDefaultTextures(MaterialData &material) const {
