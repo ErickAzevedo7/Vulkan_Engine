@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 // Sizes are counted in cells of the smallest tile.
@@ -85,4 +85,4 @@ void PackShadowAtlas(std::vector<ShadowRequest> &requests, u32 atlasSize, std::v
 	}
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

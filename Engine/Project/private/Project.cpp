@@ -8,7 +8,7 @@
 
 #include <fstream>
 
-namespace VKE::Project {
+namespace VKE {
 
 namespace {
 std::string ReadString(const YAML::Node &root, const char *key) {
@@ -66,7 +66,7 @@ std::optional<Project> Project::Open(const std::filesystem::path &folderOrFile) 
 	if (project.m_Name.empty()) {
 		project.m_Name = file.stem().u8string();
 	}
-	project.m_StartScene = Assets::AssetID::Parse(ReadString(root, "StartScene"));
+	project.m_StartScene = AssetID::Parse(ReadString(root, "StartScene"));
 
 	std::string version = ReadString(root, "EngineVersion");
 	if (!version.empty() && version != kEngineVersion) {
@@ -76,7 +76,7 @@ std::optional<Project> Project::Open(const std::filesystem::path &folderOrFile) 
 }
 
 std::optional<Project> Project::Create(
-		const std::filesystem::path &folder, const std::string &name, Assets::AssetID startScene) {
+		const std::filesystem::path &folder, const std::string &name, AssetID startScene) {
 	Project project;
 	std::error_code ec;
 	project.m_Folder = std::filesystem::weakly_canonical(folder, ec);
@@ -112,10 +112,10 @@ bool Project::Save() const {
 	return true;
 }
 
-std::vector<Assets::AssetRoot> Project::GetAssetRoots() const {
+std::vector<AssetRoot> Project::GetAssetRoots() const {
 	return {
 		{ "assets", GetAssetsFolder(), false },
-		{ "Engine", Platform::FileSystem::GetEngineContentDirectory(), true },
+		{ "Engine", FileSystem::GetEngineContentDirectory(), true },
 	};
 }
 
@@ -128,4 +128,4 @@ std::filesystem::path FindProjectArgument(const std::vector<std::string> &argume
 	return {};
 }
 
-} // namespace VKE::Project
+} // namespace VKE

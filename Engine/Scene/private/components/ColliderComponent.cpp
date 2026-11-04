@@ -6,10 +6,10 @@
 #include <assets/AssetManager.h>
 #include <core/Log.h>
 
-namespace VKE::Scene {
+namespace VKE {
 
 void ColliderComponent::SetBox(const Vec3 &center, const Vec3 &halfExtents) {
-	m_Shape = Physics::ShapeType::Box;
+	m_Shape = ShapeType::Box;
 	m_BoxCenter = center;
 	m_BoxHalfExtents = halfExtents;
 	m_Mesh = {};
@@ -17,14 +17,14 @@ void ColliderComponent::SetBox(const Vec3 &center, const Vec3 &halfExtents) {
 	MarkSyncNeeded();
 }
 
-void ColliderComponent::SetMesh(const Assets::AssetManager &assets, Handle<Assets::MeshData> mesh) {
-	m_Shape = Physics::ShapeType::Mesh;
+void ColliderComponent::SetMesh(const AssetManager &assets, Handle<MeshData> mesh) {
+	m_Shape = ShapeType::Mesh;
 	m_Mesh = mesh;
-	m_PendingGeometry = MakeIunique<Physics::MeshShapeDesc>();
+	m_PendingGeometry = MakeIunique<MeshShapeDesc>();
 
-	if (const Assets::MeshData *data = assets.GetMesh(mesh)) {
+	if (const MeshData *data = assets.GetMesh(mesh)) {
 		m_PendingGeometry->Positions.reserve(data->Vertices.size());
-		for (const Assets::Vertex &vertex : data->Vertices) {
+		for (const Vertex &vertex : data->Vertices) {
 			m_PendingGeometry->Positions.push_back(vertex.Position);
 		}
 		m_PendingGeometry->Indices = data->Indices;
@@ -34,7 +34,7 @@ void ColliderComponent::SetMesh(const Assets::AssetManager &assets, Handle<Asset
 	MarkSyncNeeded();
 }
 
-void ColliderComponent::SetMotion(Physics::BodyMotion motion) {
+void ColliderComponent::SetMotion(BodyMotion motion) {
 	m_Motion = motion;
 	MarkSyncNeeded();
 }
@@ -44,9 +44,9 @@ void ColliderComponent::SetTrigger(bool isTrigger) {
 	MarkSyncNeeded();
 }
 
-void ColliderComponent::OnPropertiesChanged(const Assets::AssetManager &assets) {
+void ColliderComponent::OnPropertiesChanged(const AssetManager &assets) {
 	// A new mesh needs its triangles read, which SetMesh does.
-	if (m_Shape == Physics::ShapeType::Mesh && m_Mesh != m_ShapeMesh) {
+	if (m_Shape == ShapeType::Mesh && m_Mesh != m_ShapeMesh) {
 		SetMesh(assets, m_Mesh);
 	} else {
 		MarkSyncNeeded();
@@ -62,12 +62,12 @@ void ColliderComponent::SyncToSystems(SceneSystems &systems) {
 	if (m_PendingGeometry) {
 		// Taken before the old one is given back, so setting the same mesh again doesn't
 		// rebuild its shape.
-		Physics::MeshShapeID shape = systems.MeshShapes.Acquire(m_Mesh, *m_PendingGeometry);
+		MeshShapeID shape = systems.MeshShapes.Acquire(m_Mesh, *m_PendingGeometry);
 		ReleaseMeshShape(systems);
 		m_MeshShape = shape;
 		m_ShapeMesh = m_Mesh;
 		m_PendingGeometry.reset();
-	} else if (m_Shape != Physics::ShapeType::Mesh) {
+	} else if (m_Shape != ShapeType::Mesh) {
 		ReleaseMeshShape(systems);
 	}
 
@@ -77,7 +77,7 @@ void ColliderComponent::SyncToSystems(SceneSystems &systems) {
 		return;
 	}
 
-	Physics::BodyDesc desc;
+	BodyDesc desc;
 	desc.Shape = m_Shape;
 	desc.Center = m_BoxCenter;
 	desc.HalfExtents = m_BoxHalfExtents;
@@ -114,4 +114,4 @@ void ColliderComponent::DestroyBody(SceneSystems &systems) {
 	m_Body = {};
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

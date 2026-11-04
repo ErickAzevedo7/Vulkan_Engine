@@ -7,7 +7,7 @@
 #include <deque>
 #include <string>
 
-namespace VKE::Scene {
+namespace VKE {
 
 namespace {
 constexpr StructInfo kNoProperties = { "Missing", nullptr, 0 };
@@ -97,4 +97,4 @@ ComponentTypeID ComponentRegistry::Add(ComponentTypeInfo info) {
 	return types.back().ID;
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

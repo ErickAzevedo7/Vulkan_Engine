@@ -16,7 +16,7 @@ namespace {
 constexpr size_t kMaxProjects = 20;
 
 std::filesystem::path GetListFile() {
-	return Platform::FileSystem::GetUserDataDirectory() / "RecentProjects.yaml";
+	return FileSystem::GetUserDataDirectory() / "RecentProjects.yaml";
 }
 
 // Folders compare by their full path, ignoring case on Windows.
@@ -86,7 +86,7 @@ void RecentProjects::Save() const {
 	}
 }
 
-void RecentProjects::Add(const Project::Project &project) {
+void RecentProjects::Add(const Project &project) {
 	Remove(project.GetFolder());
 	m_Projects.insert(m_Projects.begin(), { project.GetFolder(), project.GetName(), std::time(nullptr) });
 	if (m_Projects.size() > kMaxProjects) {

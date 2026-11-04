@@ -30,7 +30,7 @@ struct ScreenView {
 	// tan(vertical field of view / 2).
 	f32 TanHalfFov = 0.5f;
 
-	static ScreenView From(const Renderer::RenderView &view, const Vec2 &size);
+	static ScreenView From(const RenderView &view, const Vec2 &size);
 
 	// False for points behind the camera.
 	bool ToScreen(const Vec3 &point, Vec2 &pixel) const;

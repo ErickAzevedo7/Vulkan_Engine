@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace VKE::Platform {
+namespace VKE {
 
 // Pointer shapes the window can show while the mouse is over it.
 enum class CursorShape {
@@ -76,4 +76,4 @@ public:
 	virtual void *GetNativeHandle() const = 0;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

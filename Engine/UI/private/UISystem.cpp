@@ -18,13 +18,13 @@
 #include <cmath>
 #include <cstring>
 
-namespace VKE::UI {
+namespace VKE {
 
 namespace {
-static_assert(sizeof(ImDrawVert) == sizeof(Renderer::OverlayVertex), "ImDrawVert must match OverlayVertex");
-static_assert(offsetof(ImDrawVert, pos) == offsetof(Renderer::OverlayVertex, Position));
-static_assert(offsetof(ImDrawVert, uv) == offsetof(Renderer::OverlayVertex, UV));
-static_assert(offsetof(ImDrawVert, col) == offsetof(Renderer::OverlayVertex, Color));
+static_assert(sizeof(ImDrawVert) == sizeof(OverlayVertex), "ImDrawVert must match OverlayVertex");
+static_assert(offsetof(ImDrawVert, pos) == offsetof(OverlayVertex, Position));
+static_assert(offsetof(ImDrawVert, uv) == offsetof(OverlayVertex, UV));
+static_assert(offsetof(ImDrawVert, col) == offsetof(OverlayVertex, Color));
 static_assert(sizeof(ImDrawIdx) == sizeof(u16), "The 2D layer takes 16-bit indices");
 
 std::array<ImFont *, static_cast<size_t>(TextStyle::Count)> s_Fonts{};
@@ -55,28 +55,28 @@ static_assert(std::size(kFontStyles) == static_cast<size_t>(TextStyle::Count));
 
 constexpr const char *kIconFile = "lucide.ttf";
 
-Platform::CursorShape ToCursorShape(ImGuiMouseCursor cursor) {
+CursorShape ToCursorShape(ImGuiMouseCursor cursor) {
 	switch (cursor) {
 		case ImGuiMouseCursor_None:
-			return Platform::CursorShape::Hidden;
+			return CursorShape::Hidden;
 		case ImGuiMouseCursor_TextInput:
-			return Platform::CursorShape::TextInput;
+			return CursorShape::TextInput;
 		case ImGuiMouseCursor_ResizeAll:
-			return Platform::CursorShape::ResizeAll;
+			return CursorShape::ResizeAll;
 		case ImGuiMouseCursor_ResizeNS:
-			return Platform::CursorShape::ResizeVertical;
+			return CursorShape::ResizeVertical;
 		case ImGuiMouseCursor_ResizeEW:
-			return Platform::CursorShape::ResizeHorizontal;
+			return CursorShape::ResizeHorizontal;
 		case ImGuiMouseCursor_ResizeNESW:
-			return Platform::CursorShape::ResizeDiagonalUp;
+			return CursorShape::ResizeDiagonalUp;
 		case ImGuiMouseCursor_ResizeNWSE:
-			return Platform::CursorShape::ResizeDiagonalDown;
+			return CursorShape::ResizeDiagonalDown;
 		case ImGuiMouseCursor_Hand:
-			return Platform::CursorShape::Hand;
+			return CursorShape::Hand;
 		case ImGuiMouseCursor_NotAllowed:
-			return Platform::CursorShape::NotAllowed;
+			return CursorShape::NotAllowed;
 		default:
-			return Platform::CursorShape::Arrow;
+			return CursorShape::Arrow;
 	}
 }
 
@@ -95,12 +95,12 @@ ImFont *GetFont(TextStyle style) {
 	return s_Fonts[static_cast<size_t>(style)];
 }
 
-size_t UISystem::TextureKeyHash::operator()(const Renderer::OverlayTexture &texture) const {
+size_t UISystem::TextureKeyHash::operator()(const OverlayTexture &texture) const {
 	u64 key = (static_cast<u64>(texture.Index) << 32) | texture.Generation;
 	return std::hash<u64>()(key) ^ (static_cast<size_t>(texture.Type) * 0x9E3779B97F4A7C15ull);
 }
 
-UISystem::UISystem(Platform::IWindow &window, Platform::IInput &input, Renderer::Renderer &renderer) :
+UISystem::UISystem(IWindow &window, IInput &input, Renderer &renderer) :
 		m_Window(window), m_Input(input), m_Renderer(renderer) {}
 
 UISystem::~UISystem() = default;
@@ -161,7 +161,7 @@ void UISystem::SetLayoutFile(const std::filesystem::path &file) {
 }
 
 void UISystem::BuildFonts() {
-	const auto fontDir = Platform::FileSystem::GetEngineContentDirectory() / "Fonts";
+	const auto fontDir = FileSystem::GetEngineContentDirectory() / "Fonts";
 	ImFontAtlas &atlas = *ImGui::GetIO().Fonts;
 
 	// Latin-1 covers Portuguese; a few punctuation marks the interface uses come on top.
@@ -238,7 +238,7 @@ void UISystem::BuildFonts() {
 	int height = 0;
 	atlas.GetTexDataAsRGBA32(&pixels, &width, &height);
 	m_FontAtlas = m_Renderer.CreateOverlayImage(static_cast<u32>(width), static_cast<u32>(height), pixels);
-	atlas.SetTexID(static_cast<ImTextureID>(GetTextureID(Renderer::OverlayTexture::FromImage(m_FontAtlas))));
+	atlas.SetTexID(static_cast<ImTextureID>(GetTextureID(OverlayTexture::FromImage(m_FontAtlas))));
 	// The atlas texture lives on the GPU now; the font files stay for a rebuild.
 	atlas.ClearTexData();
 }
@@ -260,8 +260,8 @@ void UISystem::FeedInput(FrameTime ft) {
 	io.DeltaTime = std::max(ft.GetDeltaF(), 1e-5f);
 
 	io.AddMousePosEvent(m_Input.GetMouseX(), m_Input.GetMouseY());
-	constexpr Platform::MouseButton kButtons[] = { Platform::MouseButton::Left, Platform::MouseButton::Right,
-		Platform::MouseButton::Middle, Platform::MouseButton::Button4, Platform::MouseButton::Button5 };
+	constexpr MouseButton kButtons[] = { MouseButton::Left, MouseButton::Right, MouseButton::Middle,
+		MouseButton::Button4, MouseButton::Button5 };
 	for (int i = 0; i < static_cast<int>(std::size(kButtons)); ++i) {
 		if (m_Input.IsMouseButtonPressed(kButtons[i])) {
 			io.AddMouseButtonEvent(i, true);
@@ -274,7 +274,6 @@ void UISystem::FeedInput(FrameTime ft) {
 		io.AddMouseWheelEvent(m_Input.GetScrollDeltaX(), m_Input.GetScrollDeltaY());
 	}
 
-	using Platform::KeyCode;
 	auto down = [&](KeyCode key) { return m_Input.IsKeyDown(key); };
 	io.AddKeyEvent(ImGuiMod_Ctrl, down(KeyCode::LeftControl) || down(KeyCode::RightControl));
 	io.AddKeyEvent(ImGuiMod_Shift, down(KeyCode::LeftShift) || down(KeyCode::RightShift));
@@ -316,8 +315,7 @@ void UISystem::ApplyCursor() {
 	if (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) {
 		return;
 	}
-	m_Window.SetCursorShape(
-			io.MouseDrawCursor ? Platform::CursorShape::Hidden : ToCursorShape(ImGui::GetMouseCursor()));
+	m_Window.SetCursorShape(io.MouseDrawCursor ? CursorShape::Hidden : ToCursorShape(ImGui::GetMouseCursor()));
 }
 
 void UISystem::BuildDrawList() {
@@ -344,7 +342,7 @@ void UISystem::BuildDrawList() {
 				continue;
 			}
 
-			Renderer::OverlayCommand command;
+			OverlayCommand command;
 			command.FirstIndex = indexBase + cmd.IdxOffset;
 			command.IndexCount = cmd.ElemCount;
 			command.VertexOffset = static_cast<i32>(vertexBase + cmd.VtxOffset);
@@ -361,8 +359,8 @@ void UISystem::BuildDrawList() {
 	}
 }
 
-u64 UISystem::GetTextureID(const Renderer::OverlayTexture &texture) {
-	if (texture.Type == Renderer::OverlayTexture::Kind::None) {
+u64 UISystem::GetTextureID(const OverlayTexture &texture) {
+	if (texture.Type == OverlayTexture::Kind::None) {
 		return 0;
 	}
 	auto [it, inserted] = m_TextureIDs.emplace(texture, m_Textures.size() + 1);
@@ -380,4 +378,4 @@ bool UISystem::WantsKeyboard() const {
 	return m_Context && ImGui::GetIO().WantCaptureKeyboard;
 }
 
-} // namespace VKE::UI
+} // namespace VKE

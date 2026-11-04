@@ -24,11 +24,6 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-namespace Colors = UI::Colors;
-namespace Sizes = UI::Sizes;
-
 namespace {
 constexpr f32 kSidebarWidth = 280.0f;
 constexpr f32 kRowHeight = 56.0f;
@@ -90,7 +85,7 @@ bool ContainsIgnoringCase(const std::string &text, const std::string &part) {
 void DrawClippedText(ImDrawList *draw, ImFont *font, ImVec2 position, f32 width, u32 color, const std::string &text) {
 	ImVec4 clip(position.x, position.y, position.x + width, position.y + font->FontSize * 2.0f);
 	if (font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, text.c_str()).x <= width) {
-		draw->AddText(font, font->FontSize, position, UI::ToImColor(color), text.c_str());
+		draw->AddText(font, font->FontSize, position, ToImColor(color), text.c_str());
 		return;
 	}
 	const char *ellipsis = "\xe2\x80\xa6";
@@ -104,7 +99,7 @@ void DrawClippedText(ImDrawList *draw, ImFont *font, ImVec2 position, f32 width,
 		}
 	}
 	cut += ellipsis;
-	draw->AddText(font, font->FontSize, position, UI::ToImColor(color), cut.c_str(), nullptr, 0.0f, &clip);
+	draw->AddText(font, font->FontSize, position, ToImColor(color), cut.c_str(), nullptr, 0.0f, &clip);
 }
 
 // A button as wide as the sidebar, its label on the left.
@@ -125,7 +120,7 @@ bool SidebarButton(const char *label, bool primary) {
 }
 } // namespace
 
-ProjectHub::ProjectHub(Platform::IInput &input, Renderer::Renderer &renderer, UI::UISystem &ui, std::string notice) :
+ProjectHub::ProjectHub(IInput &input, Renderer &renderer, UISystem &ui, std::string notice) :
 		m_Input(input),
 		m_Renderer(renderer),
 		m_UI(ui),
@@ -156,7 +151,7 @@ void ProjectHub::OnUpdate(FrameTime /*ft*/) {
 void ProjectHub::RefreshMissing() {
 	m_Missing.clear();
 	for (const RecentProject &project : m_Recent.Get()) {
-		m_Missing.push_back(Project::Project::FindProjectFile(project.Folder).empty());
+		m_Missing.push_back(Project::FindProjectFile(project.Folder).empty());
 	}
 }
 
@@ -196,11 +191,11 @@ void ProjectHub::DrawSidebar() {
 	Widgets::Text(version.c_str(), Colors::TextMuted, TextStyle::MonoSmall);
 	ImGui::Dummy(ImVec2(0.0f, Sizes::Space6));
 
-	std::string newLabel = std::string(UI::Icons::FolderPlus) + "  New project";
+	std::string newLabel = std::string(Icons::FolderPlus) + "  New project";
 	if (SidebarButton(newLabel.c_str(), true)) {
 		BeginNewProject();
 	}
-	std::string openLabel = std::string(UI::Icons::FolderOpen) + "  Open folder\xe2\x80\xa6";
+	std::string openLabel = std::string(Icons::FolderOpen) + "  Open folder\xe2\x80\xa6";
 	if (SidebarButton(openLabel.c_str(), false)) {
 		OpenFolder();
 	}
@@ -223,7 +218,7 @@ void ProjectHub::DrawSidebar() {
 	// The line between the sidebar and the list.
 	ImVec2 min = ImGui::GetWindowPos();
 	ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x + kSidebarWidth - 1.0f, min.y),
-			ImVec2(min.x + kSidebarWidth - 1.0f, min.y + ImGui::GetWindowHeight()), UI::ToImColor(Colors::Line));
+			ImVec2(min.x + kSidebarWidth - 1.0f, min.y + ImGui::GetWindowHeight()), ToImColor(Colors::Line));
 	ImGui::EndChild();
 	ImGui::PopStyleVar();
 	ImGui::PopStyleColor();
@@ -250,13 +245,13 @@ void ProjectHub::DrawRecentProjects() {
 	ImFont *small = GetFont(TextStyle::UISmall);
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	f32 nameX = header.x + 13.0f + 40.0f + Sizes::Space5;
-	draw->AddText(small, small->FontSize, ImVec2(nameX, header.y), UI::ToImColor(Colors::TextMuted), "NAME");
+	draw->AddText(small, small->FontSize, ImVec2(nameX, header.y), ToImColor(Colors::TextMuted), "NAME");
 	const char *whenLabel = "LAST OPENED";
 	f32 whenWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, whenLabel).x;
 	draw->AddText(small, small->FontSize, ImVec2(header.x + width - 13.0f - whenWidth, header.y),
-			UI::ToImColor(Colors::TextMuted), whenLabel);
+			ToImColor(Colors::TextMuted), whenLabel);
 	f32 lineY = header.y + small->FontSize + Sizes::Space3;
-	draw->AddLine(ImVec2(header.x, lineY), ImVec2(header.x + width, lineY), UI::ToImColor(Colors::Line));
+	draw->AddLine(ImVec2(header.x, lineY), ImVec2(header.x + width, lineY), ToImColor(Colors::Line));
 	ImGui::Dummy(ImVec2(width, lineY - header.y + Sizes::Space3 - ImGui::GetStyle().ItemSpacing.y));
 
 	// The list, leaving room for the footer.
@@ -304,7 +299,7 @@ void ProjectHub::DrawRecentProjects() {
 
 	// Footer: a line, the hint or notice, and the buttons for the selected project.
 	ImVec2 footer = ImGui::GetCursorScreenPos();
-	draw->AddLine(ImVec2(footer.x, footer.y), ImVec2(footer.x + width, footer.y), UI::ToImColor(Colors::Line));
+	draw->AddLine(ImVec2(footer.x, footer.y), ImVec2(footer.x + width, footer.y), ToImColor(Colors::Line));
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + Sizes::Space6);
 	ImGui::AlignTextToFramePadding();
 	if (m_Notice.empty()) {
@@ -362,17 +357,17 @@ void ProjectHub::DrawProjectRow(size_t index, f32 width) {
 
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	if (selected) {
-		draw->AddRectFilled(min, max, UI::ToImColor(Colors::AccentSoft), Sizes::RadiusMd);
-		draw->AddRect(min, max, UI::ToImColor(Colors::Accent), Sizes::RadiusMd);
+		draw->AddRectFilled(min, max, ToImColor(Colors::AccentSoft), Sizes::RadiusMd);
+		draw->AddRect(min, max, ToImColor(Colors::Accent), Sizes::RadiusMd);
 	} else if (hovered) {
-		draw->AddRectFilled(min, max, UI::ToImColor(Colors::BgHover), Sizes::RadiusMd);
+		draw->AddRectFilled(min, max, ToImColor(Colors::BgHover), Sizes::RadiusMd);
 	}
 
 	// The first letter of the name in a square.
 	ImVec2 iconMin(min.x + Sizes::Space5, min.y + Sizes::Space4);
 	ImVec2 iconMax(iconMin.x + 40.0f, iconMin.y + 40.0f);
-	draw->AddRectFilled(iconMin, iconMax, UI::ToImColor(Colors::BgRaised), Sizes::RadiusMd);
-	draw->AddRect(iconMin, iconMax, UI::ToImColor(Colors::Line), Sizes::RadiusMd);
+	draw->AddRectFilled(iconMin, iconMax, ToImColor(Colors::BgRaised), Sizes::RadiusMd);
+	draw->AddRect(iconMin, iconMax, ToImColor(Colors::Line), Sizes::RadiusMd);
 	std::string letter = project.Name.empty()
 			? "?"
 			: std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(project.Name[0]))));
@@ -381,7 +376,7 @@ void ProjectHub::DrawProjectRow(size_t index, f32 width) {
 	draw->AddText(heading, heading->FontSize,
 			ImVec2(std::floor(iconMin.x + (40.0f - letterSize.x) * 0.5f),
 					std::floor(iconMin.y + (40.0f - letterSize.y) * 0.5f)),
-			UI::ToImColor(Colors::TextMuted), letter.c_str());
+			ToImColor(Colors::TextMuted), letter.c_str());
 
 	// Name and folder, then when it was opened, on the right.
 	ImFont *strong = GetFont(TextStyle::UIStrong);
@@ -405,14 +400,14 @@ void ProjectHub::DrawProjectRow(size_t index, f32 width) {
 	f32 whenWidth = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, when.c_str()).x;
 	draw->AddText(mono, mono->FontSize,
 			ImVec2(max.x - 13.0f - whenWidth, std::floor(min.y + (kRowHeight - mono->FontSize) * 0.5f)),
-			UI::ToImColor(Colors::TextMuted), when.c_str());
+			ToImColor(Colors::TextMuted), when.c_str());
 }
 
 void ProjectHub::BeginNewProject() {
 	SetNotice({}, false);
 	m_CreateError.clear();
 	m_Template = 0;
-	std::filesystem::path location = Platform::FileSystem::GetDocumentsDirectory() / "VKE";
+	std::filesystem::path location = FileSystem::GetDocumentsDirectory() / "VKE";
 	m_NewLocation = location.generic_u8string();
 	// A name whose folder isn't taken yet.
 	m_NewName = "NewProject";
@@ -447,7 +442,7 @@ std::string ProjectHub::CheckNewProject() const {
 }
 
 void ProjectHub::CreateNewProject() {
-	std::optional<Project::Project> project = CreateProject(m_Templates[m_Template], GetNewProjectFolder(), m_NewName);
+	std::optional<Project> project = CreateProject(m_Templates[m_Template], GetNewProjectFolder(), m_NewName);
 	if (!project) {
 		m_CreateError = "The project couldn't be created. The log says why.";
 		return;
@@ -480,25 +475,24 @@ void ProjectHub::DrawTemplateCard(size_t index) {
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	ImVec2 max(min.x + kCardWidth, min.y + height);
 	bool selected = m_Template == index;
-	draw->AddRectFilled(min, max, UI::ToImColor(Colors::BgRaised), Sizes::RadiusLg);
+	draw->AddRectFilled(min, max, ToImColor(Colors::BgRaised), Sizes::RadiusLg);
 	u32 border = selected ? Colors::Accent : hovered ? Colors::ControlBorder : Colors::Line;
-	draw->AddRect(min, max, UI::ToImColor(border), Sizes::RadiusLg, 0, selected ? 2.0f : 1.0f);
+	draw->AddRect(min, max, ToImColor(border), Sizes::RadiusLg, 0, selected ? 2.0f : 1.0f);
 
 	ImVec2 artMin(min.x + padding, min.y + padding);
 	ImVec2 artMax(max.x - padding, artMin.y + kArtHeight);
-	draw->AddRectFilled(artMin, artMax, UI::ToImColor(Colors::BgField), Sizes::RadiusMd);
+	draw->AddRectFilled(artMin, artMax, ToImColor(Colors::BgField), Sizes::RadiusMd);
 	ImFont *icons = GetFont(TextStyle::Icons32);
-	ImVec2 iconSize = icons->CalcTextSizeA(icons->FontSize, FLT_MAX, 0.0f, UI::Icons::Box);
+	ImVec2 iconSize = icons->CalcTextSizeA(icons->FontSize, FLT_MAX, 0.0f, Icons::Box);
 	draw->AddText(icons, icons->FontSize,
 			ImVec2(std::floor((artMin.x + artMax.x - iconSize.x) * 0.5f),
 					std::floor((artMin.y + artMax.y - iconSize.y) * 0.5f)),
-			UI::ToImColor(Colors::TextMuted), UI::Icons::Box);
+			ToImColor(Colors::TextMuted), Icons::Box);
 
 	f32 y = artMax.y + Sizes::Space3;
-	draw->AddText(
-			strong, strong->FontSize, ImVec2(artMin.x, y), UI::ToImColor(Colors::Text), projectTemplate.Name.c_str());
+	draw->AddText(strong, strong->FontSize, ImVec2(artMin.x, y), ToImColor(Colors::Text), projectTemplate.Name.c_str());
 	y += strong->FontSize + Sizes::Space1;
-	draw->AddText(text, text->FontSize, ImVec2(artMin.x, y), UI::ToImColor(Colors::TextMuted),
+	draw->AddText(text, text->FontSize, ImVec2(artMin.x, y), ToImColor(Colors::TextMuted),
 			projectTemplate.Description.c_str(), nullptr, innerWidth);
 }
 
@@ -550,7 +544,7 @@ void ProjectHub::DrawNewProjectDialog() {
 	bool submitted = ImGui::InputText("##Name", &m_NewName, ImGuiInputTextFlags_EnterReturnsTrue);
 
 	label("Location");
-	std::string browse = std::string(UI::Icons::FolderOpen) + "  Browse\xe2\x80\xa6";
+	std::string browse = std::string(Icons::FolderOpen) + "  Browse\xe2\x80\xa6";
 	f32 browseWidth = ImGui::CalcTextSize(browse.c_str()).x + 2.0f * ImGui::GetStyle().FramePadding.x;
 	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - Sizes::Space3);
 	ImGui::PushFont(GetFont(TextStyle::Mono));
@@ -561,9 +555,9 @@ void ProjectHub::DrawNewProjectDialog() {
 		std::error_code ec;
 		std::filesystem::path start = std::filesystem::u8path(m_NewLocation);
 		if (!std::filesystem::is_directory(start, ec)) {
-			start = Platform::FileSystem::GetDocumentsDirectory();
+			start = FileSystem::GetDocumentsDirectory();
 		}
-		if (auto folder = Platform::FileDialog::PickFolder(start)) {
+		if (auto folder = FileDialog::PickFolder(start)) {
 			m_NewLocation = folder->generic_u8string();
 		}
 	}
@@ -577,8 +571,8 @@ void ProjectHub::DrawNewProjectDialog() {
 	} else if (!problem.empty()) {
 		Widgets::Text(problem.c_str(), Colors::Danger, TextStyle::MonoSmall);
 	} else {
-		std::string file = (GetNewProjectFolder() / std::filesystem::u8path(m_NewName + Project::Project::kExtension))
-								   .generic_u8string();
+		std::string file =
+				(GetNewProjectFolder() / std::filesystem::u8path(m_NewName + Project::kExtension)).generic_u8string();
 		Widgets::Text(("Creates " + file).c_str(), Colors::TextMuted, TextStyle::MonoSmall);
 	}
 
@@ -603,7 +597,7 @@ void ProjectHub::DrawNewProjectDialog() {
 
 void ProjectHub::OpenFolder() {
 	SetNotice({}, false);
-	std::optional<std::filesystem::path> folder = Platform::FileDialog::PickFolder();
+	std::optional<std::filesystem::path> folder = FileDialog::PickFolder();
 	if (!folder) {
 		return;
 	}
@@ -611,12 +605,12 @@ void ProjectHub::OpenFolder() {
 }
 
 bool ProjectHub::OpenProject(const std::filesystem::path &folder) {
-	if (Project::Project::FindProjectFile(folder).empty()) {
+	if (Project::FindProjectFile(folder).empty()) {
 		SetNotice("'" + folder.filename().u8string() + "' has no .vkproject file.", true);
 		return false;
 	}
-	std::filesystem::path editor = Platform::FileSystem::GetExecutablePath();
-	if (!Platform::Process::Launch(editor, { "--project", folder.u8string() })) {
+	std::filesystem::path editor = FileSystem::GetExecutablePath();
+	if (!Process::Launch(editor, { "--project", folder.u8string() })) {
 		SetNotice("The editor couldn't be started. The log says why.", true);
 		return false;
 	}

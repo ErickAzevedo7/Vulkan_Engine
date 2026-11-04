@@ -6,14 +6,14 @@
 #include <physics/PhysicsWorld.h>
 #include <renderer/RenderScene.h>
 
-namespace VKE::Scene {
+namespace VKE {
 
 class GameObject;
 
 // What a scene's components feed. Only the scene module sees its definition.
 struct SceneSystems {
-	Renderer::RenderScene &Render;
-	Physics::PhysicsWorld &Physics;
+	RenderScene &Render;
+	PhysicsWorld &Physics;
 	MeshShapeCache &MeshShapes;
 };
 
@@ -30,4 +30,4 @@ inline Handle<GameObject> UnpackObjectHandle(u64 userData) {
 	return handle;
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

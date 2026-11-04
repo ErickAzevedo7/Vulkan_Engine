@@ -13,22 +13,22 @@
 #include <functional>
 #include <string>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Platform {
+namespace VKE {
 class IInput;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 class GameObject;
 class Scene;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::Scripting {
+namespace VKE {
 class GameModule;
-} // namespace VKE::Scripting
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -58,26 +58,26 @@ enum class PlayMode {
 // the prefab's, and Save writes the prefab and remakes the scene's instances from it.
 class EditorScene {
 public:
-	explicit EditorScene(Assets::AssetManager &assets);
+	explicit EditorScene(AssetManager &assets);
 	~EditorScene();
 
 	// An unsaved scene with a camera and a light.
 	void New();
 	// False, logged, if the asset isn't a scene or can't be read; the open scene stays.
-	bool Open(Assets::AssetID scene);
+	bool Open(AssetID scene);
 	// Writes the scene to its file. False if it has none yet or the write fails.
 	bool Save();
 	// Writes the scene to `file`, which must be inside the project's assets, and makes it
 	// the scene's file. False, logged, if it isn't or the write fails.
 	bool SaveAs(const std::filesystem::path &file);
 
-	Scene::Scene &GetScene() { return *m_Scene; }
-	const Scene::Scene &GetScene() const { return *m_Scene; }
-	Assets::AssetManager &GetAssets() { return m_Assets; }
-	Scene::PrefabLibrary &GetPrefabs() { return m_Prefabs; }
+	Scene &GetScene() { return *m_Scene; }
+	const Scene &GetScene() const { return *m_Scene; }
+	AssetManager &GetAssets() { return m_Assets; }
+	PrefabLibrary &GetPrefabs() { return m_Prefabs; }
 
 	// Invalid until the scene is saved. While a prefab is open, these are the prefab's.
-	Assets::AssetID GetID() const { return m_ID; }
+	AssetID GetID() const { return m_ID; }
 	// Where the scene asset is now, which follows it when it is moved; empty until saved, or
 	// once its file is deleted.
 	std::filesystem::path GetFile() const;
@@ -98,7 +98,7 @@ public:
 	// Back to the scene as it was at Play, with the same object selected if it was there.
 	void Stop();
 	// What scripts read the keyboard and the mouse from.
-	void SetInput(const Platform::IInput &input) { m_Input = &input; }
+	void SetInput(const IInput &input) { m_Input = &input; }
 	// Whether they are the game's now, and where its view starts in the window.
 	void SetInputArea(bool focused, f32 viewX, f32 viewY) { m_Runner.SetInputArea(focused, viewX, viewY); }
 	// Where the scene is kept during Play if it has unsaved changes, in case the game takes
@@ -117,8 +117,7 @@ public:
 	// every object is destroyed and made again from what it held, including a prefab open
 	// now, unsaved changes and selection. False, logged, if something can't be kept or the
 	// DLL can't be loaded, and then the running game stays if it can.
-	bool SwitchGame(
-			Scripting::GameModule &game, const std::filesystem::path &library, const std::filesystem::path &workFolder);
+	bool SwitchGame(GameModule &game, const std::filesystem::path &library, const std::filesystem::path &workFolder);
 
 	// Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
 	// per frame, before rendering.
@@ -131,98 +130,95 @@ public:
 	// The name of the scene waiting while a prefab is open.
 	std::string GetWaitingFileName() const;
 	// False, logged, if the asset isn't a prefab or can't be read; the scene stays.
-	bool OpenPrefab(Assets::AssetID prefab);
+	bool OpenPrefab(AssetID prefab);
 	// Back to the scene, dropping what wasn't saved of the prefab.
 	void ClosePrefab();
 
 	// Asks for a prefab to be opened, for what can't replace the scene while drawing it.
-	void AskToOpenPrefab(Assets::AssetID prefab) { m_PrefabToOpen = prefab; }
+	void AskToOpenPrefab(AssetID prefab) { m_PrefabToOpen = prefab; }
 	// The prefab asked for since the last call; invalid if none.
-	Assets::AssetID TakePrefabToOpen();
+	AssetID TakePrefabToOpen();
 
 	// Whether `object` could become a prefab: prefabs don't go inside prefabs.
-	bool CanCreatePrefab(const Scene::GameObject &object) const;
+	bool CanCreatePrefab(const GameObject &object) const;
 	// Writes `object` and everything below it to `file`, and puts an instance of the new
 	// prefab in their place. Invalid, logged, if it can't.
-	Assets::AssetID CreatePrefab(Scene::GameObject &object, const std::filesystem::path &file);
+	AssetID CreatePrefab(GameObject &object, const std::filesystem::path &file);
 	// Has `change` edit the prefab's objects, given by their root, writes the file and remakes
 	// the scene's instances, which keep their overrides. Replaces every object of the scene.
 	// False, logged, if the prefab can't be written.
-	bool ChangePrefab(Assets::AssetID prefab, const std::function<void(Scene::GameObject &)> &change);
+	bool ChangePrefab(AssetID prefab, const std::function<void(GameObject &)> &change);
 	// Makes an instance plain objects, which stay as they are, and marks the scene changed.
-	void Unpack(Scene::GameObject &instance);
+	void Unpack(GameObject &instance);
 
 	// The hierarchy's rules. Prefab instances keep the shape of their prefab: only a whole
 	// instance moves or goes away, and nothing goes inside one. A prefab has one root.
 	// Whether `object` has to stay where it is and can't be destroyed.
-	bool IsFixed(const Scene::GameObject &object) const;
+	bool IsFixed(const GameObject &object) const;
 	// Whether objects can go under `parent`, or at the root of the scene for null.
-	bool AcceptsChildren(const Scene::GameObject *parent) const;
+	bool AcceptsChildren(const GameObject *parent) const;
 	// Where new objects go when no parent is given: the open prefab's root, or the scene's root.
-	Scene::GameObject *GetDefaultParent() const;
+	GameObject *GetDefaultParent() const;
 
 	// The selected object, or null. Nothing is selected after New and Open.
-	Scene::GameObject *GetSelected() const;
+	GameObject *GetSelected() const;
 	// Selecting anything, or nothing, deselects the asset.
-	void Select(Scene::GameObject *object);
+	void Select(GameObject *object);
 	// The selected asset, or invalid. Selecting one deselects the object.
-	Assets::AssetID GetSelectedAsset() const { return m_SelectedAsset; }
-	void SelectAsset(Assets::AssetID asset);
+	AssetID GetSelectedAsset() const { return m_SelectedAsset; }
+	void SelectAsset(AssetID asset);
 
 	// New objects go last under `parent`, or at the root of the scene, and mark it changed.
-	Scene::GameObject &CreateEmpty(Scene::GameObject *parent = nullptr);
+	GameObject &CreateEmpty(GameObject *parent = nullptr);
 	// Null, logged, if the engine's content is missing the shape.
-	Scene::GameObject *CreateShape(Shape shape, Scene::GameObject *parent = nullptr);
-	Scene::GameObject &CreateCamera(Scene::GameObject *parent = nullptr);
-	Scene::GameObject &CreateLight(Renderer::LightType type, Scene::GameObject *parent = nullptr);
+	GameObject *CreateShape(Shape shape, GameObject *parent = nullptr);
+	GameObject &CreateCamera(GameObject *parent = nullptr);
+	GameObject &CreateLight(LightType type, GameObject *parent = nullptr);
 	// The objects of a model asset, last under `parent` or at the root of the scene, with the
 	// root at `position` in its parent's space. Null, logged, if it isn't a model or can't load.
-	Scene::GameObject *InstantiateModel(
-			Assets::AssetID model, Scene::GameObject *parent = nullptr, const Vec3 &position = Vec3(0.0f));
+	GameObject *InstantiateModel(AssetID model, GameObject *parent = nullptr, const Vec3 &position = Vec3(0.0f));
 	// Whether the asset can go in the scene with Place: a model, or a prefab outside a prefab.
-	bool CanPlace(Assets::AssetID asset) const;
+	bool CanPlace(AssetID asset) const;
 	// The objects of a model or a new instance of a prefab, as InstantiateModel does.
-	Scene::GameObject *Place(
-			Assets::AssetID asset, Scene::GameObject *parent = nullptr, const Vec3 &position = Vec3(0.0f));
+	GameObject *Place(AssetID asset, GameObject *parent = nullptr, const Vec3 &position = Vec3(0.0f));
 	// Destroys the object and its children, and marks the scene changed.
-	void Destroy(Scene::GameObject &object);
+	void Destroy(GameObject &object);
 
 private:
 	// The scene while a prefab is open in its place.
 	struct WaitingScene {
-		Iunique<Scene::Scene> Objects;
-		Assets::AssetID ID;
+		Iunique<Scene> Objects;
+		AssetID ID;
 		bool Dirty = false;
-		Handle<Scene::GameObject> Selected;
+		Handle<GameObject> Selected;
 	};
 
 	// Replaces `scene` with the one `text` holds, with the same object selected if it's there.
-	bool Reload(Iunique<Scene::Scene> &scene, Handle<Scene::GameObject> &selected, const std::string &text,
-			const std::string &name);
+	bool Reload(Iunique<Scene> &scene, Handle<GameObject> &selected, const std::string &text, const std::string &name);
 	bool SavePrefab();
-	void WriteRecovery(const std::string &text, Assets::AssetID scene) const;
-	Scripting::GameContext MakeGameContext();
+	void WriteRecovery(const std::string &text, AssetID scene) const;
+	GameContext MakeGameContext();
 	// A script asked for another scene. Stop still goes back to the one Play started from.
-	void SwitchPlayedScene(Assets::AssetID scene);
+	void SwitchPlayedScene(AssetID scene);
 
-	Assets::AssetManager &m_Assets;
-	Scene::PrefabLibrary m_Prefabs;
-	Iunique<Scene::Scene> m_Scene;
-	Assets::AssetID m_ID;
+	AssetManager &m_Assets;
+	PrefabLibrary m_Prefabs;
+	Iunique<Scene> m_Scene;
+	AssetID m_ID;
 	u32 m_OpenCount = 0;
 	bool m_Dirty = false;
 	PlayMode m_PlayMode = PlayMode::Edit;
 	std::string m_PlaySnapshot;
 	bool m_DirtyAtPlay = false;
-	Handle<Scene::GameObject> m_Selected;
-	Assets::AssetID m_SelectedAsset;
+	Handle<GameObject> m_Selected;
+	AssetID m_SelectedAsset;
 	WaitingScene m_Waiting;
-	Assets::AssetID m_PrefabToOpen;
-	const Platform::IInput *m_Input = nullptr;
+	AssetID m_PrefabToOpen;
+	const IInput *m_Input = nullptr;
 	std::filesystem::path m_RecoveryFile;
 	std::string m_Fault;
 	// Last: it stops the scripts of a scene that is still there.
-	Scripting::ScriptRunner m_Runner;
+	ScriptRunner m_Runner;
 };
 
 } // namespace VKE::Editor

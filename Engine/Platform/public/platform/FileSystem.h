@@ -8,7 +8,7 @@
 
 // Generic, backend-independent file I/O.
 
-namespace VKE::Platform::FileSystem {
+namespace VKE::FileSystem {
 
 // The running executable's file, and the directory containing it.
 std::filesystem::path GetExecutablePath();
@@ -34,4 +34,4 @@ std::string ReadFileText(const std::string &path);
 
 bool Exists(const std::string &path);
 
-} // namespace VKE::Platform::FileSystem
+} // namespace VKE::FileSystem

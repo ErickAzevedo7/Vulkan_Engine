@@ -6,20 +6,20 @@
 #include <vke/Math.h>
 #include <vke/Object.h>
 
-namespace VKE::Scene {
+namespace VKE {
 class GameObject;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::Scripting {
+namespace VKE {
 
 // A script's Object is the handle of a GameObject, in one number.
-inline vke::Object ToObject(Handle<Scene::GameObject> handle) {
+inline vke::Object ToObject(Handle<GameObject> handle) {
 	return vke::detail::Bits::MakeObject((static_cast<u64>(handle.Index) << 32) | handle.Generation);
 }
 
-inline Handle<Scene::GameObject> ToHandle(vke::Object object) {
+inline Handle<GameObject> ToHandle(vke::Object object) {
 	u64 bits = vke::detail::Bits::GetHandle(object);
-	Handle<Scene::GameObject> handle;
+	Handle<GameObject> handle;
 	handle.Index = static_cast<u32>(bits >> 32);
 	handle.Generation = static_cast<u32>(bits);
 	return handle;
@@ -46,4 +46,4 @@ inline vke::Quat ToSDK(const Quat &rotation) {
 	return result;
 }
 
-} // namespace VKE::Scripting
+} // namespace VKE

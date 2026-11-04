@@ -4,7 +4,7 @@
 #include <renderer/RenderTypes.h>
 #include <scene/Component.h>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // A perspective view from its object, looking down the object's forward axis (-Z).
 // The first camera added to a scene becomes its main camera.
@@ -13,11 +13,11 @@ class CameraComponent final : public Component {
 
 public:
 	// Vertical, in radians.
-	VKE_PROPERTY(Min = 0.01, Max = 3.1, Display = Angle) f32 FieldOfView = Renderer::kDefaultFieldOfView;
+	VKE_PROPERTY(Min = 0.01, Max = 3.1, Display = Angle) f32 FieldOfView = kDefaultFieldOfView;
 	VKE_PROPERTY(Min = 0) f32 NearPlane = 0.1f;
 	VKE_PROPERTY(Min = 0) f32 FarPlane = 1000.0f;
 
-	Renderer::RenderView GetView() const;
+	RenderView GetView() const;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -12,17 +12,17 @@
 #include <optional>
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::RHI {
+namespace VKE {
 
 // Vulkan backend for RHIDevice. Owns the instance, window surface,
 // physical and logical device, queues, command pool and memory allocator.
 class VulkanDevice : public RHIDevice {
 public:
-	explicit VulkanDevice(Platform::IWindow &window);
+	explicit VulkanDevice(IWindow &window);
 	~VulkanDevice() override;
 
 	void WaitIdle() override;
@@ -58,7 +58,7 @@ private:
 
 	void CreateInstance();
 	void SetupDebugMessenger();
-	void CreateSurface(Platform::IWindow &window);
+	void CreateSurface(IWindow &window);
 	void PickPhysicalDevice();
 	void CreateLogicalDevice();
 	void CreateCommandPool();
@@ -95,4 +95,4 @@ private:
 	Iunique<VulkanAllocator> m_Allocator;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

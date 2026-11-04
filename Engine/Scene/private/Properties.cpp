@@ -7,10 +7,10 @@
 
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 
 namespace {
-using MaterialList = std::vector<Handle<Assets::MaterialData>>;
+using MaterialList = std::vector<Handle<MaterialData>>;
 
 template <typename T> const T &As(const void *value) {
 	return *static_cast<const T *>(value);
@@ -33,7 +33,7 @@ bool AreEqual(const PropertyInfo &property, const void *a, const void *b) {
 		case PropertyType::MeshAsset:
 		case PropertyType::MaterialAsset:
 		case PropertyType::SceneAsset:
-			return As<Assets::AssetID>(a) == As<Assets::AssetID>(b);
+			return As<AssetID>(a) == As<AssetID>(b);
 		case PropertyType::F32:
 			return As<f32>(a) == As<f32>(b);
 		case PropertyType::Vec3:
@@ -45,7 +45,7 @@ bool AreEqual(const PropertyInfo &property, const void *a, const void *b) {
 		case PropertyType::Struct:
 			return AreEqual(*property.Struct, a, b);
 		case PropertyType::Mesh:
-			return As<Handle<Assets::MeshData>>(a) == As<Handle<Assets::MeshData>>(b);
+			return As<Handle<MeshData>>(a) == As<Handle<MeshData>>(b);
 		case PropertyType::Materials:
 			return As<MaterialList>(a) == As<MaterialList>(b);
 	}
@@ -76,7 +76,7 @@ void CopyValue(const PropertyInfo &property, void *to, const void *from) {
 		case PropertyType::MeshAsset:
 		case PropertyType::MaterialAsset:
 		case PropertyType::SceneAsset:
-			As<Assets::AssetID>(to) = As<Assets::AssetID>(from);
+			As<AssetID>(to) = As<AssetID>(from);
 			break;
 		case PropertyType::F32:
 			As<f32>(to) = As<f32>(from);
@@ -94,7 +94,7 @@ void CopyValue(const PropertyInfo &property, void *to, const void *from) {
 			CopyValues(*property.Struct, to, from);
 			break;
 		case PropertyType::Mesh:
-			As<Handle<Assets::MeshData>>(to) = As<Handle<Assets::MeshData>>(from);
+			As<Handle<MeshData>>(to) = As<Handle<MeshData>>(from);
 			break;
 		case PropertyType::Materials:
 			As<MaterialList>(to) = As<MaterialList>(from);
@@ -108,4 +108,4 @@ void CopyValues(const StructInfo &type, void *to, const void *from) {
 	}
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

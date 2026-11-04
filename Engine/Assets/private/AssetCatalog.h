@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace VKE::Assets {
+namespace VKE {
 
 // What a .vkasset holds about one asset file.
 struct AssetEntry {
@@ -105,4 +105,4 @@ private:
 	std::unordered_map<AssetID, SubAssetEntry> m_SubAssets;
 };
 
-} // namespace VKE::Assets
+} // namespace VKE

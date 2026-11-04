@@ -7,31 +7,31 @@
 
 #include <unordered_map>
 
-namespace VKE::Physics {
+namespace VKE {
 class PhysicsWorld;
-} // namespace VKE::Physics
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 
 // The physics shapes of the meshes a scene's colliders use, one per mesh however many
 // colliders share it, so each triangle tree is built once.
 class MeshShapeCache {
 public:
-	explicit MeshShapeCache(Physics::PhysicsWorld &world) : m_World(world) {}
+	explicit MeshShapeCache(PhysicsWorld &world) : m_World(world) {}
 
 	// The shape of `mesh`, built from `geometry` the first time the mesh is asked for.
-	Physics::MeshShapeID Acquire(Handle<Assets::MeshData> mesh, const Physics::MeshShapeDesc &geometry);
+	MeshShapeID Acquire(Handle<MeshData> mesh, const MeshShapeDesc &geometry);
 	// Destroys the shape once no collider uses it.
-	void Release(Handle<Assets::MeshData> mesh);
+	void Release(Handle<MeshData> mesh);
 
 private:
 	struct Entry {
-		Physics::MeshShapeID Shape;
+		MeshShapeID Shape;
 		u32 Users = 0;
 	};
 
-	Physics::PhysicsWorld &m_World;
-	std::unordered_map<Handle<Assets::MeshData>, Entry> m_Entries;
+	PhysicsWorld &m_World;
+	std::unordered_map<Handle<MeshData>, Entry> m_Entries;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -1,7 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include "VulkanAllocator.h"
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanAllocator::VulkanAllocator(
 		VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, u32 vulkanApiVersion) {
@@ -20,4 +20,4 @@ VulkanAllocator::~VulkanAllocator() {
 	}
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

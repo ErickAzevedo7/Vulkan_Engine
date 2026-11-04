@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace VKE::Scene {
+namespace VKE {
 
 GameObject::GameObject(Scene &scene, std::string name) :
 		m_Scene(scene), m_ID(ObjectID::Generate()), m_Name(std::move(name)) {
@@ -169,4 +169,4 @@ void GameObject::Unlink() {
 	}
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

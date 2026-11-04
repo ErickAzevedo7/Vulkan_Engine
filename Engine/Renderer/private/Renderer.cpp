@@ -4,9 +4,9 @@
 
 #include <core/Log.h>
 
-namespace VKE::Renderer {
+namespace VKE {
 
-Renderer::Renderer(Platform::IWindow &window, Assets::AssetManager &assets) : m_Window(window), m_Assets(assets) {}
+Renderer::Renderer(IWindow &window, AssetManager &assets) : m_Window(window), m_Assets(assets) {}
 
 Renderer::~Renderer() = default;
 
@@ -103,4 +103,4 @@ void Renderer::SetShadowsEnabled(bool enabled) {
 	}
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

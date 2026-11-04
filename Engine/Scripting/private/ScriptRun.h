@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 struct Contact;
 class GameObject;
 class Scene;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::Scripting {
+namespace VKE {
 
 class GameModule;
 class ScriptComponent;
@@ -24,7 +24,7 @@ class ScriptComponent;
 // a time: the functions scripts call find their scene through GetCurrent.
 class ScriptRun {
 public:
-	ScriptRun(Scene::Scene &scene, const GameContext &context);
+	ScriptRun(Scene &scene, const GameContext &context);
 	~ScriptRun();
 
 	ScriptRun(const ScriptRun &) = delete;
@@ -32,10 +32,10 @@ public:
 
 	// Null while no game runs.
 	static ScriptRun *GetCurrent() { return s_Current; }
-	Scene::Scene &GetScene() const { return m_Scene; }
+	Scene &GetScene() const { return m_Scene; }
 	const GameContext &GetContext() const { return m_Context; }
-	Scene::PrefabLibrary &GetPrefabs() const { return m_Context.Prefabs; }
-	const Platform::IInput &GetInput() const { return m_Context.Input; }
+	PrefabLibrary &GetPrefabs() const { return m_Context.Prefabs; }
+	const IInput &GetInput() const { return m_Context.Input; }
 
 	void SetInputArea(bool focused, f32 viewX, f32 viewY);
 	bool HasInputFocus() const { return m_InputFocused; }
@@ -58,11 +58,11 @@ public:
 	// of the object going away may be in use.
 	bool IsStopping() const { return m_Stopping > 0; }
 	// Happens at the end of the frame.
-	void QueueDestroy(Handle<Scene::GameObject> object);
+	void QueueDestroy(Handle<GameObject> object);
 
 	// Scripts asked for these; the runner acts on them after the frame.
-	void RequestScene(Assets::AssetID scene) { m_RequestedScene = scene; }
-	Assets::AssetID GetRequestedScene() const { return m_RequestedScene; }
+	void RequestScene(AssetID scene) { m_RequestedScene = scene; }
+	AssetID GetRequestedScene() const { return m_RequestedScene; }
 	void RequestQuit() { m_QuitRequested = true; }
 	bool IsQuitRequested() const { return m_QuitRequested; }
 
@@ -74,8 +74,7 @@ public:
 private:
 	void StartNewScripts();
 	void DeliverContacts();
-	void DeliverContact(const Scene::Contact &contact, Handle<Scene::GameObject> self, Handle<Scene::GameObject> other,
-			bool flipNormal);
+	void DeliverContact(const Contact &contact, Handle<GameObject> self, Handle<GameObject> other, bool flipNormal);
 	void DestroyQueued();
 	// Closes the gaps left by scripts that left.
 	void CompactScripts();
@@ -86,16 +85,16 @@ private:
 
 	static ScriptRun *s_Current;
 
-	Scene::Scene &m_Scene;
+	Scene &m_Scene;
 	GameContext m_Context;
 	// In the order they joined. A script that left is null until the end of the frame.
 	std::vector<ScriptComponent *> m_Scripts;
 	bool m_HasGaps = false;
-	std::vector<Handle<Scene::GameObject>> m_ToDestroy;
+	std::vector<Handle<GameObject>> m_ToDestroy;
 	// Reused for the scripts of an object receiving a contact.
 	std::vector<ScriptComponent *> m_ContactScripts;
 	u32 m_Stopping = 0;
-	Assets::AssetID m_RequestedScene;
+	AssetID m_RequestedScene;
 	bool m_QuitRequested = false;
 	bool m_HasFault = false;
 	std::string m_Fault;
@@ -107,4 +106,4 @@ private:
 	i32 m_Frame = 0;
 };
 
-} // namespace VKE::Scripting
+} // namespace VKE

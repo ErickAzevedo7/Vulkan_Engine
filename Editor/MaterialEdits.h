@@ -4,9 +4,9 @@
 
 #include <unordered_set>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -15,26 +15,26 @@ namespace VKE::Editor {
 // reads it again.
 class MaterialEdits {
 public:
-	explicit MaterialEdits(Assets::AssetManager &assets);
+	explicit MaterialEdits(AssetManager &assets);
 
 	// Replaces the values of the material loaded from `material`. False for materials that
 	// aren't writable .mat files.
-	bool Change(Assets::AssetID material, Assets::MaterialData values);
+	bool Change(AssetID material, MaterialData values);
 
-	bool IsUnsaved(Assets::AssetID material) const { return m_Unsaved.count(material) != 0; }
+	bool IsUnsaved(AssetID material) const { return m_Unsaved.count(material) != 0; }
 	size_t GetUnsavedCount() const { return m_Unsaved.size(); }
 
-	bool Save(Assets::AssetID material);
+	bool Save(AssetID material);
 	// False if any of them wasn't saved; those stay unsaved.
 	bool SaveAll();
-	void Revert(Assets::AssetID material);
+	void Revert(AssetID material);
 
 	// Forgets materials whose files are gone.
 	void DropMissing();
 
 private:
-	Assets::AssetManager &m_Assets;
-	std::unordered_set<Assets::AssetID> m_Unsaved;
+	AssetManager &m_Assets;
+	std::unordered_set<AssetID> m_Unsaved;
 };
 
 } // namespace VKE::Editor

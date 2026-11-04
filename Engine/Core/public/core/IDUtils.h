@@ -6,7 +6,7 @@
 
 namespace VKE {
 
-// Helpers shared by the 64-bit ID types that are saved in files (ObjectID, Assets::AssetID).
+// Helpers shared by the 64-bit ID types that are saved in files (ObjectID, AssetID).
 
 // A new random ID, never zero, drawn from the operating system's random source so separate
 // runs don't repeat each other's IDs.

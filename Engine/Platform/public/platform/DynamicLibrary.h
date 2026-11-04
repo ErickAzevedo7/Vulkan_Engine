@@ -4,7 +4,7 @@
 
 #include <filesystem>
 
-namespace VKE::Platform {
+namespace VKE {
 
 // A library loaded while the program runs, unloaded when this is destroyed.
 class DynamicLibrary {
@@ -26,4 +26,4 @@ private:
 	void *m_Handle;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

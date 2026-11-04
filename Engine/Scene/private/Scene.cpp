@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-namespace VKE::Scene {
+namespace VKE {
 
 namespace {
 // Children before their parents.
@@ -116,15 +116,15 @@ void Scene::SyncQueued(SceneSystems &systems) {
 }
 
 void Scene::ApplyPhysicsStep() {
-	for (Physics::BodyID body : m_PhysicsWorld.GetMovedBodies()) {
-		const Physics::BodyDesc *desc = m_PhysicsWorld.GetBody(body);
+	for (BodyID body : m_PhysicsWorld.GetMovedBodies()) {
+		const BodyDesc *desc = m_PhysicsWorld.GetBody(body);
 		if (GameObject *object = Get(UnpackObjectHandle(desc->UserData))) {
 			object->GetTransform().SetWorldPosition(desc->Pose.Position);
 		}
 	}
 
 	m_Contacts.clear();
-	for (const Physics::ContactEvent &event : m_PhysicsWorld.GetContactEvents()) {
+	for (const ContactEvent &event : m_PhysicsWorld.GetContactEvents()) {
 		m_Contacts.push_back({ UnpackObjectHandle(event.UserDataA), UnpackObjectHandle(event.UserDataB), event.Phase,
 				event.IsTrigger, event.Normal });
 	}
@@ -132,7 +132,7 @@ void Scene::ApplyPhysicsStep() {
 
 bool Scene::Raycast(
 		const Vec3 &origin, const Vec3 &direction, f32 maxDistance, bool withTriggers, RaycastHit &outHit) const {
-	Physics::RayHit hit;
+	RayHit hit;
 	if (!m_PhysicsWorld.Raycast(origin, direction, maxDistance, withTriggers, hit)) {
 		return false;
 	}
@@ -140,13 +140,13 @@ bool Scene::Raycast(
 	return true;
 }
 
-GameObject *Scene::GetMeshOwner(Renderer::MeshInstanceID mesh) const {
-	const Renderer::MeshInstanceDesc *desc = m_RenderScene.GetMeshes().Get(mesh);
+GameObject *Scene::GetMeshOwner(MeshInstanceID mesh) const {
+	const MeshInstanceDesc *desc = m_RenderScene.GetMeshes().Get(mesh);
 	return desc ? Get(UnpackObjectHandle(desc->Owner)) : nullptr;
 }
 
-Renderer::RenderView Scene::GetView() const {
-	return m_MainCamera ? m_MainCamera->GetView() : Renderer::RenderView{};
+RenderView Scene::GetView() const {
+	return m_MainCamera ? m_MainCamera->GetView() : RenderView{};
 }
 
 void Scene::OnRootChanged(GameObject &object, bool isRoot) {
@@ -184,4 +184,4 @@ void Scene::DisconnectComponent(Component &component) {
 	}
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

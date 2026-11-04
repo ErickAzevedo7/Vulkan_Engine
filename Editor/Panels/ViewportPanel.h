@@ -12,21 +12,21 @@
 
 #include <string>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 class Renderer;
-} // namespace VKE::Renderer
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 class Scene;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 class UISystem;
-} // namespace VKE::UI
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -41,7 +41,7 @@ class EditorScene;
 //   Middle: pan   Wheel: zoom   F: frame the selected   W/E/R: move, rotate, scale
 class ViewportPanel {
 public:
-	ViewportPanel(EditorScene &scene, Assets::AssetManager &assets, Renderer::Renderer &renderer, UI::UISystem &ui);
+	ViewportPanel(EditorScene &scene, AssetManager &assets, Renderer &renderer, UISystem &ui);
 
 	void Create();
 	void Destroy();
@@ -54,10 +54,10 @@ public:
 
 	// Whether the panel showed this frame, so the scene must be drawn into its texture.
 	bool IsVisible() const { return m_Visible; }
-	Renderer::ViewTextureID GetTexture() const { return m_Texture; }
+	ViewTextureID GetTexture() const { return m_Texture; }
 	// Where to draw the scene from, and what to draw over it, this frame.
-	Renderer::RenderView GetView() const { return m_Camera.GetView(); }
-	const Renderer::WorldDrawList &GetWorldDrawList() const { return m_World; }
+	RenderView GetView() const { return m_Camera.GetView(); }
+	const WorldDrawList &GetWorldDrawList() const { return m_World; }
 
 private:
 	enum class Navigation {
@@ -80,9 +80,9 @@ private:
 	void DrawToolbar(const Vec2 &min);
 
 	EditorScene &m_Scene;
-	Renderer::Renderer &m_Renderer;
-	UI::UISystem &m_UI;
-	Renderer::ViewTextureID m_Texture;
+	Renderer &m_Renderer;
+	UISystem &m_UI;
+	ViewTextureID m_Texture;
 	bool m_Visible = false;
 
 	EditorCamera m_Camera;
@@ -91,7 +91,7 @@ private:
 	bool m_EditingPrefab = false;
 	TransformGizmo m_Gizmo;
 	SceneMarkers m_Markers;
-	Renderer::WorldDrawList m_World;
+	WorldDrawList m_World;
 	Navigation m_Navigation = Navigation::None;
 	bool m_IconsLoaded = false;
 	bool m_Snap = false;
@@ -99,7 +99,7 @@ private:
 	// The scene the camera was placed for (EditorScene::GetOpenCount), and the one the last
 	// pick was asked in: a new scene places the camera again, and drops picks from the old one.
 	u32 m_PlacedFor = ~0u;
-	const Scene::Scene *m_PickedIn = nullptr;
+	const Scene *m_PickedIn = nullptr;
 	// A left press that becomes a click if the mouse hardly moves before it is released.
 	bool m_ClickPending = false;
 	Vec2 m_ClickStart{ 0.0f };

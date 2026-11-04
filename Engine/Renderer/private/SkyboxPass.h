@@ -7,18 +7,18 @@
 #include <rhi/RHIPipeline.h>
 #include <rhi/RHIRenderPass.h>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Fills whatever the scene did not cover with the environment cubemap.
 class SkyboxPass {
 public:
-	SkyboxPass(RHI::RHIDevice &device, RHI::RHIRenderPass &scenePass, RHI::RHIBindGroupLayout &frameLayout,
-			RHI::RHIBindGroupLayout &environmentLayout);
+	SkyboxPass(RHIDevice &device, RHIRenderPass &scenePass, RHIBindGroupLayout &frameLayout,
+			RHIBindGroupLayout &environmentLayout);
 
-	void Record(RHI::RHICommandBuffer &cmd, RHI::RHIBindGroup &frameGroup, RHI::RHIBindGroup &environmentGroup);
+	void Record(RHICommandBuffer &cmd, RHIBindGroup &frameGroup, RHIBindGroup &environmentGroup);
 
 private:
-	Iunique<RHI::RHIPipeline> m_Pipeline;
+	Iunique<RHIPipeline> m_Pipeline;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

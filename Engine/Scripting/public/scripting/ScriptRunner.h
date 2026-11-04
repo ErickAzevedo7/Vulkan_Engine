@@ -6,26 +6,26 @@
 #include <functional>
 #include <string>
 
-namespace VKE::Platform {
+namespace VKE {
 class IInput;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 class PrefabLibrary;
 class Scene;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::Scripting {
+namespace VKE {
 
 class GameModule;
 class ScriptRun;
 
 // What a game needs from the program running it.
 struct GameContext {
-	Scene::PrefabLibrary &Prefabs;
-	const Platform::IInput &Input;
+	PrefabLibrary &Prefabs;
+	const IInput &Input;
 	// A script asked for another scene. Replace the scene: Stop, then Start with the new one.
-	std::function<void(Assets::AssetID scene)> LoadScene;
+	std::function<void(AssetID scene)> LoadScene;
 	// A script asked to end the game.
 	std::function<void()> Quit;
 	// A script crashed, as `message` says, and no script runs anymore. The memory may be
@@ -45,7 +45,7 @@ public:
 	ScriptRunner &operator=(const ScriptRunner &) = delete;
 
 	// The scripts of `scene` start at the next Update. Scripts added later join in by themselves.
-	void Start(Scene::Scene &scene, const GameContext &context);
+	void Start(Scene &scene, const GameContext &context);
 	// One frame, `deltaTime` seconds after the last. Call it instead of Scene::Update,
 	// before rendering. Does nothing unless started. The context's functions run at its end.
 	void Update(f32 deltaTime);
@@ -72,4 +72,4 @@ private:
 	f32 m_ViewY = 0.0f;
 };
 
-} // namespace VKE::Scripting
+} // namespace VKE

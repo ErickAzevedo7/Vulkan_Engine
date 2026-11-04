@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 
 class CameraComponent;
 class Component;
@@ -28,7 +28,7 @@ struct Contact {
 	// An End contact can also refer to an object destroyed during the update.
 	Handle<GameObject> A;
 	Handle<GameObject> B;
-	Physics::ContactPhase Phase = Physics::ContactPhase::Begin;
+	ContactPhase Phase = ContactPhase::Begin;
 	// Either collider is a trigger, so nothing was pushed.
 	bool IsTrigger = false;
 	// Solid contacts that haven't ended: the direction that moves A away from B.
@@ -83,15 +83,15 @@ public:
 	// What touched what during the last Update, each pair once.
 	const std::vector<Contact> &GetContacts() const { return m_Contacts; }
 
-	const Renderer::RenderScene &GetRenderScene() const { return m_RenderScene; }
+	const RenderScene &GetRenderScene() const { return m_RenderScene; }
 	// The object whose MeshComponent drew `mesh`, or null.
-	GameObject *GetMeshOwner(Renderer::MeshInstanceID mesh) const;
+	GameObject *GetMeshOwner(MeshInstanceID mesh) const;
 
 	// The camera the scene is seen from. The first camera added is used until another is set.
 	CameraComponent *GetMainCamera() const { return m_MainCamera; }
 	void SetMainCamera(CameraComponent *camera) { m_MainCamera = camera; }
 	// The main camera's view, or a view from the origin if there is none.
-	Renderer::RenderView GetView() const;
+	RenderView GetView() const;
 
 private:
 	friend class GameObject;
@@ -114,8 +114,8 @@ private:
 	void ApplyPhysicsStep();
 
 	// Declared before the objects, so they outlive the components that fill them.
-	Renderer::RenderScene m_RenderScene;
-	Physics::PhysicsWorld m_PhysicsWorld;
+	RenderScene m_RenderScene;
+	PhysicsWorld m_PhysicsWorld;
 	Iunique<MeshShapeCache> m_MeshShapes;
 	std::vector<Contact> m_Contacts;
 	CameraComponent *m_MainCamera = nullptr;
@@ -126,4 +126,4 @@ private:
 	std::vector<GameObject *> m_SyncQueue;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -10,7 +10,6 @@
 
 namespace VKE::Editor {
 
-namespace Colors = UI::Colors;
 namespace Sizes = GizmoSizes;
 
 namespace {
@@ -22,7 +21,7 @@ struct Painter {
 	const TransformGizmo &Gizmo;
 	const ScreenView &View;
 	const GizmoLayout &Layout;
-	Renderer::WorldDrawList &List;
+	WorldDrawList &List;
 
 	bool IsLit(GizmoHandle handle) const { return Gizmo.GetHovered() == handle; }
 
@@ -149,11 +148,11 @@ void DrawRotate(const Painter &painter) {
 } // namespace
 
 void DrawTransformGizmo(
-		const TransformGizmo &gizmo, const ScreenView &view, const GizmoPose &pose, Renderer::WorldDrawList &list) {
+		const TransformGizmo &gizmo, const ScreenView &view, const GizmoPose &pose, WorldDrawList &list) {
 	GizmoLayout layout = GizmoLayout::Make(gizmo.Mode, gizmo.Space, view, pose);
-	Renderer::WorldStyle style;
-	style.Depth = Renderer::WorldDepth::OnTop;
-	Renderer::WorldStyle previous = list.GetStyle();
+	WorldStyle style;
+	style.Depth = WorldDepth::OnTop;
+	WorldStyle previous = list.GetStyle();
 	list.SetStyle(style);
 
 	// Under the handles: a guide along the axis being moved or scaled, through where the drag started.

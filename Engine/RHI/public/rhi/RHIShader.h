@@ -5,7 +5,7 @@
 
 #include <string>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 
@@ -22,4 +22,4 @@ public:
 	virtual ShaderStageKind GetStage() const = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -27,4 +27,4 @@ private:
 	bool m_HasDepthAttachment = false;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

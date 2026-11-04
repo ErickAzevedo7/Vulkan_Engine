@@ -1,6 +1,6 @@
 #include "renderer/WorldDraw.h"
 
-namespace VKE::Renderer {
+namespace VKE {
 
 void WorldDrawList::Clear() {
 	Vertices.clear();
@@ -52,4 +52,4 @@ void WorldDrawList::AddQuad(const Vec3 corners[4], u32 color, const Vec2 &uvMin,
 	command.IndexCount += 6;
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

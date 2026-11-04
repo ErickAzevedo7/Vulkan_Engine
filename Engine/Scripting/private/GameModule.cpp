@@ -17,10 +17,10 @@
 #include <fstream>
 #include <unordered_map>
 
-namespace VKE::Scripting {
+namespace VKE {
 
 struct PreparedGame {
-	Iunique<Platform::DynamicLibrary> Library;
+	Iunique<DynamicLibrary> Library;
 	std::filesystem::path Copy;
 	std::filesystem::path Source;
 	const vke::detail::GameInfo *Game = nullptr;
@@ -30,19 +30,19 @@ namespace {
 // Fields of these types are read as the engine's own.
 static_assert(sizeof(vke::Vec3) == sizeof(Vec3) && sizeof(vke::Quat) == sizeof(Quat));
 static_assert(offsetof(Quat, x) == offsetof(vke::Quat, x) && offsetof(Quat, w) == offsetof(vke::Quat, w));
-static_assert(sizeof(vke::PrefabRef) == sizeof(Assets::AssetID));
-static_assert(sizeof(vke::MeshRef) == sizeof(Assets::AssetID));
-static_assert(sizeof(vke::MaterialRef) == sizeof(Assets::AssetID));
-static_assert(sizeof(vke::SceneRef) == sizeof(Assets::AssetID));
+static_assert(sizeof(vke::PrefabRef) == sizeof(AssetID));
+static_assert(sizeof(vke::MeshRef) == sizeof(AssetID));
+static_assert(sizeof(vke::MaterialRef) == sizeof(AssetID));
+static_assert(sizeof(vke::SceneRef) == sizeof(AssetID));
 
 constexpr const char *kLoadFunction = "VkeLoadGame";
 // Exists only while a DLL loads: finding it means the program ended in the middle of that.
 constexpr const char *kLoadingFile = "Loading.txt";
 using LoadFunction = const vke::detail::GameInfo *(*)(const vke::detail::ApiTable *);
 
-Scene::PropertyType Convert(vke::detail::PropertyType type) {
+PropertyType Convert(vke::detail::PropertyType type) {
 	using From = vke::detail::PropertyType;
-	using To = Scene::PropertyType;
+	using To = PropertyType;
 	switch (type) {
 		case From::Bool:
 			return To::Bool;
@@ -72,16 +72,16 @@ Scene::PropertyType Convert(vke::detail::PropertyType type) {
 	return To::Bool;
 }
 
-Scene::PropertyDisplay Convert(vke::detail::PropertyDisplay display) {
+PropertyDisplay Convert(vke::detail::PropertyDisplay display) {
 	switch (display) {
 		case vke::detail::PropertyDisplay::Color:
-			return Scene::PropertyDisplay::Color;
+			return PropertyDisplay::Color;
 		case vke::detail::PropertyDisplay::Angle:
-			return Scene::PropertyDisplay::Angle;
+			return PropertyDisplay::Angle;
 		case vke::detail::PropertyDisplay::Default:
 			break;
 	}
-	return Scene::PropertyDisplay::Default;
+	return PropertyDisplay::Default;
 }
 
 // Rewrites the DLL's tables as the engine's, in storage owned by `type`.
@@ -89,8 +89,8 @@ class TableConverter {
 public:
 	explicit TableConverter(ScriptType &type) : m_Type(type) {}
 
-	Scene::StructInfo ConvertStruct(const vke::detail::StructInfo &from) {
-		std::vector<Scene::PropertyInfo> &properties = m_Type.PropertyLists.emplace_back();
+	StructInfo ConvertStruct(const vke::detail::StructInfo &from) {
+		std::vector<PropertyInfo> &properties = m_Type.PropertyLists.emplace_back();
 		properties.reserve(from.Count);
 		for (unsigned i = 0; i < from.Count; ++i) {
 			const vke::detail::PropertyInfo &property = from.Properties[i];
@@ -103,20 +103,20 @@ public:
 	}
 
 private:
-	const Scene::StructInfo *ConvertInner(const vke::detail::StructInfo &from) {
+	const StructInfo *ConvertInner(const vke::detail::StructInfo &from) {
 		auto [it, added] = m_Structs.try_emplace(&from, nullptr);
 		if (added) {
-			Scene::StructInfo converted = ConvertStruct(from);
+			StructInfo converted = ConvertStruct(from);
 			m_Type.Structs.push_back(converted);
 			m_Structs[&from] = &m_Type.Structs.back();
 		}
 		return m_Structs[&from];
 	}
 
-	const Scene::EnumInfo *ConvertEnum(const vke::detail::EnumInfo &from) {
+	const EnumInfo *ConvertEnum(const vke::detail::EnumInfo &from) {
 		auto [it, added] = m_Enums.try_emplace(&from, nullptr);
 		if (added) {
-			std::vector<Scene::EnumValue> &values = m_Type.EnumValues.emplace_back();
+			std::vector<EnumValue> &values = m_Type.EnumValues.emplace_back();
 			for (unsigned i = 0; i < from.Count; ++i) {
 				values.push_back({ from.Values[i].Name, from.Values[i].Value });
 			}
@@ -127,8 +127,8 @@ private:
 	}
 
 	ScriptType &m_Type;
-	std::unordered_map<const vke::detail::StructInfo *, const Scene::StructInfo *> m_Structs;
-	std::unordered_map<const vke::detail::EnumInfo *, const Scene::EnumInfo *> m_Enums;
+	std::unordered_map<const vke::detail::StructInfo *, const StructInfo *> m_Structs;
+	std::unordered_map<const vke::detail::EnumInfo *, const EnumInfo *> m_Enums;
 };
 
 // Copies left by programs that ended without unloading can't be in use anymore, unless
@@ -145,10 +145,10 @@ void RemoveOldCopies(const std::filesystem::path &workFolder) {
 }
 
 // Unloading runs the destructors of the game's globals.
-void UnloadLibrary(Iunique<Platform::DynamicLibrary> &library, const std::filesystem::path &source) {
+void UnloadLibrary(Iunique<DynamicLibrary> &library, const std::filesystem::path &source) {
 	std::string fault;
-	bool survived = Platform::GuardedCall(
-			[](void *data) { static_cast<Iunique<Platform::DynamicLibrary> *>(data)->reset(); }, &library, fault);
+	bool survived =
+			GuardedCall([](void *data) { static_cast<Iunique<DynamicLibrary> *>(data)->reset(); }, &library, fault);
 	if (survived) {
 		return;
 	}
@@ -210,20 +210,20 @@ bool GameModule::Prepare(const std::filesystem::path &library, const std::filesy
 
 	// Loading runs the constructors of the game's globals.
 	std::ofstream(workFolder / kLoadingFile).put('\n');
-	Iunique<Platform::DynamicLibrary> loaded;
+	Iunique<DynamicLibrary> loaded;
 	const vke::detail::GameInfo *game = nullptr;
 	LoadFunction load = nullptr;
 	std::string fault;
 	struct LoadCall {
 		const std::filesystem::path &Copy;
-		Iunique<Platform::DynamicLibrary> &Loaded;
+		Iunique<DynamicLibrary> &Loaded;
 		LoadFunction &Load;
 		const vke::detail::GameInfo *&Game;
 	} call{ copy, loaded, load, game };
-	bool survived = Platform::GuardedCall(
+	bool survived = GuardedCall(
 			[](void *data) {
 				LoadCall &call = *static_cast<LoadCall *>(data);
-				call.Loaded = Platform::DynamicLibrary::Load(call.Copy);
+				call.Loaded = DynamicLibrary::Load(call.Copy);
 				if (call.Loaded) {
 					call.Load = reinterpret_cast<LoadFunction>(call.Loaded->GetSymbol(kLoadFunction));
 				}
@@ -301,18 +301,16 @@ void GameModule::Switch() {
 		type->UsesLateUpdate = info.UsesLateUpdate;
 		type->Properties = TableConverter(*type).ConvertStruct(*info.Properties);
 
-		Scene::ComponentTypeInfo entry;
+		ComponentTypeInfo entry;
 		entry.Name = type->Name.c_str();
 		entry.Context = type.get();
-		entry.Create = [](const Scene::ComponentTypeInfo &component) -> Scene::Component * {
+		entry.Create = [](const ComponentTypeInfo &component) -> Component * {
 			return new ScriptComponent(*static_cast<const ScriptType *>(component.Context));
 		};
 		entry.Properties = &type->Properties;
-		entry.ToObject = [](Scene::Component *component) {
-			return static_cast<ScriptComponent *>(component)->GetInstance();
-		};
+		entry.ToObject = [](Component *component) { return static_cast<ScriptComponent *>(component)->GetInstance(); };
 		// Components take their ID from the type when they are made, these first of all.
-		type->ID = Scene::ComponentRegistry::FindOrAddMissing(type->Name).ID;
+		type->ID = ComponentRegistry::FindOrAddMissing(type->Name).ID;
 		auto defaults = MakeIunique<ScriptComponent>(*type);
 		if (defaults->IsBroken()) {
 			VKE_CORE_ERROR("Scripts: script '{}' can't be used, and objects keep its values until it can", type->Name);
@@ -321,8 +319,8 @@ void GameModule::Switch() {
 		type->DefaultInstance = defaults->GetInstance();
 		entry.Defaults = std::move(defaults);
 
-		type->ID = Scene::ComponentRegistry::RegisterExternal(std::move(entry));
-		if (type->ID == Scene::kInvalidComponentType) {
+		type->ID = ComponentRegistry::RegisterExternal(std::move(entry));
+		if (type->ID == kInvalidComponentType) {
 			VKE_CORE_ERROR("Scripts: the name of script '{}' is taken by a component of the engine", type->Name);
 			continue;
 		}
@@ -336,7 +334,7 @@ void GameModule::Unload() {
 		return;
 	}
 	for (const Iunique<ScriptType> &type : m_Types) {
-		Scene::ComponentRegistry::ReleaseExternal(type->ID);
+		ComponentRegistry::ReleaseExternal(type->ID);
 	}
 	m_Types.clear();
 	UnloadLibrary(m_Library, m_RunningCopy);
@@ -346,4 +344,4 @@ void GameModule::Unload() {
 	m_RunningCopy.clear();
 }
 
-} // namespace VKE::Scripting
+} // namespace VKE

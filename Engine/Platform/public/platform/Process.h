@@ -8,7 +8,7 @@
 
 // The running program's arguments, and starting other programs.
 
-namespace VKE::Platform::Process {
+namespace VKE::Process {
 
 // The arguments the program was started with, without the program itself, in UTF-8.
 std::vector<std::string> GetCommandLineArguments();
@@ -59,4 +59,4 @@ private:
 // encoding, depending on the program.
 std::string ConsoleTextToUtf8(const std::string &text);
 
-} // namespace VKE::Platform::Process
+} // namespace VKE::Process

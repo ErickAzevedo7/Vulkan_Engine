@@ -13,7 +13,7 @@ struct SourceLocation {
 };
 
 struct EnumDef {
-	// As C++ names it, from the global namespace: "VKE::Renderer::LightType".
+	// As C++ names it, from the global namespace: "VKE::LightType".
 	std::string QualifiedName;
 	std::string Name;
 	std::vector<std::pair<std::string, std::uint32_t>> Values;

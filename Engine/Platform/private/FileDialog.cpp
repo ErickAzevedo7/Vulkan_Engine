@@ -4,7 +4,7 @@
 
 // Systems without native dialogs yet. Windows uses private/windows/WindowsFileDialog.cpp.
 
-namespace VKE::Platform::FileDialog {
+namespace VKE::FileDialog {
 
 std::optional<std::filesystem::path> OpenFile(const std::vector<Filter> &, const std::filesystem::path &) {
 	VKE_CORE_WARN("FileDialog::OpenFile: no native dialog on this system");
@@ -22,4 +22,4 @@ std::optional<std::filesystem::path> PickFolder(const std::filesystem::path &) {
 	return std::nullopt;
 }
 
-} // namespace VKE::Platform::FileDialog
+} // namespace VKE::FileDialog

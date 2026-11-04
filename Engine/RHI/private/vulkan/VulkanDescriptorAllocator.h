@@ -6,7 +6,7 @@
 
 #include <vector>
 
-namespace VKE::RHI {
+namespace VKE {
 
 // Allocates descriptor sets, adding pools as the existing ones fill up.
 class VulkanDescriptorAllocator {
@@ -32,4 +32,4 @@ private:
 	std::vector<VkDescriptorPool> m_Pools;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

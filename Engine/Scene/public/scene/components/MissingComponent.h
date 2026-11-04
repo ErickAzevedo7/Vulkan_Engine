@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // Stands in for a component whose type isn't there, like a script whose game didn't load. It
 // does nothing and keeps what the file said about the component, which saving writes back, so
@@ -24,4 +24,4 @@ private:
 	std::string m_SavedText;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

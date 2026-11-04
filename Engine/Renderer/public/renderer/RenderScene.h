@@ -5,16 +5,16 @@
 
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // What gets drawn: mesh instances and lights. Holds only data, so entries can
 // be created, changed and destroyed at any time.
 class RenderScene {
 public:
 	MeshInstanceID CreateMesh(const MeshInstanceDesc &desc);
-	void SetMesh(MeshInstanceID id, Handle<Assets::MeshData> mesh);
+	void SetMesh(MeshInstanceID id, Handle<MeshData> mesh);
 	void SetTransform(MeshInstanceID id, const Mat4 &transform);
-	void SetMaterials(MeshInstanceID id, std::vector<Handle<Assets::MaterialData>> materials);
+	void SetMaterials(MeshInstanceID id, std::vector<Handle<MaterialData>> materials);
 	void SetVisible(MeshInstanceID id, bool visible);
 	void DestroyMesh(MeshInstanceID id);
 
@@ -34,4 +34,4 @@ private:
 	EnvironmentDesc m_Environment;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

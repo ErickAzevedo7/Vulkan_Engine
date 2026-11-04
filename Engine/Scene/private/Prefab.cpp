@@ -11,7 +11,7 @@
 
 #include <cstring>
 
-namespace VKE::Scene {
+namespace VKE {
 
 namespace {
 // Calls `visit` with every property of `object` that differs from `pristine`, with the
@@ -56,12 +56,12 @@ template <typename Visit> void VisitParts(PrefabLibrary &prefabs, GameObject &ob
 }
 } // namespace
 
-PrefabLibrary::PrefabLibrary(Assets::AssetManager &assets) : m_Assets(assets) {}
+PrefabLibrary::PrefabLibrary(AssetManager &assets) : m_Assets(assets) {}
 
 PrefabLibrary::~PrefabLibrary() = default;
 
-GameObject *PrefabLibrary::GetRoot(Assets::AssetID prefab) {
-	if (m_Assets.GetType(prefab) != Assets::AssetType::Prefab) {
+GameObject *PrefabLibrary::GetRoot(AssetID prefab) {
+	if (m_Assets.GetType(prefab) != AssetType::Prefab) {
 		m_Prefabs.erase(prefab);
 		return nullptr;
 	}
@@ -89,7 +89,7 @@ Component *PrefabLibrary::GetPart(const Component &component) {
 	return part ? part->GetComponent(component.GetTypeID()) : nullptr;
 }
 
-void PrefabLibrary::Forget(Assets::AssetID prefab) {
+void PrefabLibrary::Forget(AssetID prefab) {
 	m_Prefabs.erase(prefab);
 }
 
@@ -97,7 +97,7 @@ void PrefabLibrary::ForgetAll() {
 	m_Prefabs.clear();
 }
 
-Assets::AssetID PrefabLibrary::Create(GameObject &root, const std::filesystem::path &file) {
+AssetID PrefabLibrary::Create(GameObject &root, const std::filesystem::path &file) {
 	if (HasParts(root)) {
 		VKE_CORE_ERROR(
 				"Prefabs: '{}' has an instance of a prefab in it; prefabs can't go inside prefabs", root.GetName());
@@ -109,12 +109,12 @@ Assets::AssetID PrefabLibrary::Create(GameObject &root, const std::filesystem::p
 	return m_Assets.FindAsset(file.u8string());
 }
 
-bool PrefabLibrary::Save(Assets::AssetID prefab) {
+bool PrefabLibrary::Save(AssetID prefab) {
 	GameObject *root = GetRoot(prefab);
 	return root && SceneSerializer::SavePrefab(*root, m_Assets, m_Assets.GetFile(prefab));
 }
 
-GameObject *PrefabLibrary::Instantiate(Scene &scene, Assets::AssetID prefab, GameObject *parent, ObjectID id) {
+GameObject *PrefabLibrary::Instantiate(Scene &scene, AssetID prefab, GameObject *parent, ObjectID id) {
 	GameObject *source = GetRoot(prefab);
 	if (!source) {
 		return nullptr;
@@ -122,9 +122,9 @@ GameObject *PrefabLibrary::Instantiate(Scene &scene, Assets::AssetID prefab, Gam
 
 	// Parents first, siblings in order.
 	struct Copier {
-		Assets::AssetManager &Assets;
+		AssetManager &Assets;
 		Scene &Target;
-		Assets::AssetID Prefab;
+		AssetID Prefab;
 		ObjectID Instance;
 
 		GameObject &Copy(const GameObject &part, GameObject *parent, ObjectID id) {
@@ -268,4 +268,4 @@ void PrefabLibrary::ApplyOverrides(GameObject &root) {
 	});
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

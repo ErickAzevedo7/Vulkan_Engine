@@ -2,7 +2,7 @@
 
 #include "VulkanUtils.h"
 
-namespace VKE::RHI {
+namespace VKE {
 
 namespace {
 constexpr u32 kSetsPerPool = 256;
@@ -69,4 +69,4 @@ VkDescriptorPool VulkanDescriptorAllocator::CreatePool() {
 	return pool;
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

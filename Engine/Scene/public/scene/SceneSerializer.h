@@ -3,15 +3,15 @@
 #include <filesystem>
 #include <string>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
 namespace YAML {
 class Node;
 } // namespace YAML
 
-namespace VKE::Scene {
+namespace VKE {
 
 class Component;
 class GameObject;
@@ -41,23 +41,22 @@ public:
 
 	// A .prefab file: `root` and everything below it, as a scene's objects, with no parent
 	// for `root`. Loading adds them with the IDs they were saved with.
-	static bool SavePrefab(GameObject &root, const Assets::AssetManager &assets, const std::filesystem::path &file);
-	static bool LoadPrefab(Scene &scene, Assets::AssetManager &assets, const std::filesystem::path &file);
+	static bool SavePrefab(GameObject &root, const AssetManager &assets, const std::filesystem::path &file);
+	static bool LoadPrefab(Scene &scene, AssetManager &assets, const std::filesystem::path &file);
 	// The same in memory. PrefabToText is empty if the objects can't be written.
-	static std::string PrefabToText(GameObject &root, const Assets::AssetManager &assets);
-	static bool LoadPrefabText(
-			Scene &scene, Assets::AssetManager &assets, const std::string &text, const std::string &name);
+	static std::string PrefabToText(GameObject &root, const AssetManager &assets);
+	static bool LoadPrefabText(Scene &scene, AssetManager &assets, const std::string &text, const std::string &name);
 
 	// The values of one component, for moving them to a new component on the same object.
 	// Only what differs from the type's defaults goes in the text, so loading it into a
 	// component of a changed type gives what's left out the new defaults.
-	static std::string ComponentToText(Component &component, const Assets::AssetManager &assets);
-	static void LoadComponentText(Component &component, Assets::AssetManager &assets, const std::string &text);
+	static std::string ComponentToText(Component &component, const AssetManager &assets);
+	static void LoadComponentText(Component &component, AssetManager &assets, const std::string &text);
 
 private:
 	// Without `prefabs`, instances are left empty, as in a prefab's own file.
-	static bool LoadObjects(Scene &scene, Assets::AssetManager &assets, PrefabLibrary *prefabs, const YAML::Node &root,
+	static bool LoadObjects(Scene &scene, AssetManager &assets, PrefabLibrary *prefabs, const YAML::Node &root,
 			const std::string &name);
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

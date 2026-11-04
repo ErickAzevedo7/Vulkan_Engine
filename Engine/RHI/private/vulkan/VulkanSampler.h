@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -20,4 +20,4 @@ private:
 	VkSampler m_Sampler = VK_NULL_HANDLE;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

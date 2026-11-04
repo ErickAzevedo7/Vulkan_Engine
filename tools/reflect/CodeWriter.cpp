@@ -55,7 +55,7 @@ private:
 		for (const std::string &include : m_Model.Includes) {
 			m_Out << "#include <" << include << ">\n";
 		}
-		m_Out << "\nnamespace VKE::Scene {\n\n";
+		m_Out << "\nnamespace VKE {\n\n";
 		m_Out << "    // A member of the registry, which every component befriends, so the tables can reach\n"
 				 "    // private members.\n";
 		m_Out << "    void ComponentRegistry::" << m_RegisterFunction << "() {\n";
@@ -75,7 +75,7 @@ private:
 		}
 
 		m_Out << "    }\n\n";
-		m_Out << "} // namespace VKE::Scene\n";
+		m_Out << "} // namespace VKE\n";
 		return m_Out.str();
 	}
 
@@ -186,9 +186,9 @@ private:
 			resolved.Kind = "MaterialAsset";
 		} else if (m_ForGame && type == "SceneRef") {
 			resolved.Kind = "SceneAsset";
-		} else if (!m_ForGame && type == "Handle<Assets::MeshData>") {
+		} else if (!m_ForGame && type == "Handle<MeshData>") {
 			resolved.Kind = "Mesh";
-		} else if (!m_ForGame && type == "std::vector<Handle<Assets::MaterialData>>") {
+		} else if (!m_ForGame && type == "std::vector<Handle<MaterialData>>") {
 			resolved.Kind = "Materials";
 		} else if (type.find('<') == std::string::npos) {
 			std::string name = type.substr(type.rfind("::") == std::string::npos ? 0 : type.rfind("::") + 2);

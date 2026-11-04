@@ -11,16 +11,16 @@
 
 struct ImGuiContext;
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
 class IInput;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 class Renderer;
-} // namespace VKE::Renderer
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 
 // Runs Dear ImGui over the engine: feeds it the window's input, builds its fonts and
 // theme from the design system, and hands what it draws to the renderer's 2D layer.
@@ -32,7 +32,7 @@ namespace VKE::UI {
 //   else ui.Render();                             // closes the frame anyway
 class UISystem : public System {
 public:
-	UISystem(Platform::IWindow &window, Platform::IInput &input, Renderer::Renderer &renderer);
+	UISystem(IWindow &window, IInput &input, Renderer &renderer);
 	~UISystem() override;
 
 	void OnInitialize() override;
@@ -46,10 +46,10 @@ public:
 	void Render();
 
 	// The ImGui texture ID (ImTextureID) that shows `texture`, e.g. in ImGui::Image().
-	u64 GetTextureID(const Renderer::OverlayTexture &texture);
+	u64 GetTextureID(const OverlayTexture &texture);
 
 	// The texture of the font atlas, where the glyphs of every font are (ImFontGlyph UVs).
-	Renderer::OverlayTexture GetFontTexture() const { return Renderer::OverlayTexture::FromImage(m_FontAtlas); }
+	OverlayTexture GetFontTexture() const { return OverlayTexture::FromImage(m_FontAtlas); }
 
 	// Whether the UI is using the mouse or keyboard this frame, so the scene should not.
 	bool WantsMouse() const;
@@ -63,7 +63,7 @@ private:
 	struct FontStorage;
 
 	struct TextureKeyHash {
-		size_t operator()(const Renderer::OverlayTexture &texture) const;
+		size_t operator()(const OverlayTexture &texture) const;
 	};
 
 	void BuildFonts();
@@ -71,23 +71,23 @@ private:
 	void ApplyCursor();
 	void BuildDrawList();
 
-	Platform::IWindow &m_Window;
-	Platform::IInput &m_Input;
-	Renderer::Renderer &m_Renderer;
+	IWindow &m_Window;
+	IInput &m_Input;
+	Renderer &m_Renderer;
 
 	ImGuiContext *m_Context = nullptr;
 	Iunique<FontStorage> m_FontStorage;
-	Renderer::OverlayImageID m_FontAtlas;
+	OverlayImageID m_FontAtlas;
 	std::string m_LayoutFile;
 	// Kept alive for ImGui, which reads clipboard text through a pointer.
 	std::string m_ClipboardText;
 	bool m_FrameOpen = false;
 
 	// ImTextureID n is m_Textures[n - 1]; 0 is no texture.
-	std::vector<Renderer::OverlayTexture> m_Textures;
-	std::unordered_map<Renderer::OverlayTexture, u64, TextureKeyHash> m_TextureIDs;
+	std::vector<OverlayTexture> m_Textures;
+	std::unordered_map<OverlayTexture, u64, TextureKeyHash> m_TextureIDs;
 
-	Renderer::OverlayDrawList m_DrawList;
+	OverlayDrawList m_DrawList;
 };
 
-} // namespace VKE::UI
+} // namespace VKE

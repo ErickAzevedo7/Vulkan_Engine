@@ -12,11 +12,11 @@
 
 #include <cstring>
 
-namespace VKE::Scripting {
+namespace VKE {
 
 namespace {
 // The running game, if this scene is what it runs: prefabs keep scenes of their own.
-ScriptRun *FindRun(const Scene::Component &component) {
+ScriptRun *FindRun(const Component &component) {
 	ScriptRun *run = ScriptRun::GetCurrent();
 	return run && &run->GetScene() == &component.GetScene() ? run : nullptr;
 }
@@ -24,16 +24,16 @@ ScriptRun *FindRun(const Scene::Component &component) {
 // Runs `call` guarded. False if it faulted, with what happened in `outFault`.
 template <typename Call> bool RunGuarded(const Call &call, std::string &outFault) {
 	auto run = [](void *data) { (*static_cast<const Call *>(data))(); };
-	return Platform::GuardedCall(run, const_cast<Call *>(&call), outFault);
+	return GuardedCall(run, const_cast<Call *>(&call), outFault);
 }
 
-void ResolveFields(const Scene::StructInfo &type, void *object, Scene::GameObject &owner) {
-	for (const Scene::PropertyInfo &property : type) {
+void ResolveFields(const StructInfo &type, void *object, GameObject &owner) {
+	for (const PropertyInfo &property : type) {
 		void *value = property.Get(object);
-		if (property.Type == Scene::PropertyType::Struct) {
+		if (property.Type == PropertyType::Struct) {
 			ResolveFields(*property.Struct, value, owner);
-		} else if (property.Type == Scene::PropertyType::Object) {
-			Scene::GameObject *target = Scene::PrefabLibrary::FindReferenced(owner, *static_cast<ObjectID *>(value));
+		} else if (property.Type == PropertyType::Object) {
+			GameObject *target = PrefabLibrary::FindReferenced(owner, *static_cast<ObjectID *>(value));
 			vke::detail::Bits::SetObject(
 					*static_cast<vke::ObjectRef *>(value), target ? ToObject(target->GetHandle()) : vke::Object());
 		}
@@ -83,7 +83,7 @@ void ScriptComponent::DropInstance() {
 }
 
 bool ScriptComponent::MakeInstance() {
-	const Scene::ComponentTypeInfo *type = Scene::ComponentRegistry::Find(m_TypeID);
+	const ComponentTypeInfo *type = ComponentRegistry::Find(m_TypeID);
 	if (!type || !type->Context) {
 		return false;
 	}
@@ -111,25 +111,25 @@ template <typename Call> void ScriptComponent::Guard(const char *function, const
 	}
 }
 
-ScriptComponent *ScriptComponent::From(Scene::Component &component) {
-	const Scene::ComponentTypeInfo *type = Scene::ComponentRegistry::Find(component.GetTypeID());
+ScriptComponent *ScriptComponent::From(Component &component) {
+	const ComponentTypeInfo *type = ComponentRegistry::Find(component.GetTypeID());
 	return type && type->Context ? static_cast<ScriptComponent *>(&component) : nullptr;
 }
 
-void ScriptComponent::ConnectToSystems(Scene::SceneSystems &) {
+void ScriptComponent::ConnectToSystems(SceneSystems &) {
 	Guard("its setup", [&] { m_Type->Calls->SetOwner(m_Script, ToObject(GetOwner().GetHandle())); });
 	if (ScriptRun *run = FindRun(*this)) {
 		run->Add(*this);
 	}
 }
 
-void ScriptComponent::DisconnectFromSystems(Scene::SceneSystems &) {
+void ScriptComponent::DisconnectFromSystems(SceneSystems &) {
 	if (ScriptRun *run = FindRun(*this)) {
 		run->Remove(*this);
 	}
 }
 
-void ScriptComponent::OnPropertiesChanged(const Assets::AssetManager &) {
+void ScriptComponent::OnPropertiesChanged(const AssetManager &) {
 	if (m_Started) {
 		ResolveReferences();
 	}
@@ -181,4 +181,4 @@ void ScriptComponent::CallTrigger(vke::detail::ContactPhase phase, vke::Object o
 	Guard("a trigger callback", [&] { m_Type->Calls->Trigger(m_Script, phase, other); });
 }
 
-} // namespace VKE::Scripting
+} // namespace VKE

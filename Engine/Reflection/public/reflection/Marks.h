@@ -20,8 +20,8 @@
 // - VKE_STRUCT goes right before a `struct` or `class`; its marked members must be public.
 // - VKE_PROPERTY goes right before one member declaration: a type, a name and an optional
 //   initializer. A leading "m_" is dropped from the name the property is saved under.
-// - A property is a bool, f32, Vec3, Quat, Handle<Assets::MeshData>,
-//   std::vector<Handle<Assets::MaterialData>>, a marked enum or a marked struct.
+// - A property is a bool, f32, Vec3, Quat, Handle<MeshData>,
+//   std::vector<Handle<MaterialData>>, a marked enum or a marked struct.
 // - VKE_PROPERTY takes `Name = "Saved"` to save the property under another name, and
 //   `Min = <number>` / `Max = <number>` on f32 properties, for editors.
 // - VKE_PROPERTY also takes `Display = Color` on a Vec3 holding a color and `Display = Angle` on an

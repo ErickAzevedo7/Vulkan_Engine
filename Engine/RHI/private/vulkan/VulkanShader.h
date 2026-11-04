@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -22,4 +22,4 @@ private:
 	ShaderStageKind m_Stage;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

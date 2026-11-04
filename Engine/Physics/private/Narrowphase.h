@@ -6,7 +6,7 @@
 #include <math/AABB.h>
 #include <math/MathTypes.h>
 
-namespace VKE::Physics {
+namespace VKE {
 
 // A box in world space: center, unit axes and half the size along each axis.
 struct OrientedBox {
@@ -36,4 +36,4 @@ bool TestBoxBox(const OrientedBox &a, const OrientedBox &b, f32 margin, Penetrat
 // Otherwise it is the axis of least overlap, the smallest push that separates them.
 bool TestBoxTriangle(const OrientedBox &box, const Triangle &triangle, f32 margin, bool alongFace, Penetration &out);
 
-} // namespace VKE::Physics
+} // namespace VKE

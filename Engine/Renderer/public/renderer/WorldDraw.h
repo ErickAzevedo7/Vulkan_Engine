@@ -11,7 +11,7 @@
 // with an optional texture. Tools build these lists (grids, icons, handles); the renderer
 // knows nothing about what they draw.
 
-namespace VKE::Renderer {
+namespace VKE {
 
 enum class WorldPrimitive : u8 {
 	// Segments widened to quads on the GPU, so their width stays the same on screen.
@@ -87,4 +87,4 @@ private:
 	WorldStyle m_Style;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

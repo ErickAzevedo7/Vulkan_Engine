@@ -7,7 +7,7 @@
 
 #include <unordered_map>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -48,4 +48,4 @@ private:
 	VkImageAspectFlags m_Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

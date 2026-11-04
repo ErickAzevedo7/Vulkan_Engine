@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // One light's wish for shadow space: `FaceCount` square tiles of `Size` texels.
 struct ShadowRequest {
@@ -35,4 +35,4 @@ constexpr u32 kMinShadowTileSize = 128;
 // at the smallest size do they lose their shadows. Orders `requests` by priority.
 void PackShadowAtlas(std::vector<ShadowRequest> &requests, u32 atlasSize, std::vector<ShadowTile> &outTiles);
 
-} // namespace VKE::Renderer
+} // namespace VKE

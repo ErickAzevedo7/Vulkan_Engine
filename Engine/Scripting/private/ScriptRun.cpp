@@ -13,27 +13,27 @@
 
 #include <algorithm>
 
-namespace VKE::Scripting {
+namespace VKE {
 
 namespace {
-void CollectScripts(Scene::GameObject &object, std::vector<ScriptComponent *> &out) {
-	for (Scene::Component *component : object.GetComponents()) {
+void CollectScripts(GameObject &object, std::vector<ScriptComponent *> &out) {
+	for (Component *component : object.GetComponents()) {
 		if (ScriptComponent *script = ScriptComponent::From(*component)) {
 			out.push_back(script);
 		}
 	}
-	for (Scene::GameObject *child : object.GetChildren()) {
+	for (GameObject *child : object.GetChildren()) {
 		CollectScripts(*child, out);
 	}
 }
 
-vke::detail::ContactPhase ToPhase(Physics::ContactPhase phase) {
+vke::detail::ContactPhase ToPhase(ContactPhase phase) {
 	switch (phase) {
-		case Physics::ContactPhase::Begin:
+		case ContactPhase::Begin:
 			return vke::detail::ContactPhase::Start;
-		case Physics::ContactPhase::Stay:
+		case ContactPhase::Stay:
 			return vke::detail::ContactPhase::Stay;
-		case Physics::ContactPhase::End:
+		case ContactPhase::End:
 			break;
 	}
 	return vke::detail::ContactPhase::End;
@@ -42,12 +42,12 @@ vke::detail::ContactPhase ToPhase(Physics::ContactPhase phase) {
 
 ScriptRun *ScriptRun::s_Current = nullptr;
 
-ScriptRun::ScriptRun(Scene::Scene &scene, const GameContext &context) : m_Scene(scene), m_Context(context) {
+ScriptRun::ScriptRun(Scene &scene, const GameContext &context) : m_Scene(scene), m_Context(context) {
 	VKE_CORE_ASSERT(!s_Current, "Only one game runs at a time");
 	s_Current = this;
 
 	std::vector<ScriptComponent *> scripts;
-	for (Scene::GameObject *root : m_Scene.GetRootObjects()) {
+	for (GameObject *root : m_Scene.GetRootObjects()) {
 		CollectScripts(*root, scripts);
 	}
 	for (ScriptComponent *script : scripts) {
@@ -119,13 +119,13 @@ void ScriptRun::SwitchGame(GameModule &game) {
 		}
 	}
 
-	Assets::AssetManager &assets = GetPrefabs().GetAssets();
+	AssetManager &assets = GetPrefabs().GetAssets();
 	std::vector<KeptScript> kept;
 	for (ScriptComponent *script : m_Scripts) {
 		if (!script) {
 			continue;
 		}
-		kept.push_back({ script, script->GetTypeName(), Scene::SceneSerializer::ComponentToText(*script, assets) });
+		kept.push_back({ script, script->GetTypeName(), SceneSerializer::ComponentToText(*script, assets) });
 		script->DropInstance();
 	}
 	GetPrefabs().ForgetAll();
@@ -133,7 +133,7 @@ void ScriptRun::SwitchGame(GameModule &game) {
 
 	for (KeptScript &script : kept) {
 		if (script.Script->MakeInstance() && !script.Script->IsBroken()) {
-			Scene::SceneSerializer::LoadComponentText(*script.Script, assets, script.Values);
+			SceneSerializer::LoadComponentText(*script.Script, assets, script.Values);
 		} else {
 			ReportFault("Script '" + script.Name + "' on '" + script.Script->GetOwner().GetName() +
 					"' crashed in its constructor");
@@ -159,7 +159,7 @@ void ScriptRun::Remove(ScriptComponent &script) {
 	StopScript(script, false);
 }
 
-void ScriptRun::QueueDestroy(Handle<Scene::GameObject> object) {
+void ScriptRun::QueueDestroy(Handle<GameObject> object) {
 	m_ToDestroy.push_back(object);
 }
 
@@ -182,7 +182,7 @@ void ScriptRun::StartNewScripts() {
 }
 
 void ScriptRun::DeliverContacts() {
-	for (const Scene::Contact &contact : m_Scene.GetContacts()) {
+	for (const Contact &contact : m_Scene.GetContacts()) {
 		if (m_HasFault) {
 			return;
 		}
@@ -191,16 +191,16 @@ void ScriptRun::DeliverContacts() {
 	}
 }
 
-void ScriptRun::DeliverContact(const Scene::Contact &contact, Handle<Scene::GameObject> self,
-		Handle<Scene::GameObject> other, bool flipNormal) {
-	Scene::GameObject *object = m_Scene.Get(self);
+void ScriptRun::DeliverContact(
+		const Contact &contact, Handle<GameObject> self, Handle<GameObject> other, bool flipNormal) {
+	GameObject *object = m_Scene.Get(self);
 	if (!object || !object->IsActiveInHierarchy()) {
 		return;
 	}
 
 	// Copied: a script can add another to the object.
 	m_ContactScripts.clear();
-	for (Scene::Component *component : object->GetComponents()) {
+	for (Component *component : object->GetComponents()) {
 		if (ScriptComponent *script = ScriptComponent::From(*component)) {
 			m_ContactScripts.push_back(script);
 		}
@@ -225,7 +225,7 @@ void ScriptRun::DestroyQueued() {
 	// By index: an OnStop can ask for more. Asking twice, or for what went with a parent,
 	// finds nothing.
 	for (size_t i = 0; i < m_ToDestroy.size(); ++i) {
-		if (Scene::GameObject *object = m_Scene.Get(m_ToDestroy[i])) {
+		if (GameObject *object = m_Scene.Get(m_ToDestroy[i])) {
 			m_Scene.Destroy(*object);
 		}
 	}
@@ -253,4 +253,4 @@ void ScriptRun::StopScript(ScriptComponent &script, bool gameEnded) {
 	--m_Stopping;
 }
 
-} // namespace VKE::Scripting
+} // namespace VKE

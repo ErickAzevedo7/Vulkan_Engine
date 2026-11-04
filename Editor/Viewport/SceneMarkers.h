@@ -12,14 +12,14 @@
 
 #include <unordered_map>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 class GameObject;
 class Scene;
-} // namespace VKE::Scene
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -33,7 +33,7 @@ struct MarkerIcon {
 
 // The icons markers show for objects that draw nothing themselves.
 struct MarkerIcons {
-	Renderer::OverlayTexture Texture;
+	OverlayTexture Texture;
 	MarkerIcon Directional;
 	MarkerIcon Point;
 	MarkerIcon Spot;
@@ -45,35 +45,33 @@ struct MarkerIcons {
 // camera.
 class SceneMarkers {
 public:
-	explicit SceneMarkers(Assets::AssetManager &assets);
+	explicit SceneMarkers(AssetManager &assets);
 
 	void SetIcons(const MarkerIcons &icons) { m_Icons = icons; }
 
 	bool ShowGrid = true;
 	bool ShowIcons = true;
 
-	void Draw(const Scene::Scene &scene, const Scene::GameObject *selected, const ScreenView &view,
-			Renderer::WorldDrawList &list);
+	void Draw(const Scene &scene, const GameObject *selected, const ScreenView &view, WorldDrawList &list);
 
 	// The object whose icon is under `pixel`, nearest the camera, or null.
-	Scene::GameObject *PickIcon(const Scene::Scene &scene, const ScreenView &view, const Vec2 &pixel) const;
+	GameObject *PickIcon(const Scene &scene, const ScreenView &view, const Vec2 &pixel) const;
 
 	// The world bounds of the meshes of `object` and its children. False if none has one.
-	bool GetBounds(const Scene::GameObject &object, AABB &bounds);
+	bool GetBounds(const GameObject &object, AABB &bounds);
 
 private:
-	void DrawGrid(const ScreenView &view, Renderer::WorldDrawList &list) const;
-	void DrawIcons(const Scene::Scene &scene, const Scene::GameObject *selected, const ScreenView &view,
-			Renderer::WorldDrawList &list) const;
-	void DrawSelected(const Scene::GameObject &object, const ScreenView &view, Renderer::WorldDrawList &list);
+	void DrawGrid(const ScreenView &view, WorldDrawList &list) const;
+	void DrawIcons(const Scene &scene, const GameObject *selected, const ScreenView &view, WorldDrawList &list) const;
+	void DrawSelected(const GameObject &object, const ScreenView &view, WorldDrawList &list);
 	// Null for objects without an icon.
-	const MarkerIcon *GetIcon(const Scene::GameObject &object) const;
+	const MarkerIcon *GetIcon(const GameObject &object) const;
 	// A mesh's own bounds, computed once.
-	const AABB *GetMeshBounds(Handle<Assets::MeshData> mesh);
+	const AABB *GetMeshBounds(Handle<MeshData> mesh);
 
-	Assets::AssetManager &m_Assets;
+	AssetManager &m_Assets;
 	MarkerIcons m_Icons;
-	std::unordered_map<Handle<Assets::MeshData>, AABB> m_MeshBounds;
+	std::unordered_map<Handle<MeshData>, AABB> m_MeshBounds;
 };
 
 } // namespace VKE::Editor

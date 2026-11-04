@@ -24,8 +24,8 @@ bool FacesView(const Vec3 &viewPosition, const Vec3 &a, const Vec3 &b, const Vec
 	return glm::dot(glm::cross(b - a, c - a), viewPosition - a) > 0.0f;
 }
 
-void AddFacingTriangle(Renderer::WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &a, const Vec3 &b,
-		const Vec3 &c, u32 color) {
+void AddFacingTriangle(
+		WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &a, const Vec3 &b, const Vec3 &c, u32 color) {
 	if (FacesView(viewPosition, a, b, c)) {
 		list.AddTriangle(a, b, c, color);
 	}
@@ -38,8 +38,8 @@ u32 ToVertexColor(u32 rgba, f32 opacity) {
 	return ((rgba >> 24) & 0xFFu) | (((rgba >> 16) & 0xFFu) << 8) | (((rgba >> 8) & 0xFFu) << 16) | (alpha << 24);
 }
 
-void AddCircle(Renderer::WorldDrawList &list, const Vec3 &center, const Vec3 &normal, f32 radius, u32 color, f32 width,
-		u32 segments) {
+void AddCircle(
+		WorldDrawList &list, const Vec3 &center, const Vec3 &normal, f32 radius, u32 color, f32 width, u32 segments) {
 	Vec3 u;
 	Vec3 v;
 	MakeBasis(normal, u, v);
@@ -52,8 +52,8 @@ void AddCircle(Renderer::WorldDrawList &list, const Vec3 &center, const Vec3 &no
 	}
 }
 
-void AddCone(Renderer::WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &base, const Vec3 &direction,
-		f32 length, f32 radius, u32 color, u32 segments) {
+void AddCone(WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &base, const Vec3 &direction, f32 length,
+		f32 radius, u32 color, u32 segments) {
 	Vec3 u;
 	Vec3 v;
 	MakeBasis(direction, u, v);
@@ -69,8 +69,8 @@ void AddCone(Renderer::WorldDrawList &list, const Vec3 &viewPosition, const Vec3
 	}
 }
 
-void AddBox(Renderer::WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &center, const Vec3 axes[3],
-		f32 halfSize, u32 color) {
+void AddBox(WorldDrawList &list, const Vec3 &viewPosition, const Vec3 &center, const Vec3 axes[3], f32 halfSize,
+		u32 color) {
 	// Lit from above and a little in front, by a fixed light.
 	const Vec3 light = glm::normalize(Vec3(0.3f, 1.0f, 0.5f));
 	for (int axis = 0; axis < 3; ++axis) {

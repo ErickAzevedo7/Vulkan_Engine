@@ -6,7 +6,7 @@
 
 #include <vector>
 
-namespace VKE::Physics {
+namespace VKE {
 
 struct Triangle {
 	Vec3 A;
@@ -79,4 +79,4 @@ private:
 	std::vector<Vec3> m_Centroids;
 };
 
-} // namespace VKE::Physics
+} // namespace VKE

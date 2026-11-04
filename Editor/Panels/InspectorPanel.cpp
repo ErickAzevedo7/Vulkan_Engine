@@ -28,13 +28,6 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-using UI::ToImColor;
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
 // Vector rows have a narrower label, so their three numbers have room.
 constexpr f32 kVectorLabelWidth = 64.0f;
@@ -66,8 +59,7 @@ void RowText(const char *text, u32 color) {
 }
 } // namespace
 
-InspectorPanel::InspectorPanel(
-		EditorScene &scene, Assets::AssetManager &assets, MaterialEdits &edits, UI::UISystem &ui) :
+InspectorPanel::InspectorPanel(EditorScene &scene, AssetManager &assets, MaterialEdits &edits, UISystem &ui) :
 		m_Scene(scene), m_Assets(assets), m_Edits(edits), m_UI(ui) {}
 
 const char *InspectorPanel::GetWindowName() {
@@ -84,7 +76,7 @@ void InspectorPanel::Draw(bool *open) {
 		return;
 	}
 
-	if (Assets::AssetID asset = m_Scene.GetSelectedAsset(); asset.IsValid()) {
+	if (AssetID asset = m_Scene.GetSelectedAsset(); asset.IsValid()) {
 		ImGui::BeginChild("##Asset");
 		DrawAsset(asset);
 		ImGui::EndChild();
@@ -92,7 +84,7 @@ void InspectorPanel::Draw(bool *open) {
 		return;
 	}
 
-	Scene::GameObject *object = m_Scene.GetSelected();
+	GameObject *object = m_Scene.GetSelected();
 	if (!object) {
 		const char *note = "Select an object or an asset to see it here.";
 		ImVec2 size = ImGui::CalcTextSize(note);
@@ -129,31 +121,31 @@ void InspectorPanel::Draw(bool *open) {
 	}
 
 	// Copied: the add menu can add a component while the blocks are drawn.
-	std::vector<Scene::Component *> components;
-	for (Scene::Component *component : object->GetComponents()) {
+	std::vector<Component *> components;
+	for (Component *component : object->GetComponents()) {
 		components.push_back(component);
 	}
-	for (Scene::Component *component : components) {
+	for (Component *component : components) {
 		DrawComponent(*component);
 	}
 	DrawAddComponent(*object);
 	ImGui::EndChild();
 	ImGui::End();
 
-	if (m_ToReset != Scene::kInvalidComponentType) {
-		const Scene::ComponentTypeInfo *type = Scene::ComponentRegistry::Find(m_ToReset);
-		if (Scene::Component *component = object->GetComponent(m_ToReset); component && type) {
-			Scene::CopyValues(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
+	if (m_ToReset != kInvalidComponentType) {
+		const ComponentTypeInfo *type = ComponentRegistry::Find(m_ToReset);
+		if (Component *component = object->GetComponent(m_ToReset); component && type) {
+			CopyValues(*type->Properties, type->ToObject(component), type->ToObject(type->Defaults.get()));
 			component->ApplyPropertyChanges(m_Assets);
 			m_Scene.MarkDirty();
 		}
-		m_ToReset = Scene::kInvalidComponentType;
+		m_ToReset = kInvalidComponentType;
 	}
-	if (m_ToRemove != Scene::kInvalidComponentType) {
+	if (m_ToRemove != kInvalidComponentType) {
 		if (object->RemoveComponent(m_ToRemove)) {
 			m_Scene.MarkDirty();
 		}
-		m_ToRemove = Scene::kInvalidComponentType;
+		m_ToRemove = kInvalidComponentType;
 	}
 	if (m_PrefabChange) {
 		std::function<void()> change = std::move(m_PrefabChange);
@@ -162,10 +154,10 @@ void InspectorPanel::Draw(bool *open) {
 	}
 }
 
-void InspectorPanel::DrawPrefabBar(Scene::GameObject &object) {
-	Scene::GameObject *root = object.GetPrefabRoot();
-	Assets::AssetID prefab = object.GetPrefab();
-	Scene::PrefabLibrary &prefabs = m_Scene.GetPrefabs();
+void InspectorPanel::DrawPrefabBar(GameObject &object) {
+	GameObject *root = object.GetPrefabRoot();
+	AssetID prefab = object.GetPrefab();
+	PrefabLibrary &prefabs = m_Scene.GetPrefabs();
 	std::filesystem::path file = m_Assets.GetFile(prefab);
 	bool known = !file.empty();
 	bool writable = known && m_Assets.IsWritable(prefab) && !m_Scene.IsPlaying();
@@ -212,7 +204,7 @@ void InspectorPanel::DrawPrefabBar(Scene::GameObject &object) {
 	ImGui::BeginDisabled(overrides == 0 || !writable);
 	if (ImGui::Button("Apply all")) {
 		m_PrefabChange = [this, root, prefab] {
-			m_Scene.ChangePrefab(prefab, [&](Scene::GameObject &) { m_Scene.GetPrefabs().ApplyOverrides(*root); });
+			m_Scene.ChangePrefab(prefab, [&](GameObject &) { m_Scene.GetPrefabs().ApplyOverrides(*root); });
 		};
 	}
 	ImGui::EndDisabled();
@@ -227,7 +219,7 @@ void InspectorPanel::DrawPrefabBar(Scene::GameObject &object) {
 	ImGui::Dummy(ImVec2(0.0f, Sizes::Space3));
 }
 
-void InspectorPanel::DrawObjectHeader(Scene::GameObject &object) {
+void InspectorPanel::DrawObjectHeader(GameObject &object) {
 	ImGui::SetCursorPos(ImVec2(Sizes::Space4, ImGui::GetCursorPosY() + Sizes::Space4));
 	bool active = object.IsActive();
 	if (Fields::Checkbox("##Active", active)) {
@@ -302,8 +294,8 @@ ImVec2 InspectorPanel::DrawBlockHeader(const char *icon, const std::string &labe
 	return max;
 }
 
-void InspectorPanel::DrawComponent(Scene::Component &component) {
-	const Scene::ComponentTypeInfo *type = Scene::ComponentRegistry::Find(component.GetTypeID());
+void InspectorPanel::DrawComponent(Component &component) {
+	const ComponentTypeInfo *type = ComponentRegistry::Find(component.GetTypeID());
 	if (!type) {
 		return;
 	}
@@ -353,7 +345,7 @@ void InspectorPanel::DrawComponent(Scene::Component &component) {
 							   "come back with it.");
 			ImGui::PopStyleColor();
 		}
-		Scene::Component *original = m_Scene.GetPrefabs().GetPart(component);
+		Component *original = m_Scene.GetPrefabs().GetPart(component);
 		bool changed = DrawProperties(component, *type->Properties, type->ToObject(&component),
 				original ? type->ToObject(original) : nullptr);
 		ImGui::PopItemWidth();
@@ -367,14 +359,13 @@ void InspectorPanel::DrawComponent(Scene::Component &component) {
 	ImGui::PopID();
 }
 
-bool InspectorPanel::DrawProperties(
-		Scene::Component &component, const Scene::StructInfo &type, void *object, void *pristine) {
+bool InspectorPanel::DrawProperties(Component &component, const StructInfo &type, void *object, void *pristine) {
 	bool changed = false;
-	for (const Scene::PropertyInfo &property : type) {
+	for (const PropertyInfo &property : type) {
 		ImGui::PushID(property.Name);
 		void *value = property.Get(object);
 		void *original = pristine ? property.Get(pristine) : nullptr;
-		if (property.Type == Scene::PropertyType::Struct) {
+		if (property.Type == PropertyType::Struct) {
 			changed |= DrawProperties(component, *property.Struct, value, original);
 		} else {
 			f32 top = ImGui::GetCursorScreenPos().y;
@@ -389,8 +380,8 @@ bool InspectorPanel::DrawProperties(
 }
 
 bool InspectorPanel::DrawOverride(
-		Scene::Component &component, const Scene::PropertyInfo &property, void *value, void *pristine, f32 top) {
-	if (Scene::AreEqual(property, value, pristine) || Scene::PrefabLibrary::IsPlacement(component, property)) {
+		Component &component, const PropertyInfo &property, void *value, void *pristine, f32 top) {
+	if (AreEqual(property, value, pristine) || PrefabLibrary::IsPlacement(component, property)) {
 		return false;
 	}
 
@@ -408,19 +399,19 @@ bool InspectorPanel::DrawOverride(
 
 	bool changed = false;
 	if (ImGui::BeginPopup("##Override")) {
-		Assets::AssetID prefab = component.GetOwner().GetPrefab();
+		AssetID prefab = component.GetOwner().GetPrefab();
 		if (ImGui::MenuItem(WithIcon(Icons::RefreshCw, "Revert to prefab").c_str())) {
-			Scene::CopyValue(property, value, pristine);
+			CopyValue(property, value, pristine);
 			changed = true;
 		}
 		bool writable = m_Assets.IsWritable(prefab) && !m_Scene.IsPlaying();
 		if (ImGui::MenuItem(WithIcon(Icons::Package, "Apply to prefab").c_str(), nullptr, false, writable)) {
-			const Scene::PropertyInfo *applied = &property;
-			Scene::Component *source = &component;
+			const PropertyInfo *applied = &property;
+			Component *source = &component;
 			m_PrefabChange = [this, prefab, applied, value, pristine, source] {
-				m_Scene.ChangePrefab(prefab, [&](Scene::GameObject &) {
-					Scene::CopyValue(*applied, pristine, value);
-					if (Scene::Component *original = m_Scene.GetPrefabs().GetPart(*source)) {
+				m_Scene.ChangePrefab(prefab, [&](GameObject &) {
+					CopyValue(*applied, pristine, value);
+					if (Component *original = m_Scene.GetPrefabs().GetPart(*source)) {
 						original->ApplyPropertyChanges(m_Assets);
 					}
 				});
@@ -431,10 +422,7 @@ bool InspectorPanel::DrawOverride(
 	return changed;
 }
 
-bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::PropertyInfo &property, void *value) {
-	using Scene::PropertyDisplay;
-	using Scene::PropertyType;
-
+bool InspectorPanel::DrawProperty(Component &component, const PropertyInfo &property, void *value) {
 	std::string label = Display::ToWords(property.Name);
 	switch (property.Type) {
 		case PropertyType::Bool:
@@ -447,15 +435,15 @@ bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::Prop
 
 		case PropertyType::Object: {
 			Fields::Label(label.c_str(), Sizes::LabelWidth);
-			Scene::GameObject &owner = component.GetOwner();
+			GameObject &owner = component.GetOwner();
 			ObjectID &reference = *static_cast<ObjectID *>(value);
-			Scene::GameObject *target = Scene::PrefabLibrary::FindReferenced(owner, reference);
+			GameObject *target = PrefabLibrary::FindReferenced(owner, reference);
 			std::string name = target ? target->GetName() : reference.IsValid() ? "Missing object" : "";
-			Handle<Scene::GameObject> dropped;
+			Handle<GameObject> dropped;
 			switch (Fields::ObjectReference("##Value", name, dropped)) {
 				case Fields::AssetAction::Drop:
-					if (Scene::GameObject *object = owner.GetScene().Get(dropped)) {
-						reference = Scene::PrefabLibrary::GetReference(owner, *object);
+					if (GameObject *object = owner.GetScene().Get(dropped)) {
+						reference = PrefabLibrary::GetReference(owner, *object);
 						return true;
 					}
 					break;
@@ -469,13 +457,13 @@ bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::Prop
 		}
 
 		case PropertyType::Prefab:
-			return DrawAssetReference(label, value, Assets::AssetType::Prefab, Icons::Package, "Prefab");
+			return DrawAssetReference(label, value, AssetType::Prefab, Icons::Package, "Prefab");
 		case PropertyType::MeshAsset:
-			return DrawAssetReference(label, value, Assets::AssetType::Mesh, Icons::Box, "Mesh");
+			return DrawAssetReference(label, value, AssetType::Mesh, Icons::Box, "Mesh");
 		case PropertyType::MaterialAsset:
-			return DrawAssetReference(label, value, Assets::AssetType::Material, Icons::Palette, "Material");
+			return DrawAssetReference(label, value, AssetType::Material, Icons::Palette, "Material");
 		case PropertyType::SceneAsset:
-			return DrawAssetReference(label, value, Assets::AssetType::Scene, Icons::Clapperboard, "Scene");
+			return DrawAssetReference(label, value, AssetType::Scene, Icons::Clapperboard, "Scene");
 
 		case PropertyType::F32: {
 			Fields::Label(label.c_str(), Sizes::LabelWidth);
@@ -505,10 +493,10 @@ bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::Prop
 
 		case PropertyType::Mesh: {
 			Fields::Label(label.c_str(), Sizes::LabelWidth);
-			auto &mesh = *static_cast<Handle<Assets::MeshData> *>(value);
-			const Assets::MeshData *data = m_Assets.GetMesh(mesh);
-			Assets::AssetID dropped;
-			auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Mesh; };
+			auto &mesh = *static_cast<Handle<MeshData> *>(value);
+			const MeshData *data = m_Assets.GetMesh(mesh);
+			AssetID dropped;
+			auto accepts = [this](AssetID id) { return m_Assets.GetAnyType(id) == AssetType::Mesh; };
 			switch (Fields::Asset("##Value", Icons::Box, data ? data->Name : std::string(), "Mesh", accepts, dropped)) {
 				case Fields::AssetAction::Drop:
 					mesh = m_Assets.LoadMesh(dropped);
@@ -523,7 +511,7 @@ bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::Prop
 		}
 
 		case PropertyType::Materials:
-			return DrawMaterials(*static_cast<std::vector<Handle<Assets::MaterialData>> *>(value));
+			return DrawMaterials(*static_cast<std::vector<Handle<MaterialData>> *>(value));
 
 		case PropertyType::Struct:
 			break;
@@ -532,13 +520,13 @@ bool InspectorPanel::DrawProperty(Scene::Component &component, const Scene::Prop
 }
 
 bool InspectorPanel::DrawAssetReference(
-		const std::string &label, void *value, Assets::AssetType type, const char *icon, const char *typeName) {
+		const std::string &label, void *value, AssetType type, const char *icon, const char *typeName) {
 	Fields::Label(label.c_str(), Sizes::LabelWidth);
-	Assets::AssetID &asset = *static_cast<Assets::AssetID *>(value);
+	AssetID &asset = *static_cast<AssetID *>(value);
 	std::filesystem::path file = m_Assets.GetFile(asset);
 	std::string name = !file.empty() ? file.stem().u8string() : asset.IsValid() ? "Missing asset" : "";
-	Assets::AssetID dropped;
-	auto accepts = [this, type](Assets::AssetID id) { return m_Assets.GetAnyType(id) == type; };
+	AssetID dropped;
+	auto accepts = [this, type](AssetID id) { return m_Assets.GetAnyType(id) == type; };
 	switch (Fields::Asset("##Value", icon, name, typeName, accepts, dropped)) {
 		case Fields::AssetAction::Drop:
 			asset = dropped;
@@ -552,7 +540,7 @@ bool InspectorPanel::DrawAssetReference(
 	return false;
 }
 
-bool InspectorPanel::DrawRotation(const char *label, const Scene::PropertyInfo &property, Quat &rotation) {
+bool InspectorPanel::DrawRotation(const char *label, const PropertyInfo &property, Quat &rotation) {
 	// The angles are made again only when the rotation changed elsewhere, like in a gizmo.
 	if (m_Euler.Object != m_Object || m_Euler.Property != &property || !IsClose(m_Euler.From, rotation)) {
 		Vec3 degrees = glm::degrees(glm::eulerAngles(rotation));
@@ -574,7 +562,7 @@ bool InspectorPanel::DrawRotation(const char *label, const Scene::PropertyInfo &
 	return true;
 }
 
-bool InspectorPanel::DrawMaterials(std::vector<Handle<Assets::MaterialData>> &materials) {
+bool InspectorPanel::DrawMaterials(std::vector<Handle<MaterialData>> &materials) {
 	Fields::Label("Materials", Sizes::LabelWidth);
 	std::string count = materials.empty()
 			? std::string("The mesh's own")
@@ -601,15 +589,15 @@ bool InspectorPanel::DrawMaterials(std::vector<Handle<Assets::MaterialData>> &ma
 		}
 	}
 
-	auto accepts = [this](Assets::AssetID id) { return m_Assets.GetAnyType(id) == Assets::AssetType::Material; };
+	auto accepts = [this](AssetID id) { return m_Assets.GetAnyType(id) == AssetType::Material; };
 	for (size_t i = 0; i < materials.size(); ++i) {
 		ImGui::PushID(static_cast<int>(i));
 		// Slots sit under the list's label, a step in.
 		std::string slot = "Slot " + std::to_string(i);
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Sizes::Space5);
 		Fields::Label(slot.c_str(), Sizes::LabelWidth - Sizes::Space5);
-		const Assets::MaterialData *data = m_Assets.GetMaterial(materials[i]);
-		Assets::AssetID dropped;
+		const MaterialData *data = m_Assets.GetMaterial(materials[i]);
+		AssetID dropped;
 		switch (Fields::Asset(
 				"##Value", Icons::Palette, data ? data->Name : std::string(), "Material", accepts, dropped)) {
 			case Fields::AssetAction::Drop:
@@ -628,7 +616,7 @@ bool InspectorPanel::DrawMaterials(std::vector<Handle<Assets::MaterialData>> &ma
 	return changed;
 }
 
-void InspectorPanel::DrawAddComponent(Scene::GameObject &object) {
+void InspectorPanel::DrawAddComponent(GameObject &object) {
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	ImVec2 min = ImGui::GetCursorScreenPos();
 	f32 width = ImGui::GetContentRegionAvail().x;
@@ -663,8 +651,8 @@ void InspectorPanel::DrawAddComponent(Scene::GameObject &object) {
 		Widgets::SearchField("##Filter", m_AddFilter, "Search components");
 		ImGui::Separator();
 		u32 shown = 0;
-		for (Scene::ComponentTypeID id = 0; id < Scene::ComponentRegistry::GetCount(); ++id) {
-			const Scene::ComponentTypeInfo *type = Scene::ComponentRegistry::Find(id);
+		for (ComponentTypeID id = 0; id < ComponentRegistry::GetCount(); ++id) {
+			const ComponentTypeInfo *type = ComponentRegistry::Find(id);
 			if (!type || !type->Create || type->Missing || object.GetComponent(id)) {
 				continue;
 			}
@@ -686,8 +674,8 @@ void InspectorPanel::DrawAddComponent(Scene::GameObject &object) {
 	}
 }
 
-void InspectorPanel::DrawAsset(Assets::AssetID asset) {
-	std::optional<Assets::AssetType> type = m_Assets.GetAnyType(asset);
+void InspectorPanel::DrawAsset(AssetID asset) {
+	std::optional<AssetType> type = m_Assets.GetAnyType(asset);
 	if (!type) {
 		ImGui::SetCursorPos(ImVec2(Sizes::Space4, ImGui::GetCursorPosY() + Sizes::Space7));
 		Widgets::Text("The asset is gone.", Colors::TextMuted);
@@ -697,23 +685,23 @@ void InspectorPanel::DrawAsset(Assets::AssetID asset) {
 	ImGui::PushID(asset.ToString().c_str());
 	DrawAssetHeader(asset, *type);
 	switch (*type) {
-		case Assets::AssetType::Material:
+		case AssetType::Material:
 			DrawMaterial(asset);
 			break;
-		case Assets::AssetType::Texture:
+		case AssetType::Texture:
 			DrawTexture(asset);
 			break;
-		case Assets::AssetType::Model:
+		case AssetType::Model:
 			DrawModel(asset);
 			break;
-		case Assets::AssetType::Mesh:
+		case AssetType::Mesh:
 			DrawMesh(asset);
 			break;
-		case Assets::AssetType::Scene:
+		case AssetType::Scene:
 			ImGui::SetCursorPosX(Sizes::Space4);
 			Widgets::Text("Double-click the scene in Assets to open it.", Colors::TextMuted);
 			break;
-		case Assets::AssetType::Prefab:
+		case AssetType::Prefab:
 			ImGui::SetCursorPosX(Sizes::Space4);
 			ImGui::PushFont(GetFont(TextStyle::UIMedium));
 			if (ImGui::Button(WithIcon(Icons::Package, "Open prefab").c_str())) {
@@ -731,22 +719,21 @@ void InspectorPanel::DrawAsset(Assets::AssetID asset) {
 	ImGui::PopID();
 }
 
-void InspectorPanel::DrawAssetHeader(Assets::AssetID asset, Assets::AssetType type) {
+void InspectorPanel::DrawAssetHeader(AssetID asset, AssetType type) {
 	static constexpr const char *kIcons[] = { Icons::Boxes, Icons::Image, Icons::Palette, Icons::Clapperboard,
 		Icons::Box, Icons::Package };
 	std::filesystem::path file = m_Assets.GetFile(asset);
 	std::string name = file.empty() ? std::string() : file.stem().u8string();
 	if (name.empty()) {
-		if (const Assets::MaterialData *material = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
-				type == Assets::AssetType::Material && material) {
+		if (const MaterialData *material = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
+				type == AssetType::Material && material) {
 			name = material->Name;
-		} else if (const Assets::MeshData *mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset));
-				type == Assets::AssetType::Mesh && mesh) {
+		} else if (const MeshData *mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset)); type == AssetType::Mesh && mesh) {
 			name = mesh->Name;
 		}
 	}
 
-	bool isMaterialFile = type == Assets::AssetType::Material && !file.empty();
+	bool isMaterialFile = type == AssetType::Material && !file.empty();
 	bool writable = !file.empty() && m_Assets.IsWritable(asset);
 	bool unsaved = m_Edits.IsUnsaved(asset);
 
@@ -795,7 +782,7 @@ void InspectorPanel::DrawAssetHeader(Assets::AssetID asset, Assets::AssetType ty
 	// The file as its root names it, or the model the asset is inside.
 	std::string where;
 	if (!file.empty()) {
-		const Assets::AssetRoot *root = m_Assets.FindRoot(file);
+		const AssetRoot *root = m_Assets.FindRoot(file);
 		where = (root ? root->Name + "/" : std::string()) +
 				(root ? file.lexically_relative(root->Folder).generic_u8string() : file.u8string());
 	} else {
@@ -834,27 +821,27 @@ void InspectorPanel::EndAssetBlock() {
 	ImGui::PopID();
 }
 
-void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
+void InspectorPanel::DrawMaterial(AssetID asset) {
 	struct Slot {
 		const char *Label;
-		Assets::MaterialTexture Texture;
+		MaterialTexture Texture;
 	};
 	static constexpr Slot kSlots[] = {
-		{ "Albedo", Assets::MaterialTexture::Albedo },
-		{ "Normal", Assets::MaterialTexture::Normal },
-		{ "Metallic", Assets::MaterialTexture::Metallic },
-		{ "Roughness", Assets::MaterialTexture::Roughness },
-		{ "Occlusion", Assets::MaterialTexture::Occlusion },
-		{ "Emissive", Assets::MaterialTexture::Emissive },
+		{ "Albedo", MaterialTexture::Albedo },
+		{ "Normal", MaterialTexture::Normal },
+		{ "Metallic", MaterialTexture::Metallic },
+		{ "Roughness", MaterialTexture::Roughness },
+		{ "Occlusion", MaterialTexture::Occlusion },
+		{ "Emissive", MaterialTexture::Emissive },
 	};
 
-	const Assets::MaterialData *data = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
+	const MaterialData *data = m_Assets.GetMaterial(m_Assets.LoadMaterial(asset));
 	if (!data) {
 		ImGui::SetCursorPosX(Sizes::Space4);
 		Widgets::Text("The material can't be loaded.", Colors::Danger);
 		return;
 	}
-	Assets::MaterialData values = *data;
+	MaterialData values = *data;
 	bool editable = !m_Assets.GetFile(asset).empty() && m_Assets.IsWritable(asset);
 	bool changed = false;
 
@@ -883,11 +870,11 @@ void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
 		ImFont *small = GetFont(TextStyle::UISmall);
 		f32 badgeWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, "LINEAR").x + 10.0f;
 		constexpr f32 kThumbSize = 22.0f;
-		auto accepts = [this](Assets::AssetID id) { return m_Assets.GetType(id) == Assets::AssetType::Texture; };
+		auto accepts = [this](AssetID id) { return m_Assets.GetType(id) == AssetType::Texture; };
 		for (const Slot &slot : kSlots) {
 			ImGui::PushID(slot.Label);
-			Handle<Assets::TextureData> &texture = values.Textures[static_cast<size_t>(slot.Texture)];
-			Assets::AssetID textureID = m_Assets.GetID(texture);
+			Handle<TextureData> &texture = values.Textures[static_cast<size_t>(slot.Texture)];
+			AssetID textureID = m_Assets.GetID(texture);
 			Fields::Label(slot.Label, Sizes::LabelWidth);
 
 			// The image, the field and the color space the slot reads it in.
@@ -897,19 +884,19 @@ void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
 			ImVec2 thumbMax(thumbMin.x + kThumbSize, thumbMin.y + kThumbSize);
 			draw->AddRectFilled(thumbMin, thumbMax, ToImColor(Colors::BgField), 2.0f);
 			if (textureID.IsValid()) {
-				draw->AddImageRounded(m_UI.GetTextureID(Renderer::OverlayTexture::FromAsset(texture)), thumbMin,
-						thumbMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 2.0f);
+				draw->AddImageRounded(m_UI.GetTextureID(OverlayTexture::FromAsset(texture)), thumbMin, thumbMax,
+						ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 2.0f);
 			}
 			draw->AddRect(thumbMin, thumbMax, ToImColor(Colors::Line), 2.0f);
 			ImGui::SameLine(0.0f, Sizes::Space3);
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Sizes::Space4 - badgeWidth - Sizes::Space3);
-			const Assets::TextureData *textureData = m_Assets.GetTexture(texture);
+			const TextureData *textureData = m_Assets.GetTexture(texture);
 			std::string name = textureID.IsValid() && textureData ? textureData->Name : std::string();
-			Assets::AssetID dropped;
+			AssetID dropped;
 			switch (Fields::Asset("##Texture", Icons::Image, name, "Texture", accepts, dropped)) {
 				case Fields::AssetAction::Drop:
-					texture = m_Assets.LoadTexture(dropped, Assets::GetSlotColorSpace(slot.Texture));
+					texture = m_Assets.LoadTexture(dropped, GetSlotColorSpace(slot.Texture));
 					changed = true;
 					break;
 				case Fields::AssetAction::Clear:
@@ -921,12 +908,12 @@ void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
 			}
 
 			ImGui::SameLine(0.0f, Sizes::Space3);
-			Assets::ColorSpace space = textureData && textureID.IsValid() ? textureData->ColorSpace
-																		  : Assets::GetSlotColorSpace(slot.Texture);
+			ColorSpace space =
+					textureData && textureID.IsValid() ? textureData->ColorSpace : GetSlotColorSpace(slot.Texture);
 			// Centered on the field's height.
 			ImGui::SetCursorPosY(
 					ImGui::GetCursorPosY() + std::floor((Sizes::ControlHeight - ImGui::GetTextLineHeight()) * 0.5f));
-			Widgets::Badge(space == Assets::ColorSpace::SRGB ? "SRGB" : "LINEAR", Colors::TextMuted);
+			Widgets::Badge(space == ColorSpace::SRGB ? "SRGB" : "LINEAR", Colors::TextMuted);
 			ImGui::PopID();
 		}
 		ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
@@ -942,21 +929,20 @@ void InspectorPanel::DrawMaterial(Assets::AssetID asset) {
 	}
 }
 
-u64 InspectorPanel::GetTextureImage(Assets::AssetID texture) {
-	Handle<Assets::TextureData> handle = m_Assets.FindLoadedTexture(texture);
+u64 InspectorPanel::GetTextureImage(AssetID texture) {
+	Handle<TextureData> handle = m_Assets.FindLoadedTexture(texture);
 	if (!handle.IsValid()) {
-		Assets::ColorSpace space = m_Assets.GetColorSpace(texture) == Assets::TextureColorSpace::Linear
-				? Assets::ColorSpace::Linear
-				: Assets::ColorSpace::SRGB;
+		ColorSpace space =
+				m_Assets.GetColorSpace(texture) == TextureColorSpace::Linear ? ColorSpace::Linear : ColorSpace::SRGB;
 		handle = m_Assets.LoadTexture(texture, space);
 	}
-	return handle.IsValid() ? m_UI.GetTextureID(Renderer::OverlayTexture::FromAsset(handle)) : 0;
+	return handle.IsValid() ? m_UI.GetTextureID(OverlayTexture::FromAsset(handle)) : 0;
 }
 
-void InspectorPanel::DrawTexture(Assets::AssetID asset) {
+void InspectorPanel::DrawTexture(AssetID asset) {
 	static const std::vector<std::string> kSpaces = { "From use", "sRGB", "Linear" };
 	u64 image = GetTextureImage(asset);
-	const Assets::TextureData *data = m_Assets.GetTexture(m_Assets.FindLoadedTexture(asset));
+	const TextureData *data = m_Assets.GetTexture(m_Assets.FindLoadedTexture(asset));
 
 	if (BeginAssetBlock(Icons::Image, "Image")) {
 		// The image as large as fits, keeping its shape.
@@ -984,7 +970,7 @@ void InspectorPanel::DrawTexture(Assets::AssetID asset) {
 			Widgets::Text(text, Colors::Text, TextStyle::Mono);
 			Fields::Label("Pixels", Sizes::LabelWidth);
 			ImGui::AlignTextToFramePadding();
-			Widgets::Text(data->PixelType == Assets::PixelType::Float32 ? "32-bit float (HDR)" : "8-bit", Colors::Text);
+			Widgets::Text(data->PixelType == PixelType::Float32 ? "32-bit float (HDR)" : "8-bit", Colors::Text);
 		}
 
 		// Kept in the .vkasset: changing it loads the texture again where materials use it.
@@ -992,7 +978,7 @@ void InspectorPanel::DrawTexture(Assets::AssetID asset) {
 		int current = static_cast<int>(m_Assets.GetColorSpace(asset));
 		ImGui::BeginDisabled(!m_Assets.IsWritable(asset));
 		if (Fields::Choice("##ColorSpace", kSpaces, current)) {
-			m_Assets.SetColorSpace(asset, static_cast<Assets::TextureColorSpace>(current));
+			m_Assets.SetColorSpace(asset, static_cast<TextureColorSpace>(current));
 		}
 		ImGui::EndDisabled();
 		ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
@@ -1003,17 +989,17 @@ void InspectorPanel::DrawTexture(Assets::AssetID asset) {
 	}
 }
 
-void InspectorPanel::DrawModel(Assets::AssetID asset) {
-	std::vector<Assets::SubAsset> subAssets = m_Assets.GetSubAssets(asset);
+void InspectorPanel::DrawModel(AssetID asset) {
+	std::vector<SubAsset> subAssets = m_Assets.GetSubAssets(asset);
 	if (BeginAssetBlock(Icons::Layers, "Contents")) {
 		ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - Sizes::Space4);
 		if (subAssets.empty()) {
 			Widgets::Text("Open the model's tile in Assets to list its meshes and materials.", Colors::TextMuted);
 		}
 		ImGui::PopTextWrapPos();
-		for (const Assets::SubAsset &subAsset : subAssets) {
+		for (const SubAsset &subAsset : subAssets) {
 			ImGui::AlignTextToFramePadding();
-			Widgets::Text(subAsset.Type == Assets::AssetType::Mesh ? Icons::Box : Icons::Palette, Colors::TextMuted);
+			Widgets::Text(subAsset.Type == AssetType::Mesh ? Icons::Box : Icons::Palette, Colors::TextMuted);
 			ImGui::SameLine(0.0f, Sizes::Space3);
 			Widgets::Text(subAsset.Name.c_str(), Colors::Text);
 		}
@@ -1026,8 +1012,8 @@ void InspectorPanel::DrawModel(Assets::AssetID asset) {
 	}
 }
 
-void InspectorPanel::DrawMesh(Assets::AssetID asset) {
-	const Assets::MeshData *mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset));
+void InspectorPanel::DrawMesh(AssetID asset) {
+	const MeshData *mesh = m_Assets.GetMesh(m_Assets.LoadMesh(asset));
 	if (!mesh || !BeginAssetBlock(Icons::Box, "Geometry")) {
 		return;
 	}

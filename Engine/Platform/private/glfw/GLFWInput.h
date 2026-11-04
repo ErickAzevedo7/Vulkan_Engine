@@ -6,7 +6,7 @@
 
 struct GLFWwindow;
 
-namespace VKE::Platform {
+namespace VKE {
 
 class GLFWWindow;
 
@@ -57,4 +57,4 @@ private:
 	std::vector<u32> m_PendingCharacters;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

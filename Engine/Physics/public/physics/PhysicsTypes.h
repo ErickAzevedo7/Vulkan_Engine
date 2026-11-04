@@ -8,7 +8,7 @@
 
 #include <vector>
 
-namespace VKE::Physics {
+namespace VKE {
 
 // Triangles for mesh bodies, in the mesh's own space. One shape can back many bodies.
 struct MeshShapeDesc {
@@ -90,4 +90,4 @@ struct ContactEvent {
 	u64 UserDataB = 0;
 };
 
-} // namespace VKE::Physics
+} // namespace VKE

@@ -2,13 +2,13 @@
 
 #include "ScriptRun.h"
 
-namespace VKE::Scripting {
+namespace VKE {
 
 ScriptRunner::ScriptRunner() = default;
 
 ScriptRunner::~ScriptRunner() = default;
 
-void ScriptRunner::Start(Scene::Scene &scene, const GameContext &context) {
+void ScriptRunner::Start(Scene &scene, const GameContext &context) {
 	m_Run.reset();
 	m_Run = MakeIunique<ScriptRun>(scene, context);
 	m_Run->SetInputArea(m_InputFocused, m_ViewX, m_ViewY);
@@ -39,7 +39,7 @@ void ScriptRunner::ActOnRequests() {
 	} else if (m_Run->IsQuitRequested()) {
 		auto quit = m_Run->GetContext().Quit;
 		quit();
-	} else if (Assets::AssetID scene = m_Run->GetRequestedScene(); scene.IsValid()) {
+	} else if (AssetID scene = m_Run->GetRequestedScene(); scene.IsValid()) {
 		auto load = m_Run->GetContext().LoadScene;
 		load(scene);
 	}
@@ -58,4 +58,4 @@ void ScriptRunner::SetInputArea(bool focused, f32 viewX, f32 viewY) {
 	}
 }
 
-} // namespace VKE::Scripting
+} // namespace VKE

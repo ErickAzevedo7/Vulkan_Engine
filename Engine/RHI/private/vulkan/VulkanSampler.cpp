@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanSampler::VulkanSampler(VulkanDevice &device, const SamplerDesc &desc) : m_Device(device) {
 	f32 maxAnisotropy = std::min(desc.MaxAnisotropy, m_Device.GetLimits().MaxSamplerAnisotropy);
@@ -40,4 +40,4 @@ Iunique<RHISampler> RHISampler::Create(RHIDevice &device, const SamplerDesc &des
 	return MakeIunique<VulkanSampler>(static_cast<VulkanDevice &>(device), desc);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -6,7 +6,7 @@
 #define NOMINMAX
 #include <windows.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 Iunique<DynamicLibrary> DynamicLibrary::Load(const std::filesystem::path &file) {
 	HMODULE handle = LoadLibraryW(file.c_str());
@@ -25,4 +25,4 @@ void *DynamicLibrary::GetSymbol(const char *name) const {
 	return reinterpret_cast<void *>(GetProcAddress(static_cast<HMODULE>(m_Handle), name));
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

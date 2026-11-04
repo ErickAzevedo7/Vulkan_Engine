@@ -106,7 +106,7 @@ std::optional<LogLevel> FindLevel(const std::string &line) {
 }
 } // namespace
 
-ScriptCompiler::ScriptCompiler(const Project::Project &project, std::filesystem::path sdkFolder) :
+ScriptCompiler::ScriptCompiler(const Project &project, std::filesystem::path sdkFolder) :
 		m_ScriptsFolder(project.GetScriptsFolder()),
 		m_BuildFolder(project.GetGameBuildFolder()),
 		m_Library(project.GetGameLibrary()),
@@ -196,7 +196,7 @@ void ScriptCompiler::Build(const Files &files) {
 
 	Result result;
 	if (FindTools(result) && Configure(files, result)) {
-		Platform::Process::Child::Desc desc;
+		Process::Child::Desc desc;
 		desc.Executable = m_Cmake;
 		desc.Arguments = { "--build", m_BuildFolder.u8string() };
 		desc.Environment = m_Environment;
@@ -236,7 +236,7 @@ bool ScriptCompiler::FindTools(Result &result) {
 	// after it runs, in English so messages read the same anywhere, and in UTF-16 to be exact.
 	const char *shell = std::getenv("ComSpec");
 	std::filesystem::path setup = m_Studio / "VC" / "Auxiliary" / "Build" / "vcvars64.bat";
-	Platform::Process::Child::Desc desc;
+	Process::Child::Desc desc;
 	desc.Executable = shell ? shell : "cmd.exe";
 	desc.Arguments = { "/u", "/c", "set", "VSLANG=1033&&", "call", setup.u8string(), ">nul", "2>&1", "&&", "set" };
 	std::string output;
@@ -280,7 +280,7 @@ bool ScriptCompiler::Configure(const Files &files, Result &result) {
 		std::filesystem::remove_all(m_BuildFolder, ec);
 	}
 
-	Platform::Process::Child::Desc desc;
+	Process::Child::Desc desc;
 	desc.Executable = m_Cmake;
 	desc.Arguments = { "-S", m_ScriptsFolder.u8string(), "-B", m_BuildFolder.u8string(), "-G", "Ninja",
 		"-DCMAKE_MAKE_PROGRAM=" + m_Ninja.generic_u8string(), "-DCMAKE_CXX_COMPILER=cl", "-DCMAKE_BUILD_TYPE=Debug",
@@ -296,8 +296,8 @@ bool ScriptCompiler::Configure(const Files &files, Result &result) {
 	return true;
 }
 
-bool ScriptCompiler::Run(const Platform::Process::Child::Desc &desc, std::string &output) {
-	Iunique<Platform::Process::Child> child = Platform::Process::Child::Start(desc);
+bool ScriptCompiler::Run(const Process::Child::Desc &desc, std::string &output) {
+	Iunique<Process::Child> child = Process::Child::Start(desc);
 	if (!child) {
 		return false;
 	}
@@ -316,7 +316,7 @@ bool ScriptCompiler::Run(const Platform::Process::Child::Desc &desc, std::string
 }
 
 void ScriptCompiler::ReadOutput(const std::string &output, bool failed, Result &result) const {
-	std::vector<std::string> lines = SplitLines(Platform::Process::ConsoleTextToUtf8(output));
+	std::vector<std::string> lines = SplitLines(Process::ConsoleTextToUtf8(output));
 	bool anyError = false;
 	for (const std::string &line : lines) {
 		std::optional<LogLevel> level = FindLevel(line);

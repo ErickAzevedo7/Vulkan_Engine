@@ -5,7 +5,7 @@
 
 #include <cstring>
 
-namespace VKE::UI {
+namespace VKE {
 
 namespace {
 // TrueType stores numbers big-endian.
@@ -42,7 +42,7 @@ size_t FindTable(const std::vector<Byte> &data, const char *tag) {
 
 FontFile FontFile::Load(const std::filesystem::path &file) {
 	FontFile font;
-	font.Data = Platform::FileSystem::ReadFileBytes(file.string());
+	font.Data = FileSystem::ReadFileBytes(file.string());
 	if (font.Data.empty()) {
 		return {};
 	}
@@ -63,4 +63,4 @@ FontFile FontFile::Load(const std::filesystem::path &file) {
 	return font;
 }
 
-} // namespace VKE::UI
+} // namespace VKE

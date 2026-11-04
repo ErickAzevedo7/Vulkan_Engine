@@ -8,15 +8,15 @@
 
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // 60 degrees, the usual default for a game camera. Vertical, like every angle in RenderView.
 constexpr f32 kDefaultFieldOfView = glm::radians(60.0f);
 
 struct MeshInstanceDesc {
-	Handle<Assets::MeshData> Mesh;
+	Handle<MeshData> Mesh;
 	// Replaces the mesh's materials, indexed like MeshData::Materials. Empty keeps the mesh's own.
-	std::vector<Handle<Assets::MaterialData>> Materials;
+	std::vector<Handle<MaterialData>> Materials;
 	Mat4 Transform{ 1.0f };
 	bool Visible = true;
 	// Whatever the instance's creator needs to find its own object again, e.g. after
@@ -49,7 +49,7 @@ struct LightDesc {
 // What surrounds the scene, lighting it and showing behind everything else.
 struct EnvironmentDesc {
 	// Equirectangular image, usually a .hdr. An invalid handle uses a stand-in sky.
-	Handle<Assets::TextureData> Source;
+	Handle<TextureData> Source;
 	f32 Intensity = 1.0f;
 };
 
@@ -70,4 +70,4 @@ struct RenderView {
 	Mat4 GetProjection(f32 aspect) const { return glm::perspectiveRH_ZO(FieldOfView, aspect, NearPlane, FarPlane); }
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

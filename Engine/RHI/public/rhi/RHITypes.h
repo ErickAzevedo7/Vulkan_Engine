@@ -7,7 +7,7 @@
 
 // Shared types used across the RHI interfaces.
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIBindGroupLayout;
 
@@ -293,4 +293,4 @@ struct DeviceLimits {
 	u32 MaxTextureSize = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

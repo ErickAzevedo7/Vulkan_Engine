@@ -19,10 +19,6 @@
 
 namespace VKE::Editor {
 
-namespace Colors = UI::Colors;
-using Renderer::WorldDepth;
-using Renderer::WorldStyle;
-
 namespace {
 constexpr f32 kTwoPi = 6.28318530718f;
 constexpr f32 kIconRadius = 15.0f;
@@ -30,14 +26,14 @@ constexpr f32 kIconHalfSize = 11.0f;
 // How far a camera's view is drawn, in meters.
 constexpr f32 kFrustumLength = 3.0f;
 
-void ForEachObject(const Scene::Scene &scene, const std::function<void(Scene::GameObject &)> &visit) {
-	std::function<void(Scene::GameObject &)> walk = [&](Scene::GameObject &object) {
+void ForEachObject(const Scene &scene, const std::function<void(GameObject &)> &visit) {
+	std::function<void(GameObject &)> walk = [&](GameObject &object) {
 		visit(object);
-		for (Scene::GameObject *child : object.GetChildren()) {
+		for (GameObject *child : object.GetChildren()) {
 			walk(*child);
 		}
 	};
-	for (Scene::GameObject *root : scene.GetRootObjects()) {
+	for (GameObject *root : scene.GetRootObjects()) {
 		walk(*root);
 	}
 }
@@ -54,7 +50,7 @@ AABB TransformBounds(const AABB &bounds, const Mat4 &transform) {
 	return result;
 }
 
-void AddWireBox(Renderer::WorldDrawList &list, const AABB &bounds, u32 color, f32 width) {
+void AddWireBox(WorldDrawList &list, const AABB &bounds, u32 color, f32 width) {
 	auto corner = [&](u32 i) {
 		return Vec3((i & 1) ? bounds.Max.x : bounds.Min.x, (i & 2) ? bounds.Max.y : bounds.Min.y,
 				(i & 4) ? bounds.Max.z : bounds.Min.z);
@@ -70,10 +66,9 @@ void AddWireBox(Renderer::WorldDrawList &list, const AABB &bounds, u32 color, f3
 }
 } // namespace
 
-SceneMarkers::SceneMarkers(Assets::AssetManager &assets) : m_Assets(assets) {}
+SceneMarkers::SceneMarkers(AssetManager &assets) : m_Assets(assets) {}
 
-void SceneMarkers::Draw(const Scene::Scene &scene, const Scene::GameObject *selected, const ScreenView &view,
-		Renderer::WorldDrawList &list) {
+void SceneMarkers::Draw(const Scene &scene, const GameObject *selected, const ScreenView &view, WorldDrawList &list) {
 	if (ShowGrid) {
 		DrawGrid(view, list);
 	}
@@ -86,7 +81,7 @@ void SceneMarkers::Draw(const Scene::Scene &scene, const Scene::GameObject *sele
 	list.SetStyle({});
 }
 
-void SceneMarkers::DrawGrid(const ScreenView &view, Renderer::WorldDrawList &list) const {
+void SceneMarkers::DrawGrid(const ScreenView &view, WorldDrawList &list) const {
 	// Cells of 1, 10, 100 meters... as the camera rises, with lines ten times apart ten
 	// times brighter, fading out with the distance.
 	f32 height = std::max(std::abs(view.Position.y), 1.0f);
@@ -133,33 +128,33 @@ void SceneMarkers::DrawGrid(const ScreenView &view, Renderer::WorldDrawList &lis
 			ToVertexColor(Colors::AxisZ, 0.75f), 1.5f);
 }
 
-const MarkerIcon *SceneMarkers::GetIcon(const Scene::GameObject &object) const {
-	if (const auto *light = object.GetComponent<Scene::LightComponent>()) {
+const MarkerIcon *SceneMarkers::GetIcon(const GameObject &object) const {
+	if (const auto *light = object.GetComponent<LightComponent>()) {
 		switch (light->GetSettings().Type) {
-			case Renderer::LightType::Directional:
+			case LightType::Directional:
 				return &m_Icons.Directional;
-			case Renderer::LightType::Point:
+			case LightType::Point:
 				return &m_Icons.Point;
-			case Renderer::LightType::Spot:
+			case LightType::Spot:
 				return &m_Icons.Spot;
 		}
 	}
-	if (object.HasComponent<Scene::CameraComponent>()) {
+	if (object.HasComponent<CameraComponent>()) {
 		return &m_Icons.Camera;
 	}
 	return nullptr;
 }
 
-void SceneMarkers::DrawIcons(const Scene::Scene &scene, const Scene::GameObject *selected, const ScreenView &view,
-		Renderer::WorldDrawList &list) const {
+void SceneMarkers::DrawIcons(
+		const Scene &scene, const GameObject *selected, const ScreenView &view, WorldDrawList &list) const {
 	struct Entry {
-		const Scene::GameObject *Object = nullptr;
+		const GameObject *Object = nullptr;
 		const MarkerIcon *Icon = nullptr;
 		Vec3 Position;
 		f32 Depth = 0.0f;
 	};
 	std::vector<Entry> entries;
-	ForEachObject(scene, [&](Scene::GameObject &object) {
+	ForEachObject(scene, [&](GameObject &object) {
 		const MarkerIcon *icon = object.IsActiveInHierarchy() ? GetIcon(object) : nullptr;
 		if (!icon) {
 			return;
@@ -203,13 +198,13 @@ void SceneMarkers::DrawIcons(const Scene::Scene &scene, const Scene::GameObject 
 	}
 }
 
-Scene::GameObject *SceneMarkers::PickIcon(const Scene::Scene &scene, const ScreenView &view, const Vec2 &pixel) const {
+GameObject *SceneMarkers::PickIcon(const Scene &scene, const ScreenView &view, const Vec2 &pixel) const {
 	if (!ShowIcons) {
 		return nullptr;
 	}
-	Scene::GameObject *best = nullptr;
+	GameObject *best = nullptr;
 	f32 bestDepth = FLT_MAX;
-	ForEachObject(scene, [&](Scene::GameObject &object) {
+	ForEachObject(scene, [&](GameObject &object) {
 		if (!object.IsActiveInHierarchy() || !GetIcon(object)) {
 			return;
 		}
@@ -227,28 +222,28 @@ Scene::GameObject *SceneMarkers::PickIcon(const Scene::Scene &scene, const Scree
 	return best;
 }
 
-const AABB *SceneMarkers::GetMeshBounds(Handle<Assets::MeshData> mesh) {
+const AABB *SceneMarkers::GetMeshBounds(Handle<MeshData> mesh) {
 	auto it = m_MeshBounds.find(mesh);
 	if (it != m_MeshBounds.end()) {
 		return &it->second;
 	}
-	const Assets::MeshData *data = m_Assets.GetMesh(mesh);
+	const MeshData *data = m_Assets.GetMesh(mesh);
 	if (!data || data->Vertices.empty()) {
 		return nullptr;
 	}
 
 	AABB bounds(Vec3(FLT_MAX), Vec3(-FLT_MAX));
-	for (const Assets::Vertex &vertex : data->Vertices) {
+	for (const Vertex &vertex : data->Vertices) {
 		bounds.Min = glm::min(bounds.Min, vertex.Position);
 		bounds.Max = glm::max(bounds.Max, vertex.Position);
 	}
 	return &m_MeshBounds.emplace(mesh, bounds).first->second;
 }
 
-bool SceneMarkers::GetBounds(const Scene::GameObject &object, AABB &bounds) {
+bool SceneMarkers::GetBounds(const GameObject &object, AABB &bounds) {
 	bool found = false;
-	std::function<void(const Scene::GameObject &)> walk = [&](const Scene::GameObject &current) {
-		if (const auto *mesh = current.GetComponent<Scene::MeshComponent>()) {
+	std::function<void(const GameObject &)> walk = [&](const GameObject &current) {
+		if (const auto *mesh = current.GetComponent<MeshComponent>()) {
 			if (const AABB *local = GetMeshBounds(mesh->GetMesh())) {
 				AABB world = TransformBounds(*local, current.GetTransform().GetWorldMatrix());
 				if (found) {
@@ -259,7 +254,7 @@ bool SceneMarkers::GetBounds(const Scene::GameObject &object, AABB &bounds) {
 				}
 			}
 		}
-		for (const Scene::GameObject *child : current.GetChildren()) {
+		for (const GameObject *child : current.GetChildren()) {
 			walk(*child);
 		}
 	};
@@ -267,8 +262,7 @@ bool SceneMarkers::GetBounds(const Scene::GameObject &object, AABB &bounds) {
 	return found;
 }
 
-void SceneMarkers::DrawSelected(
-		const Scene::GameObject &object, const ScreenView &view, Renderer::WorldDrawList &list) {
+void SceneMarkers::DrawSelected(const GameObject &object, const ScreenView &view, WorldDrawList &list) {
 	WorldStyle style;
 	style.Depth = WorldDepth::OnTop;
 	list.SetStyle(style);
@@ -285,15 +279,15 @@ void SceneMarkers::DrawSelected(
 	u32 color = ToVertexColor(Colors::Warning, 0.7f);
 	u32 faint = ToVertexColor(Colors::Warning, 0.35f);
 
-	if (const auto *light = object.GetComponent<Scene::LightComponent>()) {
-		const Scene::LightSettings &settings = light->GetSettings();
+	if (const auto *light = object.GetComponent<LightComponent>()) {
+		const LightSettings &settings = light->GetSettings();
 		switch (settings.Type) {
-			case Renderer::LightType::Point:
+			case LightType::Point:
 				for (const Vec3 &axis : { right, up, forward }) {
 					AddCircle(list, world.Position, axis, settings.Range, color, 1.0f, 64);
 				}
 				break;
-			case Renderer::LightType::Spot: {
+			case LightType::Spot: {
 				f32 radius = std::tan(std::min(settings.OuterConeAngle, 1.5f)) * settings.Range;
 				f32 inner = std::tan(std::min(settings.InnerConeAngle, 1.5f)) * settings.Range;
 				Vec3 end = world.Position + forward * settings.Range;
@@ -304,7 +298,7 @@ void SceneMarkers::DrawSelected(
 				}
 				break;
 			}
-			case Renderer::LightType::Directional: {
+			case LightType::Directional: {
 				// Rays along the light's direction, from a disc around the object.
 				f32 radius = 0.5f;
 				f32 length = 2.0f;
@@ -320,7 +314,7 @@ void SceneMarkers::DrawSelected(
 		}
 	}
 
-	if (const auto *camera = object.GetComponent<Scene::CameraComponent>()) {
+	if (const auto *camera = object.GetComponent<CameraComponent>()) {
 		// The view out to a few meters, at the Viewport's shape.
 		f32 halfHeight = std::tan(camera->FieldOfView * 0.5f) * kFrustumLength;
 		f32 halfWidth = halfHeight * view.Size.x / view.Size.y;

@@ -6,7 +6,7 @@
 
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 
 class IWindow;
 
@@ -44,4 +44,4 @@ public:
 	virtual void Update() = 0;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

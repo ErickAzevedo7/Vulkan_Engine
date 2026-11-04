@@ -22,11 +22,11 @@ std::filesystem::path FindVisualStudio() {
 		return {};
 	}
 
-	Platform::Process::Child::Desc desc;
+	Process::Child::Desc desc;
 	desc.Executable = locator;
 	desc.Arguments = { "-latest", "-prerelease", "-products", "*", "-utf8", "-property", "installationPath",
 		"-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64" };
-	Iunique<Platform::Process::Child> child = Platform::Process::Child::Start(desc);
+	Iunique<Process::Child> child = Process::Child::Start(desc);
 	if (!child) {
 		return {};
 	}
@@ -64,7 +64,7 @@ void OpenInCodeEditor(const std::filesystem::path &file, u32 line) {
 	std::filesystem::path code = FindOnPath(path ? path : "", "code.cmd");
 	if (!code.empty()) {
 		std::filesystem::path program = code.parent_path().parent_path() / "Code.exe";
-		Platform::Process::Launch(program, { "--goto", file.u8string() + ":" + lineText });
+		Process::Launch(program, { "--goto", file.u8string() + ":" + lineText });
 		return;
 	}
 
@@ -74,7 +74,7 @@ void OpenInCodeEditor(const std::filesystem::path &file, u32 line) {
 		return;
 	}
 	std::filesystem::path program = studio / "Common7" / "IDE" / "devenv.exe";
-	Platform::Process::Launch(program, { "/edit", file.u8string(), "/command", "Edit.GoTo " + lineText });
+	Process::Launch(program, { "/edit", file.u8string(), "/command", "Edit.GoTo " + lineText });
 }
 
 } // namespace VKE::Editor

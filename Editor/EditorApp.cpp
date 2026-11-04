@@ -21,12 +21,11 @@ public:
 		// First, so the Console has every message from here on.
 		VKE::Editor::LogCapture::Install();
 
-		std::filesystem::path folder =
-				VKE::Project::FindProjectArgument(VKE::Platform::Process::GetCommandLineArguments());
-		std::optional<VKE::Project::Project> project;
+		std::filesystem::path folder = VKE::FindProjectArgument(VKE::Process::GetCommandLineArguments());
+		std::optional<VKE::Project> project;
 		std::string notice;
 		if (!folder.empty()) {
-			project = VKE::Project::Project::Open(folder);
+			project = VKE::Project::Open(folder);
 			if (!project) {
 				notice = "'" + folder.u8string() + "' couldn't be opened as a project.";
 			}
@@ -40,24 +39,22 @@ public:
 	}
 
 private:
-	void StartEditor(VKE::Project::Project project) {
-		auto *platform =
-				Register<VKE::Platform::PlatformSystem>(VKE::Platform::WindowDesc{ "VKE Editor", 1600, 900, true });
-		auto *assets = Register<VKE::Assets::AssetManager>(project.GetAssetRoots());
-		auto *renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
-		auto *ui = Register<VKE::UI::UISystem>(platform->GetWindow(), platform->GetInput(), *renderer);
-		VKE::Scene::ComponentRegistry::RegisterEngineComponents();
+	void StartEditor(VKE::Project project) {
+		auto *platform = Register<VKE::PlatformSystem>(VKE::WindowDesc{ "VKE Editor", 1600, 900, true });
+		auto *assets = Register<VKE::AssetManager>(project.GetAssetRoots());
+		auto *renderer = Register<VKE::Renderer>(platform->GetWindow(), *assets);
+		auto *ui = Register<VKE::UISystem>(platform->GetWindow(), platform->GetInput(), *renderer);
+		VKE::ComponentRegistry::RegisterEngineComponents();
 		Register<VKE::Editor::EditorSystem>(std::move(project), *platform, *assets, *renderer, *ui);
 	}
 
 	void StartProjectHub(std::string notice) {
-		auto *platform =
-				Register<VKE::Platform::PlatformSystem>(VKE::Platform::WindowDesc{ "VKE Projects", 1120, 720, true });
+		auto *platform = Register<VKE::PlatformSystem>(VKE::WindowDesc{ "VKE Projects", 1120, 720, true });
 		// Only the engine's content: the renderer needs an asset manager, and there is no project yet.
-		auto *assets = Register<VKE::Assets::AssetManager>(std::vector<VKE::Assets::AssetRoot>{
-				{ "Engine", VKE::Platform::FileSystem::GetEngineContentDirectory(), true } });
-		auto *renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
-		auto *ui = Register<VKE::UI::UISystem>(platform->GetWindow(), platform->GetInput(), *renderer);
+		auto *assets = Register<VKE::AssetManager>(
+				std::vector<VKE::AssetRoot>{ { "Engine", VKE::FileSystem::GetEngineContentDirectory(), true } });
+		auto *renderer = Register<VKE::Renderer>(platform->GetWindow(), *assets);
+		auto *ui = Register<VKE::UISystem>(platform->GetWindow(), platform->GetInput(), *renderer);
 		Register<VKE::Editor::ProjectHub>(platform->GetInput(), *renderer, *ui, std::move(notice));
 	}
 };

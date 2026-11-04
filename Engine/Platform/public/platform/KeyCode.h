@@ -6,7 +6,7 @@
 // library's key enum. Each backend translates to/from its own vocabulary
 // (see private/glfw/GLFWKeyMap.h for the GLFW mapping).
 
-namespace VKE::Platform {
+namespace VKE {
 
 enum class KeyCode : u16 {
 	Unknown = 0,
@@ -137,4 +137,4 @@ enum class MouseButton : u8 {
 	Count
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

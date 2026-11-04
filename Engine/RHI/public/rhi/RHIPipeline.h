@@ -3,7 +3,7 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 class RHIRenderPass;
@@ -18,4 +18,4 @@ public:
 	static Iunique<RHIPipeline> Create(RHIDevice &device, RHIRenderPass &renderPass, const PipelineDesc &desc);
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

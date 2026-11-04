@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 class DynamicLibrary;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Scripting {
+namespace VKE {
 
 struct ScriptType;
 struct PreparedGame;
@@ -46,10 +46,10 @@ public:
 	bool IsLoaded() const { return m_Library != nullptr; }
 
 private:
-	Iunique<Platform::DynamicLibrary> m_Library;
+	Iunique<DynamicLibrary> m_Library;
 	std::vector<Iunique<ScriptType>> m_Types;
 	std::filesystem::path m_RunningCopy;
 	Iunique<PreparedGame> m_Prepared;
 };
 
-} // namespace VKE::Scripting
+} // namespace VKE

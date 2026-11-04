@@ -9,21 +9,20 @@
 #include <algorithm>
 #include <cfloat>
 
-namespace VKE::Renderer {
+namespace VKE {
 
-static_assert(kMaterialUniformsBinding == static_cast<u32>(Assets::MaterialTexture::Count),
+static_assert(kMaterialUniformsBinding == static_cast<u32>(MaterialTexture::Count),
 		"Material uniforms must follow the texture bindings");
 
-GpuCache::GpuCache(RHI::RHIDevice &device, Assets::AssetManager &assets, RHI::RHIBindGroupLayout &materialLayout,
-		u32 framesInFlight) :
+GpuCache::GpuCache(RHIDevice &device, AssetManager &assets, RHIBindGroupLayout &materialLayout, u32 framesInFlight) :
 		m_Device(device), m_FramesInFlight(framesInFlight), m_Assets(assets), m_MaterialLayout(materialLayout) {
-	RHI::SamplerDesc samplerDesc;
+	SamplerDesc samplerDesc;
 	samplerDesc.DebugName = "MaterialSampler";
-	m_Sampler = RHI::RHISampler::Create(m_Device, samplerDesc);
+	m_Sampler = RHISampler::Create(m_Device, samplerDesc);
 
 	m_EnvironmentBaker = MakeIunique<EnvironmentBaker>(m_Device);
 
-	Assets::MaterialData defaultMaterial;
+	MaterialData defaultMaterial;
 	defaultMaterial.Name = "$default";
 	defaultMaterial.Metallic = 0.0f;
 	m_DefaultMaterial = m_Assets.AddMaterial(defaultMaterial);
@@ -38,33 +37,33 @@ void GpuCache::BeginFrame(u64 frameNumber) {
 			std::remove_if(m_RetiredMaterials.begin(), m_RetiredMaterials.end(), done), m_RetiredMaterials.end());
 }
 
-const GpuMesh *GpuCache::GetMesh(Handle<Assets::MeshData> handle) {
+const GpuMesh *GpuCache::GetMesh(Handle<MeshData> handle) {
 	if (auto it = m_Meshes.find(handle); it != m_Meshes.end()) {
 		return it->second.get();
 	}
 
-	const Assets::MeshData *mesh = m_Assets.GetMesh(handle);
+	const MeshData *mesh = m_Assets.GetMesh(handle);
 	if (!mesh || mesh->Vertices.empty() || mesh->Indices.empty()) {
 		return nullptr;
 	}
 
 	auto gpuMesh = MakeIunique<GpuMesh>();
 
-	RHI::BufferDesc vertexDesc;
-	vertexDesc.Size = mesh->Vertices.size() * sizeof(Assets::Vertex);
-	vertexDesc.Usage = RHI::BufferUsage::Vertex;
+	BufferDesc vertexDesc;
+	vertexDesc.Size = mesh->Vertices.size() * sizeof(Vertex);
+	vertexDesc.Usage = BufferUsage::Vertex;
 	vertexDesc.DebugName = mesh->Name.c_str();
-	gpuMesh->VertexBuffer = RHI::RHIBuffer::Create(m_Device, vertexDesc, mesh->Vertices.data());
+	gpuMesh->VertexBuffer = RHIBuffer::Create(m_Device, vertexDesc, mesh->Vertices.data());
 
-	RHI::BufferDesc indexDesc;
+	BufferDesc indexDesc;
 	indexDesc.Size = mesh->Indices.size() * sizeof(u32);
-	indexDesc.Usage = RHI::BufferUsage::Index;
+	indexDesc.Usage = BufferUsage::Index;
 	indexDesc.DebugName = mesh->Name.c_str();
-	gpuMesh->IndexBuffer = RHI::RHIBuffer::Create(m_Device, indexDesc, mesh->Indices.data());
+	gpuMesh->IndexBuffer = RHIBuffer::Create(m_Device, indexDesc, mesh->Indices.data());
 
 	gpuMesh->Submeshes = mesh->Submeshes;
 	gpuMesh->Materials = mesh->Materials;
-	for (const Assets::Submesh &submesh : mesh->Submeshes) {
+	for (const Submesh &submesh : mesh->Submeshes) {
 		AABB bounds(Vec3(FLT_MAX), Vec3(-FLT_MAX));
 		for (u32 i = submesh.FirstIndex; i < submesh.FirstIndex + submesh.IndexCount; ++i) {
 			const Vec3 &position = mesh->Vertices[mesh->Indices[i]].Position;
@@ -78,11 +77,11 @@ const GpuMesh *GpuCache::GetMesh(Handle<Assets::MeshData> handle) {
 	return it->second.get();
 }
 
-const GpuMaterial &GpuCache::GetMaterial(Handle<Assets::MaterialData> handle) {
+const GpuMaterial &GpuCache::GetMaterial(Handle<MaterialData> handle) {
 	if (!m_Assets.GetMaterial(handle)) {
 		handle = m_DefaultMaterial;
 	}
-	const Assets::MaterialData &material = *m_Assets.GetMaterial(handle);
+	const MaterialData &material = *m_Assets.GetMaterial(handle);
 	auto it = m_Materials.find(handle);
 	if (it != m_Materials.end() && it->second->Revision == material.Revision) {
 		return *it->second;
@@ -99,7 +98,7 @@ const GpuMaterial &GpuCache::GetMaterial(Handle<Assets::MaterialData> handle) {
 	return *added->second;
 }
 
-Iunique<GpuMaterial> GpuCache::CreateMaterial(const Assets::MaterialData &material) {
+Iunique<GpuMaterial> GpuCache::CreateMaterial(const MaterialData &material) {
 	auto gpuMaterial = MakeIunique<GpuMaterial>();
 	gpuMaterial->Revision = material.Revision;
 
@@ -108,33 +107,33 @@ Iunique<GpuMaterial> GpuCache::CreateMaterial(const Assets::MaterialData &materi
 	uniforms.EmissiveAndOcclusion = Vec4(material.Emissive, material.Occlusion);
 	uniforms.MetallicRoughness = Vec4(material.Metallic, material.Roughness, 0.0f, 0.0f);
 
-	RHI::BufferDesc uniformDesc;
+	BufferDesc uniformDesc;
 	uniformDesc.Size = sizeof(MaterialUniforms);
-	uniformDesc.Usage = RHI::BufferUsage::Uniform;
+	uniformDesc.Usage = BufferUsage::Uniform;
 	uniformDesc.DebugName = material.Name.c_str();
-	gpuMaterial->UniformBuffer = RHI::RHIBuffer::Create(m_Device, uniformDesc, &uniforms);
+	gpuMaterial->UniformBuffer = RHIBuffer::Create(m_Device, uniformDesc, &uniforms);
 
-	RHI::BindGroupDesc groupDesc;
+	BindGroupDesc groupDesc;
 	groupDesc.Layout = &m_MaterialLayout;
 	groupDesc.DebugName = material.Name.c_str();
-	for (u32 slot = 0; slot < static_cast<u32>(Assets::MaterialTexture::Count); ++slot) {
-		RHI::BoundResource resource;
+	for (u32 slot = 0; slot < static_cast<u32>(MaterialTexture::Count); ++slot) {
+		BoundResource resource;
 		resource.Binding = slot;
 		resource.Texture = &GetTexture(material.Textures[slot]);
 		resource.Sampler = m_Sampler.get();
 		groupDesc.Resources.push_back(resource);
 	}
 
-	RHI::BoundResource uniformResource;
+	BoundResource uniformResource;
 	uniformResource.Binding = kMaterialUniformsBinding;
 	uniformResource.Buffer = gpuMaterial->UniformBuffer.get();
 	groupDesc.Resources.push_back(uniformResource);
 
-	gpuMaterial->BindGroup = RHI::RHIBindGroup::Create(m_Device, groupDesc);
+	gpuMaterial->BindGroup = RHIBindGroup::Create(m_Device, groupDesc);
 	return gpuMaterial;
 }
 
-const GpuEnvironment &GpuCache::GetEnvironmentMaps(Handle<Assets::TextureData> source) {
+const GpuEnvironment &GpuCache::GetEnvironmentMaps(Handle<TextureData> source) {
 	if (source.IsValid() && !m_Assets.GetTexture(source)) {
 		source = {};
 	}
@@ -142,37 +141,36 @@ const GpuEnvironment &GpuCache::GetEnvironmentMaps(Handle<Assets::TextureData> s
 		return *it->second;
 	}
 
-	RHI::RHITexture *sourceTexture = source.IsValid() ? &GetTexture(source) : nullptr;
+	RHITexture *sourceTexture = source.IsValid() ? &GetTexture(source) : nullptr;
 	auto [it, inserted] = m_Environments.emplace(source, m_EnvironmentBaker->Bake(sourceTexture));
 	return *it->second;
 }
 
-RHI::RHITexture &GpuCache::GetTexture(Handle<Assets::TextureData> handle) {
+RHITexture &GpuCache::GetTexture(Handle<TextureData> handle) {
 	if (!m_Assets.GetTexture(handle)) {
-		handle = m_Assets.GetDefaultTexture(Assets::DefaultTexture::White);
+		handle = m_Assets.GetDefaultTexture(DefaultTexture::White);
 	}
 	if (auto it = m_Textures.find(handle); it != m_Textures.end()) {
 		return *it->second;
 	}
 
-	const Assets::TextureData &texture = *m_Assets.GetTexture(handle);
+	const TextureData &texture = *m_Assets.GetTexture(handle);
 
-	RHI::TextureDesc desc;
+	TextureDesc desc;
 	desc.Width = texture.Width;
 	desc.Height = texture.Height;
-	if (texture.PixelType == Assets::PixelType::Float32) {
-		desc.Format = RHI::Format::R32G32B32A32_SFLOAT;
+	if (texture.PixelType == PixelType::Float32) {
+		desc.Format = Format::R32G32B32A32_SFLOAT;
 	} else {
-		desc.Format = texture.ColorSpace == Assets::ColorSpace::SRGB ? RHI::Format::R8G8B8A8_SRGB
-																	 : RHI::Format::R8G8B8A8_UNORM;
+		desc.Format = texture.ColorSpace == ColorSpace::SRGB ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
 	}
-	desc.Usage = RHI::TextureUsage::Sampled;
+	desc.Usage = TextureUsage::Sampled;
 	desc.GenerateMips = texture.Width > 1 || texture.Height > 1;
 	desc.DebugName = texture.Name.c_str();
 
-	Iunique<RHI::RHITexture> gpuTexture = RHI::RHITexture::Create(m_Device, desc, texture.Pixels.data());
+	Iunique<RHITexture> gpuTexture = RHITexture::Create(m_Device, desc, texture.Pixels.data());
 	auto [it, inserted] = m_Textures.emplace(handle, std::move(gpuTexture));
 	return *it->second;
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

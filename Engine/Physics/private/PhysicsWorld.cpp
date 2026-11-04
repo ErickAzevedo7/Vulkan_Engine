@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <unordered_map>
 
-namespace VKE::Physics {
+namespace VKE {
 
 struct MeshShape {
 	TriangleTree Tree;
@@ -487,4 +487,4 @@ const std::vector<ContactEvent> &PhysicsWorld::GetContactEvents() const {
 	return m_Storage->Events;
 }
 
-} // namespace VKE::Physics
+} // namespace VKE

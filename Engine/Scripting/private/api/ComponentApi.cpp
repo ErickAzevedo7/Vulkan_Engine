@@ -12,12 +12,12 @@
 namespace vke::api {
 
 namespace {
-using VKE::Scene::CameraComponent;
-using VKE::Scene::LightComponent;
-using VKE::Scene::LightSettings;
-using VKE::Scene::MeshComponent;
-using VKE::Scripting::FindComponent;
-using VKE::Scripting::ScriptRun;
+using VKE::CameraComponent;
+using VKE::FindComponent;
+using VKE::LightComponent;
+using VKE::LightSettings;
+using VKE::MeshComponent;
+using VKE::ScriptRun;
 
 // Changes a copy of the light's settings and hands it back, which syncs the light.
 template <typename Change> void ChangeLight(Light self, const Change &change) {
@@ -37,11 +37,11 @@ bool Light_IsValid(Light self) {
 
 Vec3 Light_GetColor(Light self) {
 	LightComponent *light = FindComponent<LightComponent>(self.GetObject());
-	return light ? VKE::Scripting::ToSDK(light->GetSettings().Color) : Vec3();
+	return light ? VKE::ToSDK(light->GetSettings().Color) : Vec3();
 }
 
 void Light_SetColor(Light self, Vec3 color) {
-	ChangeLight(self, [&](LightSettings &settings) { settings.Color = VKE::Scripting::ToEngine(color); });
+	ChangeLight(self, [&](LightSettings &settings) { settings.Color = VKE::ToEngine(color); });
 }
 
 float Light_GetIntensity(Light self) {
@@ -93,7 +93,7 @@ void Mesh_SetMesh(Mesh self, MeshRef mesh) {
 	if (!component) {
 		return;
 	}
-	VKE::Assets::AssetID id{ detail::Bits::GetID(mesh) };
+	VKE::AssetID id{ detail::Bits::GetID(mesh) };
 	component->SetMesh(ScriptRun::GetCurrent()->GetPrefabs().GetAssets().LoadMesh(id));
 }
 
@@ -102,7 +102,7 @@ void Mesh_SetMaterial(Mesh self, MaterialRef material, int slot) {
 	if (!component || slot < 0) {
 		return;
 	}
-	VKE::Assets::AssetID id{ detail::Bits::GetID(material) };
+	VKE::AssetID id{ detail::Bits::GetID(material) };
 	auto materials = component->GetMaterials();
 	if (materials.size() <= static_cast<size_t>(slot)) {
 		materials.resize(static_cast<size_t>(slot) + 1);

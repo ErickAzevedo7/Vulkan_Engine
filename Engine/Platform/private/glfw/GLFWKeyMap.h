@@ -7,7 +7,7 @@
 
 #include <GLFW/glfw3.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 // Returns the GLFW_KEY_* macro for a given KeyCode, or -1 if unmapped.
 inline int ToGLFWKey(KeyCode key) {
@@ -250,4 +250,4 @@ inline int ToGLFWMouseButton(MouseButton button) {
 	}
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

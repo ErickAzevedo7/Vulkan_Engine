@@ -5,7 +5,7 @@
 
 #include <cstddef>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 
@@ -27,4 +27,4 @@ public:
 	virtual void Read(void *data, size_t size, size_t offset = 0) = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -3,7 +3,7 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 class RHIRenderPass;
@@ -23,4 +23,4 @@ public:
 	virtual u32 GetHeight() const = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

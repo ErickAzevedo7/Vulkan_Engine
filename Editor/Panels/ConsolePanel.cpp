@@ -15,22 +15,17 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-namespace Colors = UI::Colors;
-namespace Sizes = UI::Sizes;
-
 namespace {
 constexpr size_t kMaxRows = 5000;
 
 const char *GetIcon(LogLevel level) {
 	switch (level) {
 		case LogLevel::Warning:
-			return UI::Icons::TriangleAlert;
+			return Icons::TriangleAlert;
 		case LogLevel::Error:
-			return UI::Icons::CircleX;
+			return Icons::CircleX;
 		default:
-			return UI::Icons::Info;
+			return Icons::Info;
 	}
 }
 
@@ -92,7 +87,7 @@ bool ParseSource(const std::string &message, std::string &outFile, u32 &outLine)
 } // namespace
 
 const char *ConsolePanel::GetWindowName() {
-	static const std::string name = std::string(UI::Icons::Terminal) + "  Console###Console";
+	static const std::string name = std::string(Icons::Terminal) + "  Console###Console";
 	return name.c_str();
 }
 
@@ -191,8 +186,7 @@ void ConsolePanel::DrawToolbar() {
 		ImVec2 max = ImGui::GetItemRectMax();
 		ImVec2 textSize = font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, text.c_str());
 		ImVec2 textPos(min.x + (max.x - min.x - textSize.x) * 0.5f, min.y + (max.y - min.y - textSize.y) * 0.5f);
-		ImGui::GetWindowDrawList()->AddText(
-				font, font->FontSize, textPos, UI::ToImColor(GetColor(level)), GetIcon(level));
+		ImGui::GetWindowDrawList()->AddText(font, font->FontSize, textPos, ToImColor(GetColor(level)), GetIcon(level));
 	}
 
 	f32 searchWidth = 240.0f;
@@ -202,7 +196,7 @@ void ConsolePanel::DrawToolbar() {
 	ImGui::Dummy(ImVec2(0.0f, Sizes::Space1));
 	ImGui::GetWindowDrawList()->AddLine(ImVec2(ImGui::GetWindowPos().x, ImGui::GetCursorScreenPos().y - 1.0f),
 			ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), ImGui::GetCursorScreenPos().y - 1.0f),
-			UI::ToImColor(Colors::Line));
+			ToImColor(Colors::Line));
 }
 
 void ConsolePanel::DrawRows() {
@@ -234,7 +228,7 @@ void ConsolePanel::DrawRows() {
 				f32 width = ImGui::GetContentRegionAvail().x;
 				ImVec2 max(min.x + width, min.y + Sizes::ConsoleRowHeight);
 				if (line % 2 == 1) {
-					draw->AddRectFilled(min, max, UI::ToImColor(Colors::BgHeader & 0xFFFFFF73));
+					draw->AddRectFilled(min, max, ToImColor(Colors::BgHeader & 0xFFFFFF73));
 				}
 
 				ImGui::PushID(static_cast<int>(index));
@@ -265,15 +259,15 @@ void ConsolePanel::DrawRows() {
 					return min.y + std::floor((max.y - min.y - font->FontSize) * 0.5f);
 				};
 				f32 x = min.x + Sizes::Space4;
-				draw->AddText(small, small->FontSize, ImVec2(x, centerY(small)), UI::ToImColor(GetColor(entry.Level)),
+				draw->AddText(small, small->FontSize, ImVec2(x, centerY(small)), ToImColor(GetColor(entry.Level)),
 						GetIcon(entry.Level));
 				x += small->FontSize + Sizes::Space4;
 				draw->AddText(monoSmall, monoSmall->FontSize, ImVec2(x, centerY(monoSmall)),
-						UI::ToImColor(Colors::TextFaint), time.c_str());
+						ToImColor(Colors::TextFaint), time.c_str());
 				x += monoSmall->CalcTextSizeA(monoSmall->FontSize, FLT_MAX, 0.0f, time.c_str()).x + Sizes::Space4;
 				std::string category = "[" + entry.Category + "]";
-				draw->AddText(mono, mono->FontSize, ImVec2(x, centerY(mono)), UI::ToImColor(Colors::TextMuted),
-						category.c_str());
+				draw->AddText(
+						mono, mono->FontSize, ImVec2(x, centerY(mono)), ToImColor(Colors::TextMuted), category.c_str());
 				x += mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, category.c_str()).x + Sizes::Space4;
 
 				f32 messageEnd = max.x - Sizes::Space4;
@@ -282,14 +276,14 @@ void ConsolePanel::DrawRows() {
 					ImVec2 countSize = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, count.c_str());
 					ImVec2 pillMax(max.x - Sizes::Space4, min.y + (max.y - min.y + 14.0f) * 0.5f);
 					ImVec2 pillMin(pillMax.x - countSize.x - 10.0f, pillMax.y - 14.0f);
-					draw->AddRectFilled(pillMin, pillMax, UI::ToImColor(Colors::BgRaised), 7.0f);
+					draw->AddRectFilled(pillMin, pillMax, ToImColor(Colors::BgRaised), 7.0f);
 					draw->AddText(small, small->FontSize, ImVec2(pillMin.x + 5.0f, centerY(small)),
-							UI::ToImColor(Colors::TextMuted), count.c_str());
+							ToImColor(Colors::TextMuted), count.c_str());
 					messageEnd = pillMin.x - Sizes::Space4;
 				}
 				ImVec4 clip(x, min.y, messageEnd, max.y);
 				u32 messageColor = entry.Level == LogLevel::Error ? Colors::Danger : Colors::Text;
-				draw->AddText(mono, mono->FontSize, ImVec2(x, centerY(mono)), UI::ToImColor(messageColor),
+				draw->AddText(mono, mono->FontSize, ImVec2(x, centerY(mono)), ToImColor(messageColor),
 						entry.Message.c_str(), nullptr, 0.0f, &clip);
 			}
 		}

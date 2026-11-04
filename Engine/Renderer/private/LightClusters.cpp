@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 constexpr f32 kHalfPi = 1.57079632679f;
@@ -179,4 +179,4 @@ bool LightClusters::FindClusters(
 	return found;
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

@@ -6,7 +6,7 @@
 #include <core/System.h>
 #include <core/Types.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 // Owns the engine's Window and Input for the lifetime of the
 // Application. Populates the VKE::Window / VKE::Input globals
@@ -37,4 +37,4 @@ private:
 	Iunique<IInput> m_Input;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

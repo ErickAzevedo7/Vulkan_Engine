@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Assets {
+namespace VKE {
 
 // Identifies an asset across runs, and across renames and moves of its file, which keeps it
 // in a .vkasset file next to itself. Meshes and materials inside a model file have their own,
@@ -171,10 +171,10 @@ struct SubAsset {
 	std::string Name;
 };
 
-} // namespace VKE::Assets
+} // namespace VKE
 
 namespace std {
-template <> struct hash<VKE::Assets::AssetID> {
-	size_t operator()(const VKE::Assets::AssetID &id) const { return hash<VKE::u64>()(id.Value); }
+template <> struct hash<VKE::AssetID> {
+	size_t operator()(const VKE::AssetID &id) const { return hash<VKE::u64>()(id.Value); }
 };
 } // namespace std

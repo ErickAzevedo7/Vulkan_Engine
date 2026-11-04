@@ -18,7 +18,7 @@
 #include <cstdlib>
 #endif
 
-namespace VKE::Platform::FileSystem {
+namespace VKE::FileSystem {
 
 std::filesystem::path GetExecutablePath() {
 #ifdef _WIN32
@@ -139,4 +139,4 @@ bool Exists(const std::string &path) {
 	return std::filesystem::exists(path, ec);
 }
 
-} // namespace VKE::Platform::FileSystem
+} // namespace VKE::FileSystem

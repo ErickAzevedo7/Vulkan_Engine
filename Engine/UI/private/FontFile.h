@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace VKE::UI {
+namespace VKE {
 
 // A TrueType file in memory, with the vertical metrics that relate its em to ImGui's
 // font size: ImGui sizes a font by the height from its ascender to its descender, while
@@ -28,4 +28,4 @@ struct FontFile {
 	f32 AscentForEm(f32 em) const { return em * Ascender / UnitsPerEm; }
 };
 
-} // namespace VKE::UI
+} // namespace VKE

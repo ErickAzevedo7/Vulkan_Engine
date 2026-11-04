@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <limits>
 
-namespace VKE::RHI {
+namespace VKE {
 
 namespace {
 struct SwapChainSupportDetails {
@@ -58,7 +58,7 @@ VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &modes) {
 	return VK_PRESENT_MODE_FIFO_KHR; // always supported
 }
 
-VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &capabilities, Platform::IWindow &window) {
+VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &capabilities, IWindow &window) {
 	if (capabilities.currentExtent.width != std::numeric_limits<u32>::max()) {
 		return capabilities.currentExtent;
 	}
@@ -69,7 +69,7 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &capabilities, Platform::
 }
 } // namespace
 
-VulkanSwapchain::VulkanSwapchain(VulkanDevice &device, Platform::IWindow &window) : m_Device(device), m_Window(window) {
+VulkanSwapchain::VulkanSwapchain(VulkanDevice &device, IWindow &window) : m_Device(device), m_Window(window) {
 	CreateSwapchain();
 	CreateImageViews();
 	CreateSyncObjects();
@@ -250,8 +250,8 @@ bool VulkanSwapchain::SubmitAndPresent(RHICommandBuffer &cmd) {
 	return true;
 }
 
-Iunique<RHISwapchain> RHISwapchain::Create(RHIDevice &device, Platform::IWindow &window) {
+Iunique<RHISwapchain> RHISwapchain::Create(RHIDevice &device, IWindow &window) {
 	return MakeIunique<VulkanSwapchain>(static_cast<VulkanDevice &>(device), window);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

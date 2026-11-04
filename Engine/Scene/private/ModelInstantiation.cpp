@@ -9,18 +9,17 @@
 
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 
-GameObject *InstantiateModel(
-		Scene &scene, const Assets::AssetManager &assets, Handle<Assets::ModelData> model, GameObject *parent) {
-	const Assets::ModelData *data = assets.GetModel(model);
+GameObject *InstantiateModel(Scene &scene, const AssetManager &assets, Handle<ModelData> model, GameObject *parent) {
+	const ModelData *data = assets.GetModel(model);
 	if (!data || data->Nodes.empty()) {
 		return nullptr;
 	}
 
 	std::vector<GameObject *> objects;
 	objects.reserve(data->Nodes.size());
-	for (const Assets::ModelNode &node : data->Nodes) {
+	for (const ModelNode &node : data->Nodes) {
 		GameObject *nodeParent = node.Parent >= 0 ? objects[static_cast<size_t>(node.Parent)] : parent;
 		GameObject &object = scene.CreateObject(node.Name, nodeParent);
 		object.GetTransform().SetLocal(Transform::Decompose(node.LocalTransform));
@@ -34,4 +33,4 @@ GameObject *InstantiateModel(
 	return objects[0];
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -15,14 +15,14 @@
 namespace vke::api {
 
 namespace {
-using VKE::Scene::GameObject;
-using VKE::Scripting::FindObject;
-using VKE::Scripting::ScriptRun;
-using VKE::Scripting::ToHandle;
-using VKE::Scripting::ToObject;
+using VKE::FindObject;
+using VKE::GameObject;
+using VKE::ScriptRun;
+using VKE::ToHandle;
+using VKE::ToObject;
 
-const VKE::Scene::ComponentTypeInfo *FindScriptType(const char *name) {
-	const VKE::Scene::ComponentTypeInfo *type = VKE::Scene::ComponentRegistry::Find(std::string_view(name));
+const VKE::ComponentTypeInfo *FindScriptType(const char *name) {
+	const VKE::ComponentTypeInfo *type = VKE::ComponentRegistry::Find(std::string_view(name));
 	if (type && type->Context) {
 		return type;
 	}
@@ -103,15 +103,15 @@ Object Object_GetChild(Object self, int index) {
 }
 
 Light Object_GetLight(Object self) {
-	return VKE::Scripting::FindComponent<VKE::Scene::LightComponent>(self) ? Light(self) : Light();
+	return VKE::FindComponent<VKE::LightComponent>(self) ? Light(self) : Light();
 }
 
 Camera Object_GetCamera(Object self) {
-	return VKE::Scripting::FindComponent<VKE::Scene::CameraComponent>(self) ? Camera(self) : Camera();
+	return VKE::FindComponent<VKE::CameraComponent>(self) ? Camera(self) : Camera();
 }
 
 Mesh Object_GetMesh(Object self) {
-	return VKE::Scripting::FindComponent<VKE::Scene::MeshComponent>(self) ? Mesh(self) : Mesh();
+	return VKE::FindComponent<VKE::MeshComponent>(self) ? Mesh(self) : Mesh();
 }
 
 void *Object_AddScriptByName(Object self, const char *name) {
@@ -123,11 +123,11 @@ void *Object_AddScriptByName(Object self, const char *name) {
 		VKE_CORE_WARN("Scripts: can't add '{}' to '{}' during OnStop", name, object->GetName());
 		return nullptr;
 	}
-	const VKE::Scene::ComponentTypeInfo *type = FindScriptType(name);
+	const VKE::ComponentTypeInfo *type = FindScriptType(name);
 	if (!type) {
 		return nullptr;
 	}
-	return VKE::Scripting::ScriptComponent::From(*object->AddComponent(type->ID))->GetInstance();
+	return VKE::ScriptComponent::From(*object->AddComponent(type->ID))->GetInstance();
 }
 
 void *Object_GetScriptByName(Object self, const char *name) {
@@ -135,9 +135,9 @@ void *Object_GetScriptByName(Object self, const char *name) {
 	if (!object) {
 		return nullptr;
 	}
-	const VKE::Scene::ComponentTypeInfo *type = FindScriptType(name);
-	VKE::Scene::Component *component = type ? object->GetComponent(type->ID) : nullptr;
-	return component ? VKE::Scripting::ScriptComponent::From(*component)->GetInstance() : nullptr;
+	const VKE::ComponentTypeInfo *type = FindScriptType(name);
+	VKE::Component *component = type ? object->GetComponent(type->ID) : nullptr;
+	return component ? VKE::ScriptComponent::From(*component)->GetInstance() : nullptr;
 }
 
 Object CreateObject(const char *name) {
@@ -162,7 +162,7 @@ Object FindObject(const char *name) {
 }
 
 void Destroy(Object object) {
-	if (::VKE::Scripting::FindObject(object)) {
+	if (::VKE::FindObject(object)) {
 		ScriptRun::GetCurrent()->QueueDestroy(ToHandle(object));
 	}
 }
@@ -172,13 +172,13 @@ Object Instantiate(PrefabRef prefab, Vec3 position) {
 	if (!run || !prefab.IsSet()) {
 		return {};
 	}
-	VKE::Assets::AssetID id{ detail::Bits::GetID(prefab) };
+	VKE::AssetID id{ detail::Bits::GetID(prefab) };
 	GameObject *instance = run->GetPrefabs().Instantiate(run->GetScene(), id, nullptr, VKE::ObjectID::Generate());
 	if (!instance) {
 		VKE_CORE_WARN("Scripts: a PrefabRef points at something that isn't a prefab");
 		return {};
 	}
-	instance->GetTransform().SetWorldPosition(VKE::Scripting::ToEngine(position));
+	instance->GetTransform().SetWorldPosition(VKE::ToEngine(position));
 	return ToObject(instance->GetHandle());
 }
 

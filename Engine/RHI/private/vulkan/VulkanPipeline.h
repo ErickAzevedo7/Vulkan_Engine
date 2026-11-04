@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 class VulkanRenderPass;
@@ -23,4 +23,4 @@ private:
 	VkPipeline m_Pipeline = VK_NULL_HANDLE;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

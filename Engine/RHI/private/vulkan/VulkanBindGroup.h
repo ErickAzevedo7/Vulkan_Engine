@@ -8,7 +8,7 @@
 
 #include <vector>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -48,4 +48,4 @@ private:
 	u32 m_DynamicOffsetCount = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -4,7 +4,7 @@
 
 #include <chrono>
 
-namespace VKE::Platform {
+namespace VKE {
 
 // General-purpose stopwatch backed by std::chrono::steady_clock.
 // Independent per instance: elapsed time is measured from this
@@ -20,4 +20,4 @@ private:
 	std::chrono::steady_clock::time_point m_Start;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

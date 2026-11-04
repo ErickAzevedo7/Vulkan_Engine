@@ -12,7 +12,7 @@
 #include <map>
 #include <set>
 
-namespace VKE::RHI {
+namespace VKE {
 
 namespace {
 // Must match the version passed to the memory allocator.
@@ -68,7 +68,7 @@ void DestroyDebugUtilsMessengerEXT(
 }
 } // namespace
 
-VulkanDevice::VulkanDevice(Platform::IWindow &window) {
+VulkanDevice::VulkanDevice(IWindow &window) {
 	CreateInstance();
 	SetupDebugMessenger();
 	CreateSurface(window);
@@ -233,7 +233,7 @@ void VulkanDevice::SetupDebugMessenger() {
 	VK_CHECK(CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger));
 }
 
-void VulkanDevice::CreateSurface(Platform::IWindow &window) {
+void VulkanDevice::CreateSurface(IWindow &window) {
 	// GetNativeHandle() is documented (platform/Window.h) as a GLFWwindow*
 	// meant to be interpreted only by RHI backends — this is that backend.
 	auto *glfwWindow = static_cast<GLFWwindow *>(window.GetNativeHandle());
@@ -418,8 +418,8 @@ void VulkanDevice::QueryDeviceInfo() {
 	VKE_CORE_ASSERT(m_DepthFormat != Format::Undefined, "No supported depth format");
 }
 
-Iunique<RHIDevice> RHIDevice::Create(Platform::IWindow &window) {
+Iunique<RHIDevice> RHIDevice::Create(IWindow &window) {
 	return MakeIunique<VulkanDevice>(window);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

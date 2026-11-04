@@ -6,7 +6,7 @@
 // C++ copies of the data shaders read. Members are only Vec4, UVec4 and Mat4,
 // so the layout matches the shaders without extra padding.
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Bind group indices. 3 is still free.
 constexpr u32 kFrameSet = 0;
@@ -35,7 +35,7 @@ constexpr u32 kClusterSlices = 24;
 // Must match kPointShadowNearPlane in shaders/forward.frag.
 constexpr f32 kPointShadowNearPlane = 0.05f;
 
-// Material textures use bindings 0-5 in Assets::MaterialTexture order.
+// Material textures use bindings 0-5 in MaterialTexture order.
 constexpr u32 kMaterialUniformsBinding = 6;
 
 struct GpuLight {
@@ -107,4 +107,4 @@ struct ObjectPushConstants {
 };
 static_assert(sizeof(ObjectPushConstants) == 112, "ObjectPushConstants layout mismatch");
 
-} // namespace VKE::Renderer
+} // namespace VKE

@@ -23,7 +23,7 @@ std::string ReadString(const YAML::Node &root, const char *key) {
 
 std::vector<ProjectTemplate> FindProjectTemplates() {
 	std::vector<ProjectTemplate> templates;
-	std::filesystem::path folder = Platform::FileSystem::GetExecutableDirectory() / "Templates";
+	std::filesystem::path folder = FileSystem::GetExecutableDirectory() / "Templates";
 	std::error_code ec;
 	for (auto it = std::filesystem::directory_iterator(folder, ec); !ec && it != std::filesystem::directory_iterator();
 			it.increment(ec)) {
@@ -49,7 +49,7 @@ std::vector<ProjectTemplate> FindProjectTemplates() {
 			projectTemplate.Name = it->path().filename().u8string();
 		}
 		projectTemplate.Description = ReadString(root, "Description");
-		projectTemplate.StartScene = Assets::AssetID::Parse(ReadString(root, "StartScene"));
+		projectTemplate.StartScene = AssetID::Parse(ReadString(root, "StartScene"));
 		templates.push_back(std::move(projectTemplate));
 	}
 	if (templates.empty()) {
@@ -91,7 +91,7 @@ std::string CheckProjectName(const std::string &name) {
 	return {};
 }
 
-std::optional<Project::Project> CreateProject(
+std::optional<Project> CreateProject(
 		const ProjectTemplate &projectTemplate, const std::filesystem::path &folder, const std::string &name) {
 	std::error_code ec;
 	if (std::filesystem::exists(folder, ec) && !std::filesystem::is_empty(folder, ec)) {
@@ -119,7 +119,7 @@ std::optional<Project::Project> CreateProject(
 		}
 	}
 
-	std::optional<Project::Project> project = Project::Project::Create(folder, name, projectTemplate.StartScene);
+	std::optional<Project> project = Project::Create(folder, name, projectTemplate.StartScene);
 	if (project) {
 		VKE_CORE_INFO("Editor: created project '{}' in '{}'", name, folder.u8string());
 	}

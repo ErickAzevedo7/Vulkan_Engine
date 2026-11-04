@@ -6,10 +6,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-namespace VKE::Assets::Importers {
+namespace VKE::Importers {
 
 bool ImportTexture(const std::filesystem::path &file, ColorSpace colorSpace, TextureData &outTexture) {
-	std::vector<Byte> bytes = Platform::FileSystem::ReadFileBytes(file.string());
+	std::vector<Byte> bytes = FileSystem::ReadFileBytes(file.string());
 	if (bytes.empty()) {
 		return false;
 	}
@@ -49,4 +49,4 @@ bool ImportTexture(const std::filesystem::path &file, ColorSpace colorSpace, Tex
 	return true;
 }
 
-} // namespace VKE::Assets::Importers
+} // namespace VKE::Importers

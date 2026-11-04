@@ -5,11 +5,11 @@
 
 #include <functional>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHICommandBuffer;
 
@@ -18,7 +18,7 @@ class RHIDevice {
 public:
 	virtual ~RHIDevice() = default;
 
-	static Iunique<RHIDevice> Create(Platform::IWindow &window);
+	static Iunique<RHIDevice> Create(IWindow &window);
 
 	// Blocks until the GPU has finished all submitted work.
 	virtual void WaitIdle() = 0;
@@ -33,4 +33,4 @@ public:
 	virtual Format GetDepthFormat() const = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

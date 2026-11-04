@@ -6,7 +6,7 @@
 
 #include <vector>
 
-namespace VKE::Physics {
+namespace VKE {
 
 // Bodies that collide and push each other apart, without gravity, velocity or rotation.
 // Holds only data and is changed through handles, like the render scene.
@@ -49,4 +49,4 @@ private:
 	Iunique<Storage> m_Storage;
 };
 
-} // namespace VKE::Physics
+} // namespace VKE

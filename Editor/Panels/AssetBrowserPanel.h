@@ -8,13 +8,13 @@
 #include <unordered_set>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 class GameObject;
-} // namespace VKE::Scene
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 class UISystem;
-} // namespace VKE::UI
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -30,7 +30,7 @@ class MaterialEdits;
 // .vkasset files, so assets keep their IDs. Read-only roots only show their files.
 class AssetBrowserPanel {
 public:
-	AssetBrowserPanel(EditorScene &scene, MaterialEdits &edits, UI::UISystem &ui);
+	AssetBrowserPanel(EditorScene &scene, MaterialEdits &edits, UISystem &ui);
 
 	// The window's title, with its icon.
 	static const char *GetWindowName();
@@ -41,7 +41,7 @@ public:
 	void Refresh() { ++m_Generation; }
 
 	// The scene double-clicked since the last call, to open; invalid if none.
-	Assets::AssetID TakeSceneToOpen();
+	AssetID TakeSceneToOpen();
 
 private:
 	// A file, folder, or mesh or material inside a model, as the content shows it.
@@ -49,8 +49,8 @@ private:
 		std::filesystem::path Path;
 		std::string Name;
 		bool IsFolder = false;
-		Assets::AssetID ID;
-		Assets::AssetType Type = Assets::AssetType::Model;
+		AssetID ID;
+		AssetType Type = AssetType::Model;
 		// A mesh or material listed under its model's tile.
 		bool IsSubAsset = false;
 	};
@@ -75,7 +75,7 @@ private:
 	bool AcceptMove(const std::filesystem::path &folder);
 	bool AcceptObject(const std::filesystem::path &folder);
 	void Move(const std::filesystem::path &from, const std::filesystem::path &folder);
-	void CreatePrefab(Scene::GameObject &object, const std::filesystem::path &folder);
+	void CreatePrefab(GameObject &object, const std::filesystem::path &folder);
 
 	void UpdateListing();
 	void CreateFolder();
@@ -83,18 +83,18 @@ private:
 	void StartRename(const Item &item);
 	void FinishRename();
 	// The texture's image, loaded if it isn't and its tile is `visible`, one a frame; 0 until then.
-	u64 GetThumbnail(Assets::AssetID texture, bool visible);
+	u64 GetThumbnail(AssetID texture, bool visible);
 
 	bool IsReadOnly(const std::filesystem::path &path) const;
 	bool IsSelected(const Item &item) const;
 
 	EditorScene &m_Scene;
 	MaterialEdits &m_Edits;
-	UI::UISystem &m_UI;
+	UISystem &m_UI;
 
 	std::filesystem::path m_Folder;
 	std::unordered_set<std::string> m_OpenFolders;
-	std::unordered_set<Assets::AssetID> m_OpenModels;
+	std::unordered_set<AssetID> m_OpenModels;
 	std::string m_Filter;
 	bool m_ListView = false;
 	f32 m_TreeWidth = 200.0f;
@@ -109,7 +109,7 @@ private:
 
 	// The selected file or folder; assets are also selected in the scene, for the Inspector.
 	std::filesystem::path m_SelectedPath;
-	Assets::AssetID m_SelectedSubAsset;
+	AssetID m_SelectedSubAsset;
 
 	std::filesystem::path m_Renaming;
 	std::string m_RenameText;
@@ -118,7 +118,7 @@ private:
 	std::filesystem::path m_ToDelete;
 	bool m_OpenDeleteDialog = false;
 
-	Assets::AssetID m_SceneToOpen;
+	AssetID m_SceneToOpen;
 	bool m_LoadedThumbnail = false;
 };
 

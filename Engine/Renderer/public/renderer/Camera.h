@@ -4,7 +4,7 @@
 #include <math/MathTypes.h>
 #include <renderer/RenderTypes.h>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Perspective camera described by a position and yaw/pitch angles.
 // Yaw 0 and pitch 0 look down -Z.
@@ -26,4 +26,4 @@ public:
 	RenderView GetView() const;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

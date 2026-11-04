@@ -10,17 +10,17 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 class IInput;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 class Renderer;
-} // namespace VKE::Renderer
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 class UISystem;
-} // namespace VKE::UI
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -30,7 +30,7 @@ namespace VKE::Editor {
 class ProjectHub : public System {
 public:
 	// `notice` shows at the bottom until the next action, e.g. why a project didn't open.
-	ProjectHub(Platform::IInput &input, Renderer::Renderer &renderer, UI::UISystem &ui, std::string notice);
+	ProjectHub(IInput &input, Renderer &renderer, UISystem &ui, std::string notice);
 
 	void OnInitialize() override;
 	void OnUpdate(FrameTime ft) override;
@@ -58,9 +58,9 @@ private:
 	std::filesystem::path GetNewProjectFolder() const;
 	std::string CheckNewProject() const;
 
-	Platform::IInput &m_Input;
-	Renderer::Renderer &m_Renderer;
-	UI::UISystem &m_UI;
+	IInput &m_Input;
+	Renderer &m_Renderer;
+	UISystem &m_UI;
 
 	RecentProjects m_Recent;
 	// Whether each recent project's folder or .vkproject is gone.

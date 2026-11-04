@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 class VulkanPipeline;
@@ -46,4 +46,4 @@ private:
 	VulkanPipeline *m_BoundPipeline = nullptr;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

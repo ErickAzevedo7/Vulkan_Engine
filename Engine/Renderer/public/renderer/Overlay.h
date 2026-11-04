@@ -11,7 +11,7 @@
 // with a texture and a clip rectangle per command. Interfaces build these lists; the
 // layer knows nothing about what they draw.
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // A texture the renderer owns for the 2D layer, made from pixels (a font atlas, icons).
 struct OverlayImage;
@@ -38,7 +38,7 @@ struct OverlayTexture {
 
 	static OverlayTexture FromImage(OverlayImageID id) { return { Kind::Image, id.Index, id.Generation }; }
 	static OverlayTexture FromView(ViewTextureID id) { return { Kind::View, id.Index, id.Generation }; }
-	static OverlayTexture FromAsset(Handle<Assets::TextureData> id) { return { Kind::Asset, id.Index, id.Generation }; }
+	static OverlayTexture FromAsset(Handle<TextureData> id) { return { Kind::Asset, id.Index, id.Generation }; }
 
 	bool operator==(const OverlayTexture &other) const {
 		return Type == other.Type && Index == other.Index && Generation == other.Generation;
@@ -78,4 +78,4 @@ struct OverlayDrawList {
 	}
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

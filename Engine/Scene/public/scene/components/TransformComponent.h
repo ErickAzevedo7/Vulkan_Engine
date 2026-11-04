@@ -4,7 +4,7 @@
 #include <math/Transform.h>
 #include <scene/Component.h>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // Where an object is. Every object has exactly one, created with the object and listed
 // first among its components; it can't be removed. The hierarchy belongs to GameObject;
@@ -39,7 +39,7 @@ public:
 	const Mat4 &GetWorldMatrix() const;
 
 private:
-	void OnPropertiesChanged(const Assets::AssetManager &assets) override;
+	void OnPropertiesChanged(const AssetManager &assets) override;
 
 	// Recomputes the world values if a change made them stale.
 	void UpdateWorld() const;
@@ -58,4 +58,4 @@ private:
 	mutable bool m_WorldDirty = true;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

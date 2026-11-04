@@ -20,8 +20,8 @@ namespace {
 // Plays the project's start scene from its main camera until the window closes.
 class RuntimeSystem : public VKE::System {
 public:
-	RuntimeSystem(const VKE::Project::Project &project, VKE::Assets::AssetManager &assets,
-			VKE::Renderer::Renderer &renderer, const VKE::Platform::IInput &input) :
+	RuntimeSystem(
+			const VKE::Project &project, VKE::AssetManager &assets, VKE::Renderer &renderer, const VKE::IInput &input) :
 			m_StartScene(project.GetStartScene()),
 			m_Library(project.GetGameLibrary()),
 			m_WorkFolder(project.GetGameWorkFolder()),
@@ -32,7 +32,7 @@ public:
 
 	void OnInitialize() override {
 		m_Game.Load(m_Library, m_WorkFolder);
-		if (m_Assets.GetType(m_StartScene) != VKE::Assets::AssetType::Scene) {
+		if (m_Assets.GetType(m_StartScene) != VKE::AssetType::Scene) {
 			VKE_CORE_ERROR("Runtime: the project has no start scene");
 			VKE::RequestExit();
 			return;
@@ -51,32 +51,32 @@ public:
 
 private:
 	// The current scene stays if the new one can't be read.
-	bool LoadScene(VKE::Assets::AssetID scene) {
-		auto loaded = VKE::MakeIunique<VKE::Scene::Scene>();
-		if (m_Assets.GetType(scene) != VKE::Assets::AssetType::Scene ||
-				!VKE::Scene::SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
+	bool LoadScene(VKE::AssetID scene) {
+		auto loaded = VKE::MakeIunique<VKE::Scene>();
+		if (m_Assets.GetType(scene) != VKE::AssetType::Scene ||
+				!VKE::SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
 			VKE_CORE_ERROR("Runtime: scene {} can't be loaded", scene.ToString());
 			return false;
 		}
 		m_Runner.Stop();
 		m_Scene = std::move(loaded);
 		m_Runner.Start(*m_Scene,
-				{ m_Prefabs, m_Input, [this](VKE::Assets::AssetID next) { LoadScene(next); },
-						[] { VKE::RequestExit(); }, [](const std::string &) { VKE::RequestExit(); } });
+				{ m_Prefabs, m_Input, [this](VKE::AssetID next) { LoadScene(next); }, [] { VKE::RequestExit(); },
+						[](const std::string &) { VKE::RequestExit(); } });
 		return true;
 	}
 
-	VKE::Assets::AssetID m_StartScene;
+	VKE::AssetID m_StartScene;
 	std::filesystem::path m_Library;
 	std::filesystem::path m_WorkFolder;
-	VKE::Assets::AssetManager &m_Assets;
-	VKE::Renderer::Renderer &m_Renderer;
-	const VKE::Platform::IInput &m_Input;
+	VKE::AssetManager &m_Assets;
+	VKE::Renderer &m_Renderer;
+	const VKE::IInput &m_Input;
 	// Before the prefabs and the scene, which hold objects of the game's types.
-	VKE::Scripting::GameModule m_Game;
-	VKE::Scene::PrefabLibrary m_Prefabs;
-	VKE::Iunique<VKE::Scene::Scene> m_Scene;
-	VKE::Scripting::ScriptRunner m_Runner;
+	VKE::GameModule m_Game;
+	VKE::PrefabLibrary m_Prefabs;
+	VKE::Iunique<VKE::Scene> m_Scene;
+	VKE::ScriptRunner m_Runner;
 };
 
 } // namespace
@@ -85,11 +85,10 @@ private:
 class RuntimeApp : public VKE::Application {
 public:
 	RuntimeApp() {
-		std::filesystem::path folder =
-				VKE::Project::FindProjectArgument(VKE::Platform::Process::GetCommandLineArguments());
-		std::optional<VKE::Project::Project> project;
+		std::filesystem::path folder = VKE::FindProjectArgument(VKE::Process::GetCommandLineArguments());
+		std::optional<VKE::Project> project;
 		if (!folder.empty()) {
-			project = VKE::Project::Project::Open(folder);
+			project = VKE::Project::Open(folder);
 		}
 		if (!project) {
 			VKE_CORE_ERROR("Runtime: start it with --project <folder>");
@@ -97,11 +96,10 @@ public:
 			return;
 		}
 
-		auto *platform = Register<VKE::Platform::PlatformSystem>(
-				VKE::Platform::WindowDesc{ project->GetName(), 1280, 720, true });
-		auto *assets = Register<VKE::Assets::AssetManager>(project->GetAssetRoots());
-		auto *renderer = Register<VKE::Renderer::Renderer>(platform->GetWindow(), *assets);
-		VKE::Scene::ComponentRegistry::RegisterEngineComponents();
+		auto *platform = Register<VKE::PlatformSystem>(VKE::WindowDesc{ project->GetName(), 1280, 720, true });
+		auto *assets = Register<VKE::AssetManager>(project->GetAssetRoots());
+		auto *renderer = Register<VKE::Renderer>(platform->GetWindow(), *assets);
+		VKE::ComponentRegistry::RegisterEngineComponents();
 		Register<RuntimeSystem>(*project, *assets, *renderer, platform->GetInput());
 	}
 };

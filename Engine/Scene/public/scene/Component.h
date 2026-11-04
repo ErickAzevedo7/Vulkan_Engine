@@ -3,11 +3,11 @@
 #include <core/Types.h>
 #include <scene/ComponentRegistry.h>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Scene {
+namespace VKE {
 
 class GameObject;
 class Scene;
@@ -39,7 +39,7 @@ public:
 	// Call after writing properties directly through the registry's tables, as a loader or
 	// an editor does: the component applies them, as its setters would have. `assets` holds
 	// the assets the properties refer to.
-	void ApplyPropertyChanges(const Assets::AssetManager &assets);
+	void ApplyPropertyChanges(const AssetManager &assets);
 
 protected:
 	Component() = default;
@@ -61,9 +61,9 @@ private:
 	virtual void DisconnectFromSystems(SceneSystems &systems) {}
 
 	// Called by ApplyPropertyChanges. Marks the component for sync by default.
-	virtual void OnPropertiesChanged(const Assets::AssetManager &assets);
+	virtual void OnPropertiesChanged(const AssetManager &assets);
 
 	GameObject *m_Owner = nullptr;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

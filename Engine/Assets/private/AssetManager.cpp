@@ -7,7 +7,7 @@
 
 #include <unordered_set>
 
-namespace VKE::Assets {
+namespace VKE {
 
 namespace {
 TextureData MakeSolidTexture(const char *name, u8 r, u8 g, u8 b) {
@@ -533,4 +533,4 @@ void AssetManager::CreateDefaultTextures() {
 			AddTexture(MakeSolidTexture("$flat_normal", 128, 128, 255));
 }
 
-} // namespace VKE::Assets
+} // namespace VKE

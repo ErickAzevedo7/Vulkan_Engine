@@ -14,7 +14,7 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
-namespace VKE::Platform::FileDialog {
+namespace VKE::FileDialog {
 
 namespace {
 std::wstring ToWide(const std::string &text) {
@@ -186,4 +186,4 @@ std::optional<std::filesystem::path> PickFolder(const std::filesystem::path &fol
 	return Show(*dialog.Ptr, "PickFolder");
 }
 
-} // namespace VKE::Platform::FileDialog
+} // namespace VKE::FileDialog

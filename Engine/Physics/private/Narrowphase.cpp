@@ -3,7 +3,7 @@
 #include <cfloat>
 #include <cmath>
 
-namespace VKE::Physics {
+namespace VKE {
 
 namespace {
 // Cross products shorter than this come from parallel edges and give no axis.
@@ -144,4 +144,4 @@ bool TestBoxTriangle(const OrientedBox &box, const Triangle &triangle, f32 margi
 	return true;
 }
 
-} // namespace VKE::Physics
+} // namespace VKE

@@ -20,7 +20,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 
 namespace {
 // Parents before children, siblings in order, so a loader can build the hierarchy in one pass.
@@ -31,7 +31,7 @@ void CollectPreOrder(GameObject &object, std::vector<GameObject *> &out) {
 	}
 }
 
-using MaterialList = std::vector<Handle<Assets::MaterialData>>;
+using MaterialList = std::vector<Handle<MaterialData>>;
 
 template <typename T> const T &As(const void *value) {
 	return *static_cast<const T *>(value);
@@ -46,7 +46,7 @@ template <typename T> T &As(void *value) {
 // back as it was.
 class PropertyWriter {
 public:
-	PropertyWriter(YAML::Emitter &out, const Assets::AssetManager &assets, const std::string &owner) :
+	PropertyWriter(YAML::Emitter &out, const AssetManager &assets, const std::string &owner) :
 			m_Out(out), m_Assets(assets), m_Owner(owner) {}
 
 	void Write(const StructInfo &type, const void *object, const void *defaults) {
@@ -85,7 +85,7 @@ private:
 			case PropertyType::MeshAsset:
 			case PropertyType::MaterialAsset:
 			case PropertyType::SceneAsset: {
-				Assets::AssetID id = As<Assets::AssetID>(value);
+				AssetID id = As<AssetID>(value);
 				Key(property) << YAML::DoubleQuoted << (id.IsValid() ? id.ToString() : std::string());
 				break;
 			}
@@ -122,8 +122,8 @@ private:
 				break;
 			case PropertyType::Mesh: {
 				// No mesh is an empty string: the values compared with can have one.
-				Handle<Assets::MeshData> mesh = As<Handle<Assets::MeshData>>(value);
-				Assets::AssetID id = m_Assets.GetID(mesh);
+				Handle<MeshData> mesh = As<Handle<MeshData>>(value);
+				AssetID id = m_Assets.GetID(mesh);
 				if (mesh.IsValid() && !id.IsValid()) {
 					WarnMadeInCode(property);
 					break;
@@ -134,8 +134,8 @@ private:
 			case PropertyType::Materials: {
 				// Materials made in code are written as empty strings, so the others keep their slots.
 				Key(property) << YAML::Flow << YAML::BeginSeq;
-				for (Handle<Assets::MaterialData> material : As<MaterialList>(value)) {
-					Assets::AssetID id = m_Assets.GetID(material);
+				for (Handle<MaterialData> material : As<MaterialList>(value)) {
+					AssetID id = m_Assets.GetID(material);
 					if (material.IsValid() && !id.IsValid()) {
 						WarnMadeInCode(property);
 					}
@@ -155,7 +155,7 @@ private:
 	}
 
 	YAML::Emitter &m_Out;
-	const Assets::AssetManager &m_Assets;
+	const AssetManager &m_Assets;
 	const std::string &m_Owner;
 };
 
@@ -163,7 +163,7 @@ private:
 // object already has; malformed ones too, with a warning.
 class PropertyReader {
 public:
-	PropertyReader(Assets::AssetManager &assets, const std::string &owner) : m_Assets(assets), m_Owner(owner) {}
+	PropertyReader(AssetManager &assets, const std::string &owner) : m_Assets(assets), m_Owner(owner) {}
 
 	void Read(const StructInfo &type, const YAML::Node &node, void *object, const std::string &path) {
 		if (!node || node.IsNull()) {
@@ -217,7 +217,7 @@ private:
 			case PropertyType::SceneAsset: {
 				std::string text;
 				if (ReadScalar(node, text, path)) {
-					As<Assets::AssetID>(value) = Assets::AssetID::Parse(text);
+					As<AssetID>(value) = AssetID::Parse(text);
 				}
 				break;
 			}
@@ -261,12 +261,12 @@ private:
 				if (!ReadScalar(node, text, path)) {
 					break;
 				}
-				As<Handle<Assets::MeshData>>(value) = {};
+				As<Handle<MeshData>>(value) = {};
 				if (text.empty()) {
 					break;
 				}
-				As<Handle<Assets::MeshData>>(value) = m_Assets.LoadMesh(Assets::AssetID::Parse(text));
-				if (!As<Handle<Assets::MeshData>>(value).IsValid()) {
+				As<Handle<MeshData>>(value) = m_Assets.LoadMesh(AssetID::Parse(text));
+				if (!As<Handle<MeshData>>(value).IsValid()) {
 					Warn(path, "refers to a mesh that can't be loaded");
 				}
 				break;
@@ -280,9 +280,9 @@ private:
 				materials.clear();
 				for (const YAML::Node &item : node) {
 					std::string text = item.IsScalar() ? item.Scalar() : std::string();
-					Handle<Assets::MaterialData> material;
+					Handle<MaterialData> material;
 					if (!text.empty()) {
-						material = m_Assets.LoadMaterial(Assets::AssetID::Parse(text));
+						material = m_Assets.LoadMaterial(AssetID::Parse(text));
 						if (!material.IsValid()) {
 							Warn(path, "refers to a material that can't be loaded");
 						}
@@ -326,7 +326,7 @@ private:
 		VKE_CORE_WARN("SceneSerializer: {} on '{}' {}", path, m_Owner, problem);
 	}
 
-	Assets::AssetManager &m_Assets;
+	AssetManager &m_Assets;
 	const std::string &m_Owner;
 };
 
@@ -356,7 +356,7 @@ void WriteMissing(YAML::Emitter &out, const Component &component) {
 	out << node;
 }
 
-void WriteObject(YAML::Emitter &out, const GameObject &object, const Assets::AssetManager &assets, bool writeParent) {
+void WriteObject(YAML::Emitter &out, const GameObject &object, const AssetManager &assets, bool writeParent) {
 	out << YAML::BeginMap;
 	out << YAML::Key << "ID" << YAML::Value << YAML::DoubleQuoted << object.GetID().ToString();
 	out << YAML::Key << "Name" << YAML::Value << YAML::DoubleQuoted << object.GetName();
@@ -454,7 +454,7 @@ void WriteInstance(YAML::Emitter &out, GameObject &root, PrefabLibrary &prefabs)
 	out << YAML::EndMap;
 }
 
-void ReadOverrides(const YAML::Node &overrides, GameObject &root, Assets::AssetManager &assets) {
+void ReadOverrides(const YAML::Node &overrides, GameObject &root, AssetManager &assets) {
 	if (!overrides || !overrides.IsSequence()) {
 		return;
 	}
@@ -585,7 +585,7 @@ bool SceneSerializer::LoadText(Scene &scene, PrefabLibrary &prefabs, const std::
 	return LoadObjects(scene, prefabs.GetAssets(), &prefabs, root, name);
 }
 
-std::string SceneSerializer::PrefabToText(GameObject &root, const Assets::AssetManager &assets) {
+std::string SceneSerializer::PrefabToText(GameObject &root, const AssetManager &assets) {
 	std::vector<GameObject *> objects;
 	CollectPreOrder(root, objects);
 
@@ -601,8 +601,7 @@ std::string SceneSerializer::PrefabToText(GameObject &root, const Assets::AssetM
 	return ToFileText(out);
 }
 
-bool SceneSerializer::SavePrefab(
-		GameObject &root, const Assets::AssetManager &assets, const std::filesystem::path &file) {
+bool SceneSerializer::SavePrefab(GameObject &root, const AssetManager &assets, const std::filesystem::path &file) {
 	std::string text = PrefabToText(root, assets);
 	if (text.empty() || !WriteFile(text, file)) {
 		return false;
@@ -611,7 +610,7 @@ bool SceneSerializer::SavePrefab(
 	return true;
 }
 
-bool SceneSerializer::LoadPrefab(Scene &scene, Assets::AssetManager &assets, const std::filesystem::path &file) {
+bool SceneSerializer::LoadPrefab(Scene &scene, AssetManager &assets, const std::filesystem::path &file) {
 	YAML::Node root;
 	try {
 		root = YAML::LoadFile(file.string());
@@ -623,7 +622,7 @@ bool SceneSerializer::LoadPrefab(Scene &scene, Assets::AssetManager &assets, con
 }
 
 bool SceneSerializer::LoadPrefabText(
-		Scene &scene, Assets::AssetManager &assets, const std::string &text, const std::string &name) {
+		Scene &scene, AssetManager &assets, const std::string &text, const std::string &name) {
 	YAML::Node root;
 	try {
 		root = YAML::Load(text);
@@ -634,7 +633,7 @@ bool SceneSerializer::LoadPrefabText(
 	return LoadObjects(scene, assets, nullptr, root, name);
 }
 
-std::string SceneSerializer::ComponentToText(Component &component, const Assets::AssetManager &assets) {
+std::string SceneSerializer::ComponentToText(Component &component, const AssetManager &assets) {
 	const ComponentTypeInfo *type = ComponentRegistry::Find(component.GetTypeID());
 	YAML::Emitter out;
 	PropertyWriter writer(out, assets, component.GetOwner().GetName());
@@ -642,15 +641,15 @@ std::string SceneSerializer::ComponentToText(Component &component, const Assets:
 	return out.c_str();
 }
 
-void SceneSerializer::LoadComponentText(Component &component, Assets::AssetManager &assets, const std::string &text) {
+void SceneSerializer::LoadComponentText(Component &component, AssetManager &assets, const std::string &text) {
 	const ComponentTypeInfo *type = ComponentRegistry::Find(component.GetTypeID());
 	PropertyReader reader(assets, component.GetOwner().GetName());
 	reader.Read(*type->Properties, YAML::Load(text), type->ToObject(&component), std::string(type->Name) + ".");
 	component.ApplyPropertyChanges(assets);
 }
 
-bool SceneSerializer::LoadObjects(Scene &scene, Assets::AssetManager &assets, PrefabLibrary *prefabs,
-		const YAML::Node &root, const std::string &sourceName) {
+bool SceneSerializer::LoadObjects(Scene &scene, AssetManager &assets, PrefabLibrary *prefabs, const YAML::Node &root,
+		const std::string &sourceName) {
 	YAML::Node objectNodes = root["Objects"];
 	if (!root.IsMap() || !objectNodes || !objectNodes.IsSequence()) {
 		VKE_CORE_ERROR("SceneSerializer: '{}' is not a scene file", sourceName);
@@ -691,7 +690,7 @@ bool SceneSerializer::LoadObjects(Scene &scene, Assets::AssetManager &assets, Pr
 		if (prefabNode && prefabNode.IsScalar()) {
 			GameObject *instance = nullptr;
 			if (prefabs) {
-				instance = prefabs->Instantiate(scene, Assets::AssetID::Parse(prefabNode.Scalar()), nullptr, id);
+				instance = prefabs->Instantiate(scene, AssetID::Parse(prefabNode.Scalar()), nullptr, id);
 			} else {
 				VKE_CORE_WARN("SceneSerializer: prefabs can't go inside prefabs; '{}' in '{}' is left empty", name,
 						sourceName);
@@ -779,4 +778,4 @@ bool SceneSerializer::LoadObjects(Scene &scene, Assets::AssetManager &assets, Pr
 	return true;
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

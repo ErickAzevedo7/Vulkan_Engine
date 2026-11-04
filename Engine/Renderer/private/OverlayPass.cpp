@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstddef>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 // Must match OverlayConstants and the flags in shaders/overlay.frag.
@@ -26,63 +26,63 @@ size_t GrownSize(size_t needed) {
 }
 } // namespace
 
-OverlayPass::OverlayPass(RHI::RHIDevice &device, RHI::RHIRenderPass &outputPass, u32 framesInFlight) :
+OverlayPass::OverlayPass(RHIDevice &device, RHIRenderPass &outputPass, u32 framesInFlight) :
 		m_Device(device), m_FrameBuffers(framesInFlight) {
-	RHI::BindGroupLayoutDesc layoutDesc;
-	layoutDesc.Slots = { { 0, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment } };
+	BindGroupLayoutDesc layoutDesc;
+	layoutDesc.Slots = { { 0, BindingType::CombinedImageSampler, ShaderStageFlags::Fragment } };
 	layoutDesc.DebugName = "OverlayLayout";
-	m_Layout = RHI::RHIBindGroupLayout::Create(m_Device, layoutDesc);
+	m_Layout = RHIBindGroupLayout::Create(m_Device, layoutDesc);
 
-	RHI::SamplerDesc samplerDesc;
-	samplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;
-	samplerDesc.AddressModeV = RHI::SamplerAddressMode::ClampToEdge;
+	SamplerDesc samplerDesc;
+	samplerDesc.AddressModeU = SamplerAddressMode::ClampToEdge;
+	samplerDesc.AddressModeV = SamplerAddressMode::ClampToEdge;
 	samplerDesc.MaxAnisotropy = 1.0f;
 	samplerDesc.DebugName = "OverlaySampler";
-	m_Sampler = RHI::RHISampler::Create(m_Device, samplerDesc);
+	m_Sampler = RHISampler::Create(m_Device, samplerDesc);
 
-	const auto shaderDir = Platform::FileSystem::GetExecutableDirectory() / "shaders";
+	const auto shaderDir = FileSystem::GetExecutableDirectory() / "shaders";
 
-	RHI::PipelineDesc pipelineDesc;
+	PipelineDesc pipelineDesc;
 	pipelineDesc.VertexShaderPath = (shaderDir / "overlay.vert.spv").string();
 	pipelineDesc.FragmentShaderPath = (shaderDir / "overlay.frag.spv").string();
 	pipelineDesc.VertexStride = sizeof(OverlayVertex);
 	pipelineDesc.VertexAttributes = {
-		{ 0, RHI::Format::R32G32_SFLOAT, offsetof(OverlayVertex, Position) },
-		{ 1, RHI::Format::R32G32_SFLOAT, offsetof(OverlayVertex, UV) },
-		{ 2, RHI::Format::R8G8B8A8_UNORM, offsetof(OverlayVertex, Color) },
+		{ 0, Format::R32G32_SFLOAT, offsetof(OverlayVertex, Position) },
+		{ 1, Format::R32G32_SFLOAT, offsetof(OverlayVertex, UV) },
+		{ 2, Format::R8G8B8A8_UNORM, offsetof(OverlayVertex, Color) },
 	};
 	pipelineDesc.BindGroupLayouts = { m_Layout.get() };
-	pipelineDesc.PushConstantRanges = { { RHI::ShaderStageFlags::AllGraphics, 0, sizeof(OverlayConstants) } };
-	pipelineDesc.CullMode = RHI::CullMode::None;
-	pipelineDesc.Blend = RHI::BlendMode::Alpha;
-	m_Pipeline = RHI::RHIPipeline::Create(m_Device, outputPass, pipelineDesc);
+	pipelineDesc.PushConstantRanges = { { ShaderStageFlags::AllGraphics, 0, sizeof(OverlayConstants) } };
+	pipelineDesc.CullMode = CullMode::None;
+	pipelineDesc.Blend = BlendMode::Alpha;
+	m_Pipeline = RHIPipeline::Create(m_Device, outputPass, pipelineDesc);
 
 	const u32 white = 0xFFFFFFFF;
-	RHI::TextureDesc whiteDesc;
-	whiteDesc.Format = RHI::Format::R8G8B8A8_UNORM;
+	TextureDesc whiteDesc;
+	whiteDesc.Format = Format::R8G8B8A8_UNORM;
 	whiteDesc.DebugName = "OverlayWhite";
-	m_White = RHI::RHITexture::Create(m_Device, whiteDesc, &white);
+	m_White = RHITexture::Create(m_Device, whiteDesc, &white);
 }
 
 OverlayPass::~OverlayPass() = default;
 
-RHI::RHIBindGroup &OverlayPass::GetBindGroup(RHI::RHITexture &texture) {
-	Iunique<RHI::RHIBindGroup> &group = m_BindGroups[&texture];
+RHIBindGroup &OverlayPass::GetBindGroup(RHITexture &texture) {
+	Iunique<RHIBindGroup> &group = m_BindGroups[&texture];
 	if (!group) {
-		RHI::BindGroupDesc groupDesc;
+		BindGroupDesc groupDesc;
 		groupDesc.Layout = m_Layout.get();
 		groupDesc.DebugName = "OverlayTexture";
-		RHI::BoundResource resource;
+		BoundResource resource;
 		resource.Binding = 0;
 		resource.Texture = &texture;
 		resource.Sampler = m_Sampler.get();
 		groupDesc.Resources = { resource };
-		group = RHI::RHIBindGroup::Create(m_Device, groupDesc);
+		group = RHIBindGroup::Create(m_Device, groupDesc);
 	}
 	return *group;
 }
 
-void OverlayPass::ForgetTexture(RHI::RHITexture &texture) {
+void OverlayPass::ForgetTexture(RHITexture &texture) {
 	m_BindGroups.erase(&texture);
 }
 
@@ -100,29 +100,29 @@ void OverlayPass::Upload(
 
 	size_t vertexBytes = vertexCount * sizeof(OverlayVertex);
 	if (!buffers.Vertices || buffers.Vertices->GetSize() < vertexBytes) {
-		RHI::BufferDesc desc;
+		BufferDesc desc;
 		desc.Size = GrownSize(vertexBytes);
-		desc.Usage = RHI::BufferUsage::Vertex;
-		desc.Memory = RHI::BufferMemory::HostVisible;
+		desc.Usage = BufferUsage::Vertex;
+		desc.Memory = BufferMemory::HostVisible;
 		desc.DebugName = "OverlayVertices";
-		buffers.Vertices = RHI::RHIBuffer::Create(m_Device, desc);
+		buffers.Vertices = RHIBuffer::Create(m_Device, desc);
 	}
 	size_t indexBytes = indexCount * sizeof(u16);
 	if (!buffers.Indices || buffers.Indices->GetSize() < indexBytes) {
-		RHI::BufferDesc desc;
+		BufferDesc desc;
 		desc.Size = GrownSize(indexBytes);
-		desc.Usage = RHI::BufferUsage::Index;
-		desc.Memory = RHI::BufferMemory::HostVisible;
+		desc.Usage = BufferUsage::Index;
+		desc.Memory = BufferMemory::HostVisible;
 		desc.DebugName = "OverlayIndices";
-		buffers.Indices = RHI::RHIBuffer::Create(m_Device, desc);
+		buffers.Indices = RHIBuffer::Create(m_Device, desc);
 	}
 
 	buffers.Vertices->Write(m_Vertices.data(), vertexBytes);
 	buffers.Indices->Write(m_Indices.data(), indexBytes);
 }
 
-void OverlayPass::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const OverlayDrawList *lists, size_t count,
-		u32 width, u32 height, bool outputEncodes, const TextureResolver &resolve) {
+void OverlayPass::Record(RHICommandBuffer &cmd, u32 frameIndex, const OverlayDrawList *lists, size_t count, u32 width,
+		u32 height, bool outputEncodes, const TextureResolver &resolve) {
 	size_t vertexCount = 0;
 	size_t indexCount = 0;
 	for (size_t i = 0; i < count; ++i) {
@@ -138,14 +138,14 @@ void OverlayPass::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Overl
 
 	cmd.BindPipeline(*m_Pipeline);
 	cmd.BindVertexBuffer(*buffers.Vertices);
-	cmd.BindIndexBuffer(*buffers.Indices, RHI::IndexType::U16);
+	cmd.BindIndexBuffer(*buffers.Indices, IndexType::U16);
 
 	// Clip space is Y-up: the top-left pixel maps to (-1, 1).
 	OverlayConstants constants;
 	constants.Scale = Vec2(2.0f / static_cast<f32>(width), -2.0f / static_cast<f32>(height));
 	constants.Offset = Vec2(-1.0f, 1.0f);
 
-	RHI::RHITexture *boundTexture = nullptr;
+	RHITexture *boundTexture = nullptr;
 	u32 boundFlags = ~0u;
 	u32 vertexBase = 0;
 	u32 indexBase = 0;
@@ -160,7 +160,7 @@ void OverlayPass::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Overl
 				continue;
 			}
 
-			RHI::RHITexture *texture = resolve(command.Texture);
+			RHITexture *texture = resolve(command.Texture);
 			if (!texture) {
 				texture = m_White.get();
 			}
@@ -173,11 +173,11 @@ void OverlayPass::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Overl
 			}
 			if (flags != boundFlags) {
 				constants.Flags = flags;
-				cmd.PushConstants(RHI::ShaderStageFlags::AllGraphics, 0, sizeof(constants), &constants);
+				cmd.PushConstants(ShaderStageFlags::AllGraphics, 0, sizeof(constants), &constants);
 				boundFlags = flags;
 			}
 
-			RHI::ScissorRect scissor;
+			ScissorRect scissor;
 			scissor.X = static_cast<i32>(minX);
 			scissor.Y = static_cast<i32>(minY);
 			scissor.Width = static_cast<u32>(std::ceil(maxX)) - static_cast<u32>(minX);
@@ -191,10 +191,10 @@ void OverlayPass::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Overl
 		indexBase += static_cast<u32>(list.Indices.size());
 	}
 
-	RHI::ScissorRect full;
+	ScissorRect full;
 	full.Width = width;
 	full.Height = height;
 	cmd.SetScissor(full);
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

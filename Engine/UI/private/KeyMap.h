@@ -4,11 +4,10 @@
 
 #include <imgui.h>
 
-namespace VKE::UI {
+namespace VKE {
 
 // ImGui's key for an engine key, or ImGuiKey_None when ImGui has no such key.
-inline ImGuiKey ToImGuiKey(Platform::KeyCode key) {
-	using Platform::KeyCode;
+inline ImGuiKey ToImGuiKey(KeyCode key) {
 	switch (key) {
 		case KeyCode::Space:
 			return ImGuiKey_Space;
@@ -225,4 +224,4 @@ inline ImGuiKey ToImGuiKey(Platform::KeyCode key) {
 	}
 }
 
-} // namespace VKE::UI
+} // namespace VKE

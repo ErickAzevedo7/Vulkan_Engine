@@ -8,7 +8,7 @@
 #include <cctype>
 #include <fstream>
 
-namespace VKE::Assets {
+namespace VKE {
 
 namespace {
 constexpr const char *kMetadataExtension = ".vkasset";
@@ -465,4 +465,4 @@ std::string AssetCatalog::MakePathKey(const std::filesystem::path &file) const {
 	return key;
 }
 
-} // namespace VKE::Assets
+} // namespace VKE

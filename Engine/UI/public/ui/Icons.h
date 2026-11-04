@@ -7,7 +7,7 @@
 // a new icon is added to the design system's Icons card and to this list.
 // Names follow Lucide's (https://lucide.dev/icons).
 
-namespace VKE::UI::Icons {
+namespace VKE::Icons {
 
 // Assets
 constexpr const char *Boxes = "\xee\x8b\x90"; // boxes
@@ -167,4 +167,4 @@ inline constexpr u32 kCodepoints[] = {
 	0xe0bd,
 };
 
-} // namespace VKE::UI::Icons
+} // namespace VKE::Icons

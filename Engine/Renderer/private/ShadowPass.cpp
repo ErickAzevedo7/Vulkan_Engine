@@ -12,7 +12,7 @@
 #include <cmath>
 #include <cstddef>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 // Clamped to what the device can make. Powers of two, like every tile.
@@ -23,7 +23,7 @@ constexpr u32 kMaxPointFaceSize = 1024;
 // A cube face sees past its 90 degrees by this many texels on each side, so a filtered
 // lookup near the edge of a face stays inside the face's tile.
 constexpr u32 kPointFaceGutter = 2;
-constexpr RHI::Format kShadowMapFormat = RHI::Format::D32_SFLOAT;
+constexpr Format kShadowMapFormat = Format::D32_SFLOAT;
 constexpr f32 kSpotNearPlane = 0.05f;
 // Keeps casters right at the edge of the scene bounds from being clipped.
 constexpr f32 kDirectionalPadding = 0.5f;
@@ -88,61 +88,61 @@ Vec4 ToAtlasRect(const ShadowTile &tile, u32 atlasSize) {
 }
 } // namespace
 
-ShadowPass::ShadowPass(RHI::RHIDevice &device) {
-	RHI::RenderPassDesc passDesc;
+ShadowPass::ShadowPass(RHIDevice &device) {
+	RenderPassDesc passDesc;
 	passDesc.HasDepthAttachment = true;
 	passDesc.DepthAttachment.Format = kShadowMapFormat;
 	passDesc.DepthAttachment.IsDepth = true;
 	passDesc.DepthAttachment.SampledAfter = true;
-	m_RenderPass = RHI::RHIRenderPass::Create(device, passDesc);
+	m_RenderPass = RHIRenderPass::Create(device, passDesc);
 
 	m_AtlasSize = std::min(kAtlasSize, device.GetLimits().MaxTextureSize);
 
-	RHI::TextureDesc atlasDesc;
+	TextureDesc atlasDesc;
 	atlasDesc.Width = m_AtlasSize;
 	atlasDesc.Height = m_AtlasSize;
 	atlasDesc.Format = kShadowMapFormat;
-	atlasDesc.Usage = RHI::TextureUsage::DepthAttachment | RHI::TextureUsage::Sampled;
+	atlasDesc.Usage = TextureUsage::DepthAttachment | TextureUsage::Sampled;
 	atlasDesc.DebugName = "ShadowAtlas";
-	m_Atlas = RHI::RHITexture::Create(device, atlasDesc);
+	m_Atlas = RHITexture::Create(device, atlasDesc);
 
-	RHI::FramebufferDesc framebufferDesc;
+	FramebufferDesc framebufferDesc;
 	framebufferDesc.AttachmentViews = { m_Atlas->GetAttachmentView(0, 0) };
 	framebufferDesc.Width = m_AtlasSize;
 	framebufferDesc.Height = m_AtlasSize;
-	m_Framebuffer = RHI::RHIFramebuffer::Create(device, *m_RenderPass, framebufferDesc);
+	m_Framebuffer = RHIFramebuffer::Create(device, *m_RenderPass, framebufferDesc);
 
-	const auto shaderDir = Platform::FileSystem::GetExecutableDirectory() / "shaders";
+	const auto shaderDir = FileSystem::GetExecutableDirectory() / "shaders";
 
-	RHI::PipelineDesc pipelineDesc;
+	PipelineDesc pipelineDesc;
 	pipelineDesc.VertexShaderPath = (shaderDir / "shadow.vert.spv").string();
-	pipelineDesc.VertexStride = sizeof(Assets::Vertex);
-	pipelineDesc.VertexAttributes = { { 0, RHI::Format::R32G32B32_SFLOAT, offsetof(Assets::Vertex, Position) } };
-	pipelineDesc.PushConstantRanges = { { RHI::ShaderStageFlags::Vertex, 0, sizeof(ShadowPushConstants) } };
+	pipelineDesc.VertexStride = sizeof(Vertex);
+	pipelineDesc.VertexAttributes = { { 0, Format::R32G32B32_SFLOAT, offsetof(Vertex, Position) } };
+	pipelineDesc.PushConstantRanges = { { ShaderStageFlags::Vertex, 0, sizeof(ShadowPushConstants) } };
 	// Single-sided surfaces still have to block light coming from behind them.
-	pipelineDesc.CullMode = RHI::CullMode::None;
+	pipelineDesc.CullMode = CullMode::None;
 	pipelineDesc.DepthTestEnable = true;
 	pipelineDesc.DepthWriteEnable = true;
 	pipelineDesc.DepthBiasEnable = true;
 	pipelineDesc.DepthBiasConstant = 2.0f;
 	pipelineDesc.DepthBiasSlope = 2.0f;
-	m_Pipeline = RHI::RHIPipeline::Create(device, *m_RenderPass, pipelineDesc);
+	m_Pipeline = RHIPipeline::Create(device, *m_RenderPass, pipelineDesc);
 
-	RHI::SamplerDesc samplerDesc;
-	samplerDesc.MipFilter = RHI::Filter::Nearest;
-	samplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;
-	samplerDesc.AddressModeV = RHI::SamplerAddressMode::ClampToEdge;
-	samplerDesc.AddressModeW = RHI::SamplerAddressMode::ClampToEdge;
+	SamplerDesc samplerDesc;
+	samplerDesc.MipFilter = Filter::Nearest;
+	samplerDesc.AddressModeU = SamplerAddressMode::ClampToEdge;
+	samplerDesc.AddressModeV = SamplerAddressMode::ClampToEdge;
+	samplerDesc.AddressModeW = SamplerAddressMode::ClampToEdge;
 	samplerDesc.MaxAnisotropy = 1.0f;
 	samplerDesc.CompareEnable = true;
-	samplerDesc.CompareOp = RHI::CompareOp::LessOrEqual;
+	samplerDesc.CompareOp = CompareOp::LessOrEqual;
 	samplerDesc.DebugName = "ShadowSampler";
-	m_Sampler = RHI::RHISampler::Create(device, samplerDesc);
+	m_Sampler = RHISampler::Create(device, samplerDesc);
 
 	// The atlas is bound even on frames no light renders into it, so it starts ready to be
 	// sampled.
-	device.ExecuteImmediate([&](RHI::RHICommandBuffer &cmd) {
-		cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffer, RHI::ClearValue{});
+	device.ExecuteImmediate([&](RHICommandBuffer &cmd) {
+		cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffer, ClearValue{});
 		cmd.EndRenderPass();
 	});
 }
@@ -228,24 +228,24 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 	}
 }
 
-void ShadowPass::Record(RHI::RHICommandBuffer &cmd, const std::vector<DrawItem> &items) {
+void ShadowPass::Record(RHICommandBuffer &cmd, const std::vector<DrawItem> &items) {
 	if (m_Views.empty()) {
 		return;
 	}
 
-	cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffer, RHI::ClearValue{});
+	cmd.BeginRenderPass(*m_RenderPass, *m_Framebuffer, ClearValue{});
 	cmd.BindPipeline(*m_Pipeline);
 
 	const GpuMesh *boundMesh = nullptr;
 	for (const ShadowView &view : m_Views) {
-		RHI::Viewport viewport;
+		Viewport viewport;
 		viewport.X = static_cast<f32>(view.Tile.X);
 		viewport.Y = static_cast<f32>(view.Tile.Y);
 		viewport.Width = static_cast<f32>(view.Tile.Size);
 		viewport.Height = static_cast<f32>(view.Tile.Size);
 		cmd.SetViewport(viewport);
 
-		RHI::ScissorRect scissor;
+		ScissorRect scissor;
 		scissor.X = static_cast<i32>(view.Tile.X);
 		scissor.Y = static_cast<i32>(view.Tile.Y);
 		scissor.Width = view.Tile.Size;
@@ -259,13 +259,13 @@ void ShadowPass::Record(RHI::RHICommandBuffer &cmd, const std::vector<DrawItem> 
 
 			if (item.Mesh != boundMesh) {
 				cmd.BindVertexBuffer(*item.Mesh->VertexBuffer);
-				cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, RHI::IndexType::U32);
+				cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, IndexType::U32);
 				boundMesh = item.Mesh;
 			}
 
 			ShadowPushConstants object;
 			object.ModelViewProjection = view.ViewProjection * item.Instance->Transform;
-			cmd.PushConstants(RHI::ShaderStageFlags::Vertex, 0, sizeof(object), &object);
+			cmd.PushConstants(ShaderStageFlags::Vertex, 0, sizeof(object), &object);
 			cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
 		}
 	}
@@ -273,4 +273,4 @@ void ShadowPass::Record(RHI::RHICommandBuffer &cmd, const std::vector<DrawItem> 
 	cmd.EndRenderPass();
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

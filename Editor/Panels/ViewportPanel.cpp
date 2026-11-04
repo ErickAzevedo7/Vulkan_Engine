@@ -22,10 +22,6 @@
 
 namespace VKE::Editor {
 
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
 // A press that moves less than this before its release is a click, not a drag.
 constexpr f32 kClickPixels = 4.0f;
@@ -36,7 +32,7 @@ Vec2 ToVec2(const ImVec2 &v) {
 
 // An icon button of the Viewport's toolbar; `on` marks the active choice.
 bool ToolButton(const char *icon, bool on, const char *tooltip) {
-	ImGui::PushFont(UI::GetFont(UI::TextStyle::Icons16));
+	ImGui::PushFont(GetFont(TextStyle::Icons16));
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 4.0f));
 	ImGui::PushStyleColor(ImGuiCol_Button, Widgets::ToVec4(on ? Colors::BgActive : 0));
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Widgets::ToVec4(Colors::BgHover));
@@ -80,8 +76,7 @@ MarkerIcon GetGlyph(ImFont *font, const char *icon) {
 }
 } // namespace
 
-ViewportPanel::ViewportPanel(
-		EditorScene &scene, Assets::AssetManager &assets, Renderer::Renderer &renderer, UI::UISystem &ui) :
+ViewportPanel::ViewportPanel(EditorScene &scene, AssetManager &assets, Renderer &renderer, UISystem &ui) :
 		m_Scene(scene), m_Renderer(renderer), m_UI(ui), m_Markers(assets) {}
 
 void ViewportPanel::Create() {
@@ -99,7 +94,7 @@ const char *ViewportPanel::GetWindowName() {
 }
 
 void ViewportPanel::LoadIcons() {
-	ImFont *font = UI::GetFont(UI::TextStyle::Icons32);
+	ImFont *font = GetFont(TextStyle::Icons32);
 	if (!font) {
 		return;
 	}
@@ -114,7 +109,7 @@ void ViewportPanel::LoadIcons() {
 }
 
 void ViewportPanel::PlaceCamera() {
-	const Scene::Scene &scene = m_Scene.GetScene();
+	const Scene &scene = m_Scene.GetScene();
 	m_PlacedFor = m_Scene.GetOpenCount();
 
 	// A prefab is seen from up close, and the camera goes back to where it was in the scene.
@@ -134,7 +129,7 @@ void ViewportPanel::PlaceCamera() {
 		return;
 	}
 
-	if (const Scene::CameraComponent *camera = scene.GetMainCamera()) {
+	if (const CameraComponent *camera = scene.GetMainCamera()) {
 		const Transform &world = camera->GetOwner().GetTransform().GetWorld();
 		m_Camera.LookAt(world.Position, world.Position + world.GetForward() * 8.0f);
 	} else {
@@ -143,11 +138,11 @@ void ViewportPanel::PlaceCamera() {
 }
 
 void ViewportPanel::ReceivePick() {
-	Renderer::MeshInstanceID mesh;
+	MeshInstanceID mesh;
 	if (!m_Renderer.TakePickResult(m_Texture, mesh)) {
 		return;
 	}
-	const Scene::Scene &scene = m_Scene.GetScene();
+	const Scene &scene = m_Scene.GetScene();
 	if (m_PickedIn == &scene) {
 		m_Scene.Select(scene.GetMeshOwner(mesh));
 	}
@@ -180,7 +175,7 @@ void ViewportPanel::Draw(bool *open, const std::string &stats) {
 	ImVec2 min = ImGui::GetCursorScreenPos();
 	ImVec2 max(min.x + std::floor(size.x), min.y + std::floor(size.y));
 	ImDrawList *draw = ImGui::GetWindowDrawList();
-	draw->AddImage(m_UI.GetTextureID(Renderer::OverlayTexture::FromView(m_Texture)), min, max);
+	draw->AddImage(m_UI.GetTextureID(OverlayTexture::FromView(m_Texture)), min, max);
 
 	// Takes the mouse over the scene; the toolbar drawn later still gets it first.
 	ImGui::SetNextItemAllowOverlap();
@@ -188,11 +183,11 @@ void ViewportPanel::Draw(bool *open, const std::string &stats) {
 			ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
 	bool hovered = ImGui::IsItemHovered();
 	m_Visible = true;
-	Assets::AssetID droppedAsset;
+	AssetID droppedAsset;
 	if (ImGui::BeginDragDropTarget()) {
 		ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery;
 		if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
-			Assets::AssetID asset = *static_cast<const Assets::AssetID *>(payload->Data);
+			AssetID asset = *static_cast<const AssetID *>(payload->Data);
 			if (payload->IsDelivery() && m_Scene.CanPlace(asset)) {
 				droppedAsset = asset;
 			}
@@ -217,15 +212,15 @@ void ViewportPanel::Draw(bool *open, const std::string &stats) {
 			distance = kAhead;
 		}
 		Vec3 position = ray.Origin + ray.Direction * distance;
-		if (Scene::GameObject *placed = m_Scene.Place(droppedAsset, nullptr, position)) {
+		if (GameObject *placed = m_Scene.Place(droppedAsset, nullptr, position)) {
 			m_Scene.Select(placed);
 		}
 	}
 
-	Scene::GameObject *selected = m_Scene.GetSelected();
+	GameObject *selected = m_Scene.GetSelected();
 	m_Markers.Draw(m_Scene.GetScene(), selected, view, m_World);
 	if (selected) {
-		const Scene::TransformComponent &transform = selected->GetTransform();
+		const TransformComponent &transform = selected->GetTransform();
 		GizmoPose pose{ transform.GetWorld().Position, transform.GetWorld().Rotation, transform.GetLocal().Scale };
 		DrawTransformGizmo(m_Gizmo, view, pose, m_World);
 	}
@@ -233,16 +228,16 @@ void ViewportPanel::Draw(bool *open, const std::string &stats) {
 	DrawToolbar(ToVec2(min));
 
 	// The frame's numbers in a pill over the scene, bottom left; the fly speed while flying.
-	ImFont *mono = UI::GetFont(UI::TextStyle::MonoSmall);
+	ImFont *mono = GetFont(TextStyle::MonoSmall);
 	auto pill = [&](const std::string &text, f32 x, bool alignRight) {
 		ImVec2 textSize = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, text.c_str());
 		f32 width = textSize.x + 2.0f * Sizes::Space4;
 		ImVec2 pillMin(alignRight ? x - width : x, max.y - Sizes::Space4 - 24.0f);
 		ImVec2 pillMax(pillMin.x + width, pillMin.y + 24.0f);
-		draw->AddRectFilled(pillMin, pillMax, UI::ToImColor(Colors::Overlay), Sizes::RadiusMd);
+		draw->AddRectFilled(pillMin, pillMax, ToImColor(Colors::Overlay), Sizes::RadiusMd);
 		draw->AddText(mono, mono->FontSize,
 				ImVec2(pillMin.x + Sizes::Space4, std::floor(pillMin.y + (24.0f - textSize.y) * 0.5f)),
-				UI::ToImColor(Colors::OverlayText), text.c_str());
+				ToImColor(Colors::OverlayText), text.c_str());
 	};
 	pill(stats, min.x + Sizes::Space4, false);
 	if (m_Navigation == Navigation::Fly) {
@@ -334,7 +329,7 @@ void ViewportPanel::HandleShortcuts(bool hovered) {
 }
 
 void ViewportPanel::FocusSelected() {
-	Scene::GameObject *selected = m_Scene.GetSelected();
+	GameObject *selected = m_Scene.GetSelected();
 	if (!selected) {
 		return;
 	}
@@ -347,7 +342,7 @@ void ViewportPanel::FocusSelected() {
 }
 
 bool ViewportPanel::HandleGizmo(const ScreenView &view, const Vec2 &mouse, bool hovered) {
-	Scene::GameObject *selected = m_Scene.GetSelected();
+	GameObject *selected = m_Scene.GetSelected();
 	if (!selected) {
 		return false;
 	}
@@ -362,7 +357,7 @@ bool ViewportPanel::HandleGizmo(const ScreenView &view, const Vec2 &mouse, bool 
 	pointer.Snap = m_Snap != io.KeyCtrl;
 	pointer.Cancel = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsMouseClicked(ImGuiMouseButton_Right);
 
-	Scene::TransformComponent &transform = selected->GetTransform();
+	TransformComponent &transform = selected->GetTransform();
 	GizmoPose pose{ transform.GetWorld().Position, transform.GetWorld().Rotation, transform.GetLocal().Scale };
 	if (m_Gizmo.Update(view, pointer, pose)) {
 		// Only what the mode changes, so the other values don't drift through conversions.
@@ -396,8 +391,8 @@ void ViewportPanel::HandleClick(const ScreenView &view, const Vec2 &mouse, bool 
 	}
 
 	// Icons are over the scene, so they are picked first; then the meshes, on the GPU.
-	Scene::Scene &scene = m_Scene.GetScene();
-	if (Scene::GameObject *object = m_Markers.PickIcon(scene, view, mouse)) {
+	Scene &scene = m_Scene.GetScene();
+	if (GameObject *object = m_Markers.PickIcon(scene, view, mouse)) {
 		m_Scene.Select(object);
 		return;
 	}
@@ -461,7 +456,7 @@ void ViewportPanel::DrawToolbar(const Vec2 &min) {
 	ImVec2 groupMax = ImGui::GetItemRectMax();
 	draw->ChannelsSetCurrent(0);
 	draw->AddRectFilled(ImVec2(groupMin.x - Sizes::Space2, groupMin.y - Sizes::Space2),
-			ImVec2(groupMax.x + Sizes::Space2, groupMax.y + Sizes::Space2), UI::ToImColor(Colors::Overlay),
+			ImVec2(groupMax.x + Sizes::Space2, groupMax.y + Sizes::Space2), ToImColor(Colors::Overlay),
 			Sizes::RadiusMd);
 	draw->ChannelsMerge();
 

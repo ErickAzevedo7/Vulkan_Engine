@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Project {
+namespace VKE {
 class Project;
-} // namespace VKE::Project
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -20,7 +20,7 @@ struct ProjectTemplate {
 	std::string Name;
 	std::string Description;
 	std::filesystem::path Folder;
-	Assets::AssetID StartScene;
+	AssetID StartScene;
 };
 
 // The templates next to the editor, by name.
@@ -31,7 +31,7 @@ std::string CheckProjectName(const std::string &name);
 
 // Copies the template into `folder`, which must not exist or be empty, and writes
 // <name>.vkproject there. Nothing, logged, if it fails.
-std::optional<Project::Project> CreateProject(
+std::optional<Project> CreateProject(
 		const ProjectTemplate &projectTemplate, const std::filesystem::path &folder, const std::string &name);
 
 } // namespace VKE::Editor

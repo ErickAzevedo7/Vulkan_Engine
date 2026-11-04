@@ -9,7 +9,7 @@
 #include "VulkanTexture.h"
 #include "VulkanUtils.h"
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanCommandBuffer::VulkanCommandBuffer(VulkanDevice &device) : m_Device(device) {
 	VkCommandBufferAllocateInfo allocInfo{};
@@ -178,4 +178,4 @@ Iunique<RHICommandBuffer> RHICommandBuffer::Create(RHIDevice &device) {
 	return MakeIunique<VulkanCommandBuffer>(static_cast<VulkanDevice &>(device));
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

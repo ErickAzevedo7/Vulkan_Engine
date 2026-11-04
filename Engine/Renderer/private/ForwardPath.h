@@ -22,23 +22,23 @@
 #include <unordered_map>
 #include <vector>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 
 class RenderScene;
 
 // What the shaders read about one frame. The lists grow with the scene; a frame only
 // replaces its own, which the GPU has stopped reading by the time the frame starts.
 struct FrameData {
-	Iunique<RHI::RHIBuffer> Uniforms;
-	Iunique<RHI::RHIBuffer> Lights;
-	Iunique<RHI::RHIBuffer> Clusters;
-	Iunique<RHI::RHIBuffer> LightIndices;
-	Iunique<RHI::RHIBuffer> Shadows;
-	Iunique<RHI::RHIBindGroup> Group;
+	Iunique<RHIBuffer> Uniforms;
+	Iunique<RHIBuffer> Lights;
+	Iunique<RHIBuffer> Clusters;
+	Iunique<RHIBuffer> LightIndices;
+	Iunique<RHIBuffer> Shadows;
+	Iunique<RHIBindGroup> Group;
 };
 
 // What drawing a scene needs for one output: a high dynamic range color and depth target,
@@ -47,7 +47,7 @@ struct FrameData {
 struct SceneTargets {
 	std::vector<RenderTarget> Targets;
 	std::vector<FrameData> Frames;
-	std::vector<Iunique<RHI::RHIBindGroup>> TonemapSources;
+	std::vector<Iunique<RHIBindGroup>> TonemapSources;
 	u32 Width = 0;
 	u32 Height = 0;
 };
@@ -57,21 +57,21 @@ struct SceneTargets {
 // sorted into clusters of the view, so their number has no fixed limit.
 class ForwardPath {
 public:
-	ForwardPath(RHI::RHIDevice &device, Assets::AssetManager &assets, u32 framesInFlight);
+	ForwardPath(RHIDevice &device, AssetManager &assets, u32 framesInFlight);
 	~ForwardPath();
 
 	Iunique<SceneTargets> CreateTargets(u32 width, u32 height, const char *debugName);
 
 	// Records the scene's shadows and the scene itself into targets.Targets[frameIndex].
 	// Must be called outside any render pass.
-	void Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const RenderScene &scene, const RenderView &view,
+	void Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScene &scene, const RenderView &view,
 			SceneTargets &targets);
 
 	// Tonemaps what Record() drew into targets.Targets[frameIndex] over the whole output.
 	// Must be called inside `outputPass`, which the caller begins and ends, so it can draw
 	// more on top. `encodeSrgb` is for outputs whose format does not encode by itself.
-	void Resolve(RHI::RHICommandBuffer &cmd, u32 frameIndex, SceneTargets &targets, RHI::RHIRenderPass &outputPass,
-			bool encodeSrgb);
+	void Resolve(
+			RHICommandBuffer &cmd, u32 frameIndex, SceneTargets &targets, RHIRenderPass &outputPass, bool encodeSrgb);
 
 	GpuCache &GetGpuCache() { return *m_GpuCache; }
 	void SetExposure(f32 exposure) { m_Exposure = exposure; }
@@ -80,28 +80,28 @@ public:
 private:
 	void CreatePipeline();
 	void CollectDrawItems(const RenderScene &scene);
-	RHI::RHIBindGroup &GetEnvironmentGroup(const RenderScene &scene);
+	RHIBindGroup &GetEnvironmentGroup(const RenderScene &scene);
 	void WriteFrameData(FrameData &data, const RenderScene &scene, const RenderView &view, u32 width, u32 height);
 
-	RHI::RHIDevice &m_Device;
+	RHIDevice &m_Device;
 	u32 m_FramesInFlight;
 
 	// Destroyed in reverse declaration order.
-	Iunique<RHI::RHIRenderPass> m_ScenePass;
-	Iunique<RHI::RHIBindGroupLayout> m_FrameLayout;
-	Iunique<RHI::RHIBindGroupLayout> m_EnvironmentLayout;
-	Iunique<RHI::RHIBindGroupLayout> m_MaterialLayout;
-	Iunique<RHI::RHIPipeline> m_Pipeline;
+	Iunique<RHIRenderPass> m_ScenePass;
+	Iunique<RHIBindGroupLayout> m_FrameLayout;
+	Iunique<RHIBindGroupLayout> m_EnvironmentLayout;
+	Iunique<RHIBindGroupLayout> m_MaterialLayout;
+	Iunique<RHIPipeline> m_Pipeline;
 
 	Iunique<GpuCache> m_GpuCache;
 	Iunique<ShadowPass> m_ShadowPass;
 	Iunique<SkyboxPass> m_SkyboxPass;
 	Iunique<TonemapPass> m_TonemapPass;
 
-	Iunique<RHI::RHISampler> m_EnvironmentSampler;
+	Iunique<RHISampler> m_EnvironmentSampler;
 	// One per environment a scene has used, kept until shutdown: a frame may record
 	// several scenes, and an earlier one may still need its group.
-	std::unordered_map<const GpuEnvironment *, Iunique<RHI::RHIBindGroup>> m_EnvironmentGroups;
+	std::unordered_map<const GpuEnvironment *, Iunique<RHIBindGroup>> m_EnvironmentGroups;
 
 	LightClusters m_LightClusters;
 	std::vector<GpuShadow> m_Shadows;
@@ -112,4 +112,4 @@ private:
 	bool m_ShadowsEnabled = true;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

@@ -6,7 +6,7 @@
 
 #include <array>
 
-namespace VKE::Platform {
+namespace VKE {
 
 class GLFWInput;
 
@@ -57,4 +57,4 @@ private:
 	CursorShape m_CursorShape = CursorShape::Arrow;
 };
 
-} // namespace VKE::Platform
+} // namespace VKE

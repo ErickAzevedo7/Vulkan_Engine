@@ -29,7 +29,7 @@ void Badge(const char *text, u32 color);
 bool SearchField(const char *id, std::string &text, const char *hint, f32 width = 0.0f);
 
 // Text in one of the design system's colors and styles.
-void Text(const char *text, u32 color, UI::TextStyle style = UI::TextStyle::UI);
+void Text(const char *text, u32 color, TextStyle style = TextStyle::UI);
 
 // Modal dialogs: rounded, bordered and padded as the design system's dialog. Push before
 // ImGui::BeginPopupModal and pop right after it, whether it opened or not.

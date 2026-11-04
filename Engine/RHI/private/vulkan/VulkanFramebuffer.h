@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 class VulkanRenderPass;
@@ -25,4 +25,4 @@ private:
 	u32 m_Height = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

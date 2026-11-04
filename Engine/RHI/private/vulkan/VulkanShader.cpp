@@ -5,13 +5,13 @@
 
 #include <platform/FileSystem.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanShader::VulkanShader(VulkanDevice &device, const std::string &spirvPath, ShaderStageKind stage) :
 		m_Device(device), m_Stage(stage) {
 	// Pre-compiled SPIR-V only, with no GLSL compilation at runtime. The build
 	// compiles the shaders; see vke_add_shaders in cmake/VkeShaders.cmake.
-	std::vector<Byte> code = Platform::FileSystem::ReadFileBytes(spirvPath);
+	std::vector<Byte> code = FileSystem::ReadFileBytes(spirvPath);
 	VKE_CORE_ASSERT(!code.empty(), "Failed to read shader file");
 
 	VkShaderModuleCreateInfo createInfo{};
@@ -32,4 +32,4 @@ Iunique<RHIShader> RHIShader::CreateFromFile(RHIDevice &device, const std::strin
 	return MakeIunique<VulkanShader>(static_cast<VulkanDevice &>(device), spirvPath, stage);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

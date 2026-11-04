@@ -13,13 +13,13 @@
 #include <cstddef>
 #include <functional>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
-static_assert(sizeof(Assets::Vertex) == 48, "Vertex layout changed, update the pipeline attributes");
+static_assert(sizeof(Vertex) == 48, "Vertex layout changed, update the pipeline attributes");
 
 // Keeps light values above 1.0 instead of clipping them at the swapchain.
-constexpr RHI::Format kSceneColorFormat = RHI::Format::R16G16B16A16_SFLOAT;
+constexpr Format kSceneColorFormat = Format::R16G16B16A16_SFLOAT;
 
 // Box around the eight transformed corners of `bounds`.
 AABB TransformBounds(const AABB &bounds, const Mat4 &transform) {
@@ -35,78 +35,77 @@ AABB TransformBounds(const AABB &bounds, const Mat4 &transform) {
 }
 
 // Replaces `buffer` with a larger one if it can't hold `size` bytes. Returns whether it did.
-bool Reserve(RHI::RHIDevice &device, Iunique<RHI::RHIBuffer> &buffer, size_t size, const char *debugName) {
+bool Reserve(RHIDevice &device, Iunique<RHIBuffer> &buffer, size_t size, const char *debugName) {
 	if (buffer && buffer->GetSize() >= size) {
 		return false;
 	}
 
 	// Room to grow, so a scene that adds lights one by one doesn't replace it every frame.
-	RHI::BufferDesc desc;
+	BufferDesc desc;
 	desc.Size = std::max<size_t>(size + size / 2, 4096);
-	desc.Usage = RHI::BufferUsage::Storage;
-	desc.Memory = RHI::BufferMemory::HostVisible;
+	desc.Usage = BufferUsage::Storage;
+	desc.Memory = BufferMemory::HostVisible;
 	desc.DebugName = debugName;
-	buffer = RHI::RHIBuffer::Create(device, desc);
+	buffer = RHIBuffer::Create(device, desc);
 	return true;
 }
 
-template <typename T> void WriteList(RHI::RHIBuffer &buffer, const std::vector<T> &list) {
+template <typename T> void WriteList(RHIBuffer &buffer, const std::vector<T> &list) {
 	if (!list.empty()) {
 		buffer.Write(list.data(), list.size() * sizeof(T));
 	}
 }
 } // namespace
 
-ForwardPath::ForwardPath(RHI::RHIDevice &device, Assets::AssetManager &assets, u32 framesInFlight) :
+ForwardPath::ForwardPath(RHIDevice &device, AssetManager &assets, u32 framesInFlight) :
 		m_Device(device), m_FramesInFlight(framesInFlight) {
-	RHI::RenderPassDesc scenePassDesc;
-	RHI::AttachmentDesc sceneColor;
+	RenderPassDesc scenePassDesc;
+	AttachmentDesc sceneColor;
 	sceneColor.Format = kSceneColorFormat;
 	sceneColor.SampledAfter = true;
 	scenePassDesc.ColorAttachments = { sceneColor };
 	scenePassDesc.HasDepthAttachment = true;
 	scenePassDesc.DepthAttachment.Format = m_Device.GetDepthFormat();
 	scenePassDesc.DepthAttachment.IsDepth = true;
-	m_ScenePass = RHI::RHIRenderPass::Create(m_Device, scenePassDesc);
+	m_ScenePass = RHIRenderPass::Create(m_Device, scenePassDesc);
 
-	RHI::BindGroupLayoutDesc frameLayoutDesc;
-	frameLayoutDesc.Slots = { { 0, RHI::BindingType::UniformBuffer, RHI::ShaderStageFlags::AllGraphics } };
+	BindGroupLayoutDesc frameLayoutDesc;
+	frameLayoutDesc.Slots = { { 0, BindingType::UniformBuffer, ShaderStageFlags::AllGraphics } };
 	for (u32 binding : { kLightListBinding, kClusterListBinding, kLightIndexListBinding, kShadowListBinding }) {
-		frameLayoutDesc.Slots.push_back({ binding, RHI::BindingType::StorageBuffer, RHI::ShaderStageFlags::Fragment });
+		frameLayoutDesc.Slots.push_back({ binding, BindingType::StorageBuffer, ShaderStageFlags::Fragment });
 	}
 	frameLayoutDesc.DebugName = "FrameLayout";
-	m_FrameLayout = RHI::RHIBindGroupLayout::Create(m_Device, frameLayoutDesc);
+	m_FrameLayout = RHIBindGroupLayout::Create(m_Device, frameLayoutDesc);
 
-	RHI::BindGroupLayoutDesc environmentLayoutDesc;
+	BindGroupLayoutDesc environmentLayoutDesc;
 	for (u32 binding :
 			{ kIrradianceBinding, kPrefilterBinding, kBrdfLutBinding, kRadianceBinding, kShadowAtlasBinding }) {
 		environmentLayoutDesc.Slots.push_back(
-				{ binding, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment });
+				{ binding, BindingType::CombinedImageSampler, ShaderStageFlags::Fragment });
 	}
 	environmentLayoutDesc.DebugName = "EnvironmentLayout";
-	m_EnvironmentLayout = RHI::RHIBindGroupLayout::Create(m_Device, environmentLayoutDesc);
+	m_EnvironmentLayout = RHIBindGroupLayout::Create(m_Device, environmentLayoutDesc);
 
-	RHI::BindGroupLayoutDesc materialLayoutDesc;
-	for (u32 slot = 0; slot < static_cast<u32>(Assets::MaterialTexture::Count); ++slot) {
-		materialLayoutDesc.Slots.push_back(
-				{ slot, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment });
+	BindGroupLayoutDesc materialLayoutDesc;
+	for (u32 slot = 0; slot < static_cast<u32>(MaterialTexture::Count); ++slot) {
+		materialLayoutDesc.Slots.push_back({ slot, BindingType::CombinedImageSampler, ShaderStageFlags::Fragment });
 	}
 	materialLayoutDesc.Slots.push_back(
-			{ kMaterialUniformsBinding, RHI::BindingType::UniformBuffer, RHI::ShaderStageFlags::Fragment });
+			{ kMaterialUniformsBinding, BindingType::UniformBuffer, ShaderStageFlags::Fragment });
 	materialLayoutDesc.DebugName = "MaterialLayout";
-	m_MaterialLayout = RHI::RHIBindGroupLayout::Create(m_Device, materialLayoutDesc);
+	m_MaterialLayout = RHIBindGroupLayout::Create(m_Device, materialLayoutDesc);
 
 	CreatePipeline();
 
 	m_GpuCache = MakeIunique<GpuCache>(m_Device, assets, *m_MaterialLayout, framesInFlight);
 
-	RHI::SamplerDesc environmentSamplerDesc;
-	environmentSamplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;
-	environmentSamplerDesc.AddressModeV = RHI::SamplerAddressMode::ClampToEdge;
-	environmentSamplerDesc.AddressModeW = RHI::SamplerAddressMode::ClampToEdge;
+	SamplerDesc environmentSamplerDesc;
+	environmentSamplerDesc.AddressModeU = SamplerAddressMode::ClampToEdge;
+	environmentSamplerDesc.AddressModeV = SamplerAddressMode::ClampToEdge;
+	environmentSamplerDesc.AddressModeW = SamplerAddressMode::ClampToEdge;
 	environmentSamplerDesc.MaxAnisotropy = 1.0f;
 	environmentSamplerDesc.DebugName = "EnvironmentSampler";
-	m_EnvironmentSampler = RHI::RHISampler::Create(m_Device, environmentSamplerDesc);
+	m_EnvironmentSampler = RHISampler::Create(m_Device, environmentSamplerDesc);
 
 	m_ShadowPass = MakeIunique<ShadowPass>(m_Device);
 	m_SkyboxPass = MakeIunique<SkyboxPass>(m_Device, *m_ScenePass, *m_FrameLayout, *m_EnvironmentLayout);
@@ -116,25 +115,25 @@ ForwardPath::ForwardPath(RHI::RHIDevice &device, Assets::AssetManager &assets, u
 ForwardPath::~ForwardPath() = default;
 
 void ForwardPath::CreatePipeline() {
-	const auto shaderDir = Platform::FileSystem::GetExecutableDirectory() / "shaders";
+	const auto shaderDir = FileSystem::GetExecutableDirectory() / "shaders";
 
-	RHI::PipelineDesc desc;
+	PipelineDesc desc;
 	desc.VertexShaderPath = (shaderDir / "forward.vert.spv").string();
 	desc.FragmentShaderPath = (shaderDir / "forward.frag.spv").string();
-	desc.VertexStride = sizeof(Assets::Vertex);
+	desc.VertexStride = sizeof(Vertex);
 	desc.VertexAttributes = {
-		{ 0, RHI::Format::R32G32B32_SFLOAT, offsetof(Assets::Vertex, Position) },
-		{ 1, RHI::Format::R32G32B32_SFLOAT, offsetof(Assets::Vertex, Normal) },
-		{ 2, RHI::Format::R32G32_SFLOAT, offsetof(Assets::Vertex, UV) },
-		{ 3, RHI::Format::R32G32B32A32_SFLOAT, offsetof(Assets::Vertex, Tangent) },
+		{ 0, Format::R32G32B32_SFLOAT, offsetof(Vertex, Position) },
+		{ 1, Format::R32G32B32_SFLOAT, offsetof(Vertex, Normal) },
+		{ 2, Format::R32G32_SFLOAT, offsetof(Vertex, UV) },
+		{ 3, Format::R32G32B32A32_SFLOAT, offsetof(Vertex, Tangent) },
 	};
 	desc.BindGroupLayouts = { m_FrameLayout.get(), m_EnvironmentLayout.get(), m_MaterialLayout.get() };
-	desc.PushConstantRanges = { { RHI::ShaderStageFlags::Vertex, 0, sizeof(ObjectPushConstants) } };
-	desc.CullMode = RHI::CullMode::Back;
-	desc.FrontFace = RHI::FrontFace::CounterClockwise;
+	desc.PushConstantRanges = { { ShaderStageFlags::Vertex, 0, sizeof(ObjectPushConstants) } };
+	desc.CullMode = CullMode::Back;
+	desc.FrontFace = FrontFace::CounterClockwise;
 	desc.DepthTestEnable = true;
 	desc.DepthWriteEnable = true;
-	m_Pipeline = RHI::RHIPipeline::Create(m_Device, *m_ScenePass, desc);
+	m_Pipeline = RHIPipeline::Create(m_Device, *m_ScenePass, desc);
 }
 
 Iunique<SceneTargets> ForwardPath::CreateTargets(u32 width, u32 height, const char *debugName) {
@@ -149,13 +148,13 @@ Iunique<SceneTargets> ForwardPath::CreateTargets(u32 width, u32 height, const ch
 		targets->Targets[i].Create(
 				m_Device, *m_ScenePass, width, height, kSceneColorFormat, m_Device.GetDepthFormat(), debugName);
 
-		RHI::BufferDesc uniformDesc;
+		BufferDesc uniformDesc;
 		uniformDesc.Size = sizeof(FrameUniforms);
-		uniformDesc.Usage = RHI::BufferUsage::Uniform;
-		uniformDesc.Memory = RHI::BufferMemory::HostVisible;
+		uniformDesc.Usage = BufferUsage::Uniform;
+		uniformDesc.Memory = BufferMemory::HostVisible;
 		uniformDesc.DebugName = "FrameUniforms";
 		FrameData frame;
-		frame.Uniforms = RHI::RHIBuffer::Create(m_Device, uniformDesc);
+		frame.Uniforms = RHIBuffer::Create(m_Device, uniformDesc);
 		targets->Frames.push_back(std::move(frame));
 
 		targets->TonemapSources.push_back(m_TonemapPass->CreateSource(*targets->Targets[i].Color));
@@ -178,8 +177,8 @@ void ForwardPath::CollectDrawItems(const RenderScene &scene) {
 		}
 
 		for (size_t i = 0; i < mesh->Submeshes.size(); ++i) {
-			const Assets::Submesh &submesh = mesh->Submeshes[i];
-			Handle<Assets::MaterialData> material;
+			const Submesh &submesh = mesh->Submeshes[i];
+			Handle<MaterialData> material;
 			if (submesh.MaterialIndex < instance.Materials.size()) {
 				material = instance.Materials[submesh.MaterialIndex];
 			} else if (submesh.MaterialIndex < mesh->Materials.size()) {
@@ -201,20 +200,20 @@ void ForwardPath::CollectDrawItems(const RenderScene &scene) {
 	});
 }
 
-RHI::RHIBindGroup &ForwardPath::GetEnvironmentGroup(const RenderScene &scene) {
+RHIBindGroup &ForwardPath::GetEnvironmentGroup(const RenderScene &scene) {
 	const EnvironmentDesc &environment = scene.GetEnvironment();
 	const GpuEnvironment &maps = m_GpuCache->GetEnvironmentMaps(environment.Source);
-	Iunique<RHI::RHIBindGroup> &group = m_EnvironmentGroups[&maps];
+	Iunique<RHIBindGroup> &group = m_EnvironmentGroups[&maps];
 	if (group) {
 		return *group;
 	}
 
-	RHI::BindGroupDesc groupDesc;
+	BindGroupDesc groupDesc;
 	groupDesc.Layout = m_EnvironmentLayout.get();
 	groupDesc.DebugName = "EnvironmentGroup";
 
-	auto bind = [&](u32 binding, RHI::RHITexture *texture, RHI::RHISampler *sampler) {
-		RHI::BoundResource resource;
+	auto bind = [&](u32 binding, RHITexture *texture, RHISampler *sampler) {
+		BoundResource resource;
 		resource.Binding = binding;
 		resource.Texture = texture;
 		resource.Sampler = sampler;
@@ -226,7 +225,7 @@ RHI::RHIBindGroup &ForwardPath::GetEnvironmentGroup(const RenderScene &scene) {
 	bind(kRadianceBinding, maps.Radiance.get(), m_EnvironmentSampler.get());
 	bind(kShadowAtlasBinding, &m_ShadowPass->GetAtlas(), &m_ShadowPass->GetSampler());
 
-	group = RHI::RHIBindGroup::Create(m_Device, groupDesc);
+	group = RHIBindGroup::Create(m_Device, groupDesc);
 	return *group;
 }
 
@@ -257,13 +256,13 @@ void ForwardPath::WriteFrameData(
 	replaced |= Reserve(m_Device, data.LightIndices, indices.size() * sizeof(u32), "LightIndexList");
 	replaced |= Reserve(m_Device, data.Shadows, m_Shadows.size() * sizeof(GpuShadow), "ShadowList");
 	if (replaced) {
-		RHI::BindGroupDesc groupDesc;
+		BindGroupDesc groupDesc;
 		groupDesc.Layout = m_FrameLayout.get();
 		groupDesc.Resources = { { 0, data.Uniforms.get() }, { kLightListBinding, data.Lights.get() },
 			{ kClusterListBinding, data.Clusters.get() }, { kLightIndexListBinding, data.LightIndices.get() },
 			{ kShadowListBinding, data.Shadows.get() } };
 		groupDesc.DebugName = "FrameGroup";
-		data.Group = RHI::RHIBindGroup::Create(m_Device, groupDesc);
+		data.Group = RHIBindGroup::Create(m_Device, groupDesc);
 	}
 
 	data.Uniforms->Write(&frame, sizeof(frame));
@@ -273,19 +272,19 @@ void ForwardPath::WriteFrameData(
 	WriteList(*data.Shadows, m_Shadows);
 }
 
-void ForwardPath::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const RenderScene &scene, const RenderView &view,
+void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScene &scene, const RenderView &view,
 		SceneTargets &targets) {
 	// Uploads any assets seen for the first time.
 	CollectDrawItems(scene);
-	RHI::RHIBindGroup &environmentGroup = GetEnvironmentGroup(scene);
+	RHIBindGroup &environmentGroup = GetEnvironmentGroup(scene);
 
 	FrameData &frameData = targets.Frames[frameIndex];
 	WriteFrameData(frameData, scene, view, targets.Width, targets.Height);
-	RHI::RHIBindGroup &frameGroup = *frameData.Group;
+	RHIBindGroup &frameGroup = *frameData.Group;
 
 	m_ShadowPass->Record(cmd, m_DrawItems);
 
-	RHI::ClearValue sceneClear;
+	ClearValue sceneClear;
 	sceneClear.R = 0.02f;
 	sceneClear.G = 0.02f;
 	sceneClear.B = 0.05f;
@@ -304,7 +303,7 @@ void ForwardPath::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Rende
 		}
 		if (item.Mesh != boundMesh) {
 			cmd.BindVertexBuffer(*item.Mesh->VertexBuffer);
-			cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, RHI::IndexType::U32);
+			cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, IndexType::U32);
 			boundMesh = item.Mesh;
 		}
 
@@ -315,7 +314,7 @@ void ForwardPath::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Rende
 			object.NormalMatrix[column] = Vec4(normalMatrix[column], 0.0f);
 		}
 
-		cmd.PushConstants(RHI::ShaderStageFlags::Vertex, 0, sizeof(object), &object);
+		cmd.PushConstants(ShaderStageFlags::Vertex, 0, sizeof(object), &object);
 		cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
 	}
 
@@ -325,9 +324,9 @@ void ForwardPath::Record(RHI::RHICommandBuffer &cmd, u32 frameIndex, const Rende
 	cmd.EndRenderPass();
 }
 
-void ForwardPath::Resolve(RHI::RHICommandBuffer &cmd, u32 frameIndex, SceneTargets &targets,
-		RHI::RHIRenderPass &outputPass, bool encodeSrgb) {
+void ForwardPath::Resolve(
+		RHICommandBuffer &cmd, u32 frameIndex, SceneTargets &targets, RHIRenderPass &outputPass, bool encodeSrgb) {
 	m_TonemapPass->Record(cmd, outputPass, *targets.TonemapSources[frameIndex], m_Exposure, encodeSrgb);
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

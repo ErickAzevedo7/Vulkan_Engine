@@ -2,13 +2,13 @@
 
 #include <utility>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 MeshInstanceID RenderScene::CreateMesh(const MeshInstanceDesc &desc) {
 	return m_Meshes.Emplace(desc);
 }
 
-void RenderScene::SetMesh(MeshInstanceID id, Handle<Assets::MeshData> mesh) {
+void RenderScene::SetMesh(MeshInstanceID id, Handle<MeshData> mesh) {
 	if (MeshInstanceDesc *instance = m_Meshes.Get(id)) {
 		instance->Mesh = mesh;
 	}
@@ -20,7 +20,7 @@ void RenderScene::SetTransform(MeshInstanceID id, const Mat4 &transform) {
 	}
 }
 
-void RenderScene::SetMaterials(MeshInstanceID id, std::vector<Handle<Assets::MaterialData>> materials) {
+void RenderScene::SetMaterials(MeshInstanceID id, std::vector<Handle<MaterialData>> materials) {
 	if (MeshInstanceDesc *mesh = m_Meshes.Get(id)) {
 		mesh->Materials = std::move(materials);
 	}
@@ -50,4 +50,4 @@ void RenderScene::DestroyLight(LightID id) {
 	m_Lights.Remove(id);
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

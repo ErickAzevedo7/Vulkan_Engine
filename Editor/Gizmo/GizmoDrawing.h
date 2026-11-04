@@ -12,6 +12,6 @@ class TransformGizmo;
 // Draws the gizmo's handles for `pose` over everything, in the axis colors, with the
 // hovered or dragged handle in the accent color.
 void DrawTransformGizmo(
-		const TransformGizmo &gizmo, const ScreenView &view, const GizmoPose &pose, Renderer::WorldDrawList &list);
+		const TransformGizmo &gizmo, const ScreenView &view, const GizmoPose &pose, WorldDrawList &list);
 
 } // namespace VKE::Editor

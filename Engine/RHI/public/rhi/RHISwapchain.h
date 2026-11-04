@@ -3,11 +3,11 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 class RHICommandBuffer;
@@ -18,7 +18,7 @@ class RHISwapchain {
 public:
 	virtual ~RHISwapchain() = default;
 
-	static Iunique<RHISwapchain> Create(RHIDevice &device, Platform::IWindow &window);
+	static Iunique<RHISwapchain> Create(RHIDevice &device, IWindow &window);
 
 	// Rebuilds the swapchain at the window's current size. Call after a
 	// resize, or when AcquireNextImage/SubmitAndPresent report it out
@@ -56,4 +56,4 @@ public:
 	virtual bool SubmitAndPresent(RHICommandBuffer &cmd) = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

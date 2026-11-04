@@ -4,7 +4,7 @@
 
 // Systems without a backend yet. Windows uses private/windows/WindowsProcess.cpp.
 
-namespace VKE::Platform::Process {
+namespace VKE::Process {
 
 std::vector<std::string> GetCommandLineArguments() {
 	VKE_CORE_WARN("Process::GetCommandLineArguments: not available on this system");
@@ -37,4 +37,4 @@ std::string ConsoleTextToUtf8(const std::string &text) {
 	return text;
 }
 
-} // namespace VKE::Platform::Process
+} // namespace VKE::Process

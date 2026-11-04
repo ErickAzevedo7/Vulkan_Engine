@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace VKE::Physics {
+namespace VKE {
 
 namespace {
 bool RayTouchesBounds(const AABB &bounds, const Vec3 &origin, const Vec3 &direction, f32 maxT) {
@@ -175,4 +175,4 @@ void TriangleTree::BuildNode(u32 nodeIndex, u32 first, u32 count, u32 depth) {
 	BuildNode(children + 1, first + half, count - half, depth + 1);
 }
 
-} // namespace VKE::Physics
+} // namespace VKE

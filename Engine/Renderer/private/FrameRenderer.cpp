@@ -6,20 +6,20 @@
 
 #include <algorithm>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 // View textures store sRGB-encoded values, which the 2D layer blends as they are.
-constexpr RHI::Format kViewColorFormat = RHI::Format::R8G8B8A8_UNORM;
+constexpr Format kViewColorFormat = Format::R8G8B8A8_UNORM;
 
-bool IsSrgbFormat(RHI::Format format) {
-	return format == RHI::Format::B8G8R8A8_SRGB || format == RHI::Format::R8G8B8A8_SRGB;
+bool IsSrgbFormat(Format format) {
+	return format == Format::B8G8R8A8_SRGB || format == Format::R8G8B8A8_SRGB;
 }
 } // namespace
 
-FrameRenderer::FrameRenderer(Platform::IWindow &window, Assets::AssetManager &assets) : m_Window(window) {
-	m_Device = RHI::RHIDevice::Create(m_Window);
-	m_Swapchain = RHI::RHISwapchain::Create(*m_Device, m_Window);
+FrameRenderer::FrameRenderer(IWindow &window, AssetManager &assets) : m_Window(window) {
+	m_Device = RHIDevice::Create(m_Window);
+	m_Swapchain = RHISwapchain::Create(*m_Device, m_Window);
 
 	m_OutputNeedsEncoding = !IsSrgbFormat(m_Swapchain->GetColorFormat());
 	if (!m_OutputNeedsEncoding) {
@@ -27,29 +27,29 @@ FrameRenderer::FrameRenderer(Platform::IWindow &window, Assets::AssetManager &as
 					  "in linear space and look slightly different from its design");
 	}
 
-	RHI::RenderPassDesc outputPassDesc;
-	RHI::AttachmentDesc outputColor;
+	RenderPassDesc outputPassDesc;
+	AttachmentDesc outputColor;
 	outputColor.Format = m_Swapchain->GetColorFormat();
 	outputColor.PresentAfter = true;
 	outputPassDesc.ColorAttachments = { outputColor };
-	m_OutputPass = RHI::RHIRenderPass::Create(*m_Device, outputPassDesc);
+	m_OutputPass = RHIRenderPass::Create(*m_Device, outputPassDesc);
 
-	RHI::RenderPassDesc viewPassDesc;
-	RHI::AttachmentDesc viewColor;
+	RenderPassDesc viewPassDesc;
+	AttachmentDesc viewColor;
 	viewColor.Format = kViewColorFormat;
 	viewColor.SampledAfter = true;
 	viewPassDesc.ColorAttachments = { viewColor };
-	m_ViewPass = RHI::RHIRenderPass::Create(*m_Device, viewPassDesc);
+	m_ViewPass = RHIRenderPass::Create(*m_Device, viewPassDesc);
 
-	RHI::RenderPassDesc worldPassDesc;
-	RHI::AttachmentDesc worldColor = viewColor;
+	RenderPassDesc worldPassDesc;
+	AttachmentDesc worldColor = viewColor;
 	worldColor.Clear = false;
 	worldPassDesc.ColorAttachments = { worldColor };
 	worldPassDesc.HasDepthAttachment = true;
 	worldPassDesc.DepthAttachment.Format = m_Device->GetDepthFormat();
 	worldPassDesc.DepthAttachment.IsDepth = true;
 	worldPassDesc.DepthAttachment.Clear = false;
-	m_WorldRenderPass = RHI::RHIRenderPass::Create(*m_Device, worldPassDesc);
+	m_WorldRenderPass = RHIRenderPass::Create(*m_Device, worldPassDesc);
 
 	u32 framesInFlight = m_Swapchain->GetFramesInFlightCount();
 	m_ForwardPath = MakeIunique<ForwardPath>(*m_Device, assets, framesInFlight);
@@ -60,7 +60,7 @@ FrameRenderer::FrameRenderer(Platform::IWindow &window, Assets::AssetManager &as
 	CreateWindowTargets();
 
 	for (u32 i = 0; i < framesInFlight; ++i) {
-		m_CommandBuffers.push_back(RHI::RHICommandBuffer::Create(*m_Device));
+		m_CommandBuffers.push_back(RHICommandBuffer::Create(*m_Device));
 	}
 }
 
@@ -82,11 +82,11 @@ void FrameRenderer::CreateWindowTargets() {
 	m_WindowScene = m_ForwardPath->CreateTargets(width, height, "WindowScene");
 
 	for (u32 i = 0; i < m_Swapchain->GetImageCount(); ++i) {
-		RHI::FramebufferDesc framebufferDesc;
+		FramebufferDesc framebufferDesc;
 		framebufferDesc.AttachmentViews = { m_Swapchain->GetImageView(i) };
 		framebufferDesc.Width = width;
 		framebufferDesc.Height = height;
-		m_OutputFramebuffers.push_back(RHI::RHIFramebuffer::Create(*m_Device, *m_OutputPass, framebufferDesc));
+		m_OutputFramebuffers.push_back(RHIFramebuffer::Create(*m_Device, *m_OutputPass, framebufferDesc));
 	}
 }
 
@@ -132,7 +132,7 @@ void FrameRenderer::DrawScene(
 	if (!m_InFrame) {
 		return;
 	}
-	RHI::RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
+	RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
 
 	if (!target.IsValid()) {
 		m_ForwardPath->Record(cmd, m_FrameIndex, scene, view, *m_WindowScene);
@@ -147,7 +147,7 @@ void FrameRenderer::DrawScene(
 	}
 	m_ForwardPath->Record(cmd, m_FrameIndex, scene, view, *viewTexture->Scene);
 
-	cmd.BeginRenderPass(*m_ViewPass, *viewTexture->Framebuffers[m_FrameIndex], RHI::ClearValue{});
+	cmd.BeginRenderPass(*m_ViewPass, *viewTexture->Framebuffers[m_FrameIndex], ClearValue{});
 	m_ForwardPath->Resolve(cmd, m_FrameIndex, *viewTexture->Scene, *m_ViewPass, true);
 	cmd.EndRenderPass();
 
@@ -155,7 +155,7 @@ void FrameRenderer::DrawScene(
 	Mat4 viewProjection = view.GetProjection(aspect) * view.View;
 
 	if (world && !world->Indices.empty()) {
-		cmd.BeginRenderPass(*m_WorldRenderPass, *viewTexture->WorldFramebuffers[m_FrameIndex], RHI::ClearValue{});
+		cmd.BeginRenderPass(*m_WorldRenderPass, *viewTexture->WorldFramebuffers[m_FrameIndex], ClearValue{});
 		m_WorldPass->Record(cmd, m_FrameIndex, *world, viewProjection, view.Position, viewTexture->Width,
 				viewTexture->Height, [this](const OverlayTexture &texture) { return ResolveOverlayTexture(texture); });
 		cmd.EndRenderPass();
@@ -216,9 +216,9 @@ void FrameRenderer::EndFrame() {
 		return;
 	}
 	m_InFrame = false;
-	RHI::RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
+	RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
 
-	cmd.BeginRenderPass(*m_OutputPass, *m_OutputFramebuffers[m_ImageIndex], RHI::ClearValue{});
+	cmd.BeginRenderPass(*m_OutputPass, *m_OutputFramebuffers[m_ImageIndex], ClearValue{});
 	if (m_WindowSceneDrawn) {
 		m_ForwardPath->Resolve(cmd, m_FrameIndex, *m_WindowScene, *m_OutputPass, m_OutputNeedsEncoding);
 	}
@@ -233,7 +233,7 @@ void FrameRenderer::EndFrame() {
 	}
 }
 
-RHI::RHITexture *FrameRenderer::ResolveOverlayTexture(const OverlayTexture &texture) {
+RHITexture *FrameRenderer::ResolveOverlayTexture(const OverlayTexture &texture) {
 	switch (texture.Type) {
 		case OverlayTexture::Kind::Image: {
 			OverlayImage *image = m_Images.Get({ texture.Index, texture.Generation });
@@ -244,7 +244,7 @@ RHI::RHITexture *FrameRenderer::ResolveOverlayTexture(const OverlayTexture &text
 			return view ? view->Colors[m_FrameIndex].get() : nullptr;
 		}
 		case OverlayTexture::Kind::Asset: {
-			Handle<Assets::TextureData> asset{ texture.Index, texture.Generation };
+			Handle<TextureData> asset{ texture.Index, texture.Generation };
 			return asset.IsValid() ? &m_ForwardPath->GetGpuCache().GetTexture(asset) : nullptr;
 		}
 		default:
@@ -262,30 +262,29 @@ ViewTexture FrameRenderer::MakeViewTexture(u32 width, u32 height) {
 	viewTexture.Scene = m_ForwardPath->CreateTargets(width, height, "ViewScene");
 
 	for (size_t i = 0; i < viewTexture.Scene->Targets.size(); ++i) {
-		RHI::TextureDesc colorDesc;
+		TextureDesc colorDesc;
 		colorDesc.Width = width;
 		colorDesc.Height = height;
 		colorDesc.Format = kViewColorFormat;
-		colorDesc.Usage = RHI::TextureUsage::ColorAttachment | RHI::TextureUsage::Sampled;
+		colorDesc.Usage = TextureUsage::ColorAttachment | TextureUsage::Sampled;
 		colorDesc.DebugName = "ViewColor";
-		viewTexture.Colors.push_back(RHI::RHITexture::Create(*m_Device, colorDesc));
+		viewTexture.Colors.push_back(RHITexture::Create(*m_Device, colorDesc));
 
-		RHI::FramebufferDesc framebufferDesc;
+		FramebufferDesc framebufferDesc;
 		framebufferDesc.AttachmentViews = { viewTexture.Colors.back()->GetAttachmentView(0, 0) };
 		framebufferDesc.Width = width;
 		framebufferDesc.Height = height;
-		viewTexture.Framebuffers.push_back(RHI::RHIFramebuffer::Create(*m_Device, *m_ViewPass, framebufferDesc));
+		viewTexture.Framebuffers.push_back(RHIFramebuffer::Create(*m_Device, *m_ViewPass, framebufferDesc));
 
 		framebufferDesc.AttachmentViews.push_back(viewTexture.Scene->Targets[i].Depth->GetAttachmentView(0, 0));
-		viewTexture.WorldFramebuffers.push_back(
-				RHI::RHIFramebuffer::Create(*m_Device, *m_WorldRenderPass, framebufferDesc));
+		viewTexture.WorldFramebuffers.push_back(RHIFramebuffer::Create(*m_Device, *m_WorldRenderPass, framebufferDesc));
 	}
 
 	// The 2D layer may show a view before a scene is drawn into it, so every color starts
 	// cleared and ready to sample.
-	m_Device->ExecuteImmediate([&](RHI::RHICommandBuffer &cmd) {
-		for (const Iunique<RHI::RHIFramebuffer> &framebuffer : viewTexture.Framebuffers) {
-			cmd.BeginRenderPass(*m_ViewPass, *framebuffer, RHI::ClearValue{});
+	m_Device->ExecuteImmediate([&](RHICommandBuffer &cmd) {
+		for (const Iunique<RHIFramebuffer> &framebuffer : viewTexture.Framebuffers) {
+			cmd.BeginRenderPass(*m_ViewPass, *framebuffer, ClearValue{});
 			cmd.EndRenderPass();
 		}
 	});
@@ -321,12 +320,12 @@ void FrameRenderer::DestroyViewTexture(ViewTextureID id) {
 }
 
 OverlayImageID FrameRenderer::CreateOverlayImage(u32 width, u32 height, const void *pixels) {
-	RHI::TextureDesc desc;
+	TextureDesc desc;
 	desc.Width = width;
 	desc.Height = height;
-	desc.Format = RHI::Format::R8G8B8A8_UNORM;
+	desc.Format = Format::R8G8B8A8_UNORM;
 	desc.DebugName = "OverlayImage";
-	return m_Images.Emplace(OverlayImage{ RHI::RHITexture::Create(*m_Device, desc, pixels) });
+	return m_Images.Emplace(OverlayImage{ RHITexture::Create(*m_Device, desc, pixels) });
 }
 
 void FrameRenderer::DestroyOverlayImage(OverlayImageID id) {
@@ -361,7 +360,7 @@ void FrameRenderer::ReleaseRetired(bool all) {
 		if (!done(retired)) {
 			continue;
 		}
-		for (const Iunique<RHI::RHITexture> &color : retired.View.Colors) {
+		for (const Iunique<RHITexture> &color : retired.View.Colors) {
 			m_OverlayPass->ForgetTexture(*color);
 			m_WorldPass->ForgetTexture(*color);
 		}
@@ -373,4 +372,4 @@ void FrameRenderer::ReleaseRetired(bool all) {
 	m_Retired.erase(std::remove_if(m_Retired.begin(), m_Retired.end(), done), m_Retired.end());
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-namespace VKE::Platform {
+namespace VKE {
 
 namespace {
 constexpr DWORD kCppException = 0xE06D7363;
@@ -105,4 +105,4 @@ bool GuardedCall(void (*call)(void *data), void *data, std::string &outFault) {
 	return false;
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

@@ -6,7 +6,7 @@
 
 #include <fstream>
 
-namespace VKE::Assets::Importers {
+namespace VKE::Importers {
 
 namespace {
 struct TextureSlot {
@@ -107,4 +107,4 @@ bool ExportMaterial(const AssetManager &assets, const MaterialData &material, co
 	return true;
 }
 
-} // namespace VKE::Assets::Importers
+} // namespace VKE::Importers

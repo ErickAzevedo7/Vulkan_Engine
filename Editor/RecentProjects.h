@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Project {
+namespace VKE {
 class Project;
-} // namespace VKE::Project
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -26,7 +26,7 @@ public:
 	void Save() const;
 
 	// Puts the project first, opened now.
-	void Add(const Project::Project &project);
+	void Add(const Project &project);
 	void Remove(const std::filesystem::path &folder);
 
 	const std::vector<RecentProject> &Get() const { return m_Projects; }

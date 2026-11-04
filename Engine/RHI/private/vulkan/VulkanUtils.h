@@ -8,7 +8,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 // Aborts (debug break) on any non-VK_SUCCESS result, after logging it.
 // Every Vulkan backend file uses this instead of ignoring VkResult —
@@ -246,4 +246,4 @@ inline VkCompareOp ToVkCompareOp(CompareOp op) {
 	}
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -4,7 +4,7 @@
 
 namespace VKE::Editor {
 
-ScreenView ScreenView::From(const Renderer::RenderView &view, const Vec2 &size) {
+ScreenView ScreenView::From(const RenderView &view, const Vec2 &size) {
 	ScreenView screen;
 	screen.Size = glm::max(size, Vec2(1.0f));
 	screen.ViewProjection = view.GetProjection(screen.Size.x / screen.Size.y) * view.View;

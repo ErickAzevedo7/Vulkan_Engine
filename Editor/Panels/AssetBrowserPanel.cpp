@@ -25,13 +25,6 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-using UI::ToImColor;
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
 // Drag-and-drop payload of a folder, carrying its path in UTF-8.
 constexpr const char *kFolderPayload = "VKE_FOLDER";
@@ -59,37 +52,37 @@ bool LessIgnoringCase(const std::string &a, const std::string &b) {
 	});
 }
 
-const char *GetTypeIcon(Assets::AssetType type) {
+const char *GetTypeIcon(AssetType type) {
 	switch (type) {
-		case Assets::AssetType::Model:
+		case AssetType::Model:
 			return Icons::Boxes;
-		case Assets::AssetType::Texture:
+		case AssetType::Texture:
 			return Icons::Image;
-		case Assets::AssetType::Material:
+		case AssetType::Material:
 			return Icons::Palette;
-		case Assets::AssetType::Scene:
+		case AssetType::Scene:
 			return Icons::Clapperboard;
-		case Assets::AssetType::Mesh:
+		case AssetType::Mesh:
 			return Icons::Box;
-		case Assets::AssetType::Prefab:
+		case AssetType::Prefab:
 			return Icons::Package;
 	}
 	return Icons::File;
 }
 
-const char *GetTypeName(Assets::AssetType type) {
+const char *GetTypeName(AssetType type) {
 	switch (type) {
-		case Assets::AssetType::Model:
+		case AssetType::Model:
 			return "MODEL";
-		case Assets::AssetType::Texture:
+		case AssetType::Texture:
 			return "TEXTURE";
-		case Assets::AssetType::Material:
+		case AssetType::Material:
 			return "MATERIAL";
-		case Assets::AssetType::Scene:
+		case AssetType::Scene:
 			return "SCENE";
-		case Assets::AssetType::Mesh:
+		case AssetType::Mesh:
 			return "MESH";
-		case Assets::AssetType::Prefab:
+		case AssetType::Prefab:
 			return "PREFAB";
 	}
 	return "";
@@ -174,7 +167,7 @@ void DrawTwoLines(ImFont *font, const std::string &text, f32 centerX, f32 top, f
 }
 } // namespace
 
-AssetBrowserPanel::AssetBrowserPanel(EditorScene &scene, MaterialEdits &edits, UI::UISystem &ui) :
+AssetBrowserPanel::AssetBrowserPanel(EditorScene &scene, MaterialEdits &edits, UISystem &ui) :
 		m_Scene(scene), m_Edits(edits), m_UI(ui) {}
 
 const char *AssetBrowserPanel::GetWindowName() {
@@ -182,16 +175,16 @@ const char *AssetBrowserPanel::GetWindowName() {
 	return name.c_str();
 }
 
-Assets::AssetID AssetBrowserPanel::TakeSceneToOpen() {
-	Assets::AssetID scene = m_SceneToOpen;
+AssetID AssetBrowserPanel::TakeSceneToOpen() {
+	AssetID scene = m_SceneToOpen;
 	m_SceneToOpen = {};
 	return scene;
 }
 
 bool AssetBrowserPanel::IsReadOnly(const std::filesystem::path &path) const {
-	const Assets::AssetRoot *root = m_Scene.GetAssets().FindRoot(path);
+	const AssetRoot *root = m_Scene.GetAssets().FindRoot(path);
 	// A root folder itself isn't under its root.
-	for (const Assets::AssetRoot &candidate : m_Scene.GetAssets().GetRoots()) {
+	for (const AssetRoot &candidate : m_Scene.GetAssets().GetRoots()) {
 		if (candidate.Folder == path) {
 			return candidate.ReadOnly;
 		}
@@ -209,7 +202,7 @@ bool AssetBrowserPanel::IsSelected(const Item &item) const {
 
 void AssetBrowserPanel::Draw(bool *open) {
 	m_LoadedThumbnail = false;
-	const std::vector<Assets::AssetRoot> &roots = m_Scene.GetAssets().GetRoots();
+	const std::vector<AssetRoot> &roots = m_Scene.GetAssets().GetRoots();
 	if (m_Folder.empty() && !roots.empty()) {
 		m_Folder = roots.front().Folder;
 	}
@@ -270,7 +263,7 @@ void AssetBrowserPanel::UpdateListing() {
 	m_ListedGeneration = m_Generation;
 	m_Items.clear();
 
-	Assets::AssetManager &assets = m_Scene.GetAssets();
+	AssetManager &assets = m_Scene.GetAssets();
 	auto add = [&](const std::filesystem::path &path, bool isFolder) {
 		Item item;
 		item.Path = path;
@@ -278,7 +271,7 @@ void AssetBrowserPanel::UpdateListing() {
 		item.Name = isFolder ? path.filename().u8string() : path.stem().u8string();
 		if (!isFolder) {
 			item.ID = assets.GetAsset(path);
-			std::optional<Assets::AssetType> type = assets.GetType(item.ID);
+			std::optional<AssetType> type = assets.GetType(item.ID);
 			if (!type) {
 				return;
 			}
@@ -315,14 +308,14 @@ void AssetBrowserPanel::UpdateListing() {
 
 	// The meshes and materials of open models, after their tiles.
 	for (size_t i = 0; i < m_Items.size(); ++i) {
-		if (m_Items[i].IsFolder || m_Items[i].Type != Assets::AssetType::Model) {
+		if (m_Items[i].IsFolder || m_Items[i].Type != AssetType::Model) {
 			continue;
 		}
 		if (!m_OpenModels.count(m_Items[i].ID)) {
 			continue;
 		}
 		std::vector<Item> inside;
-		for (const Assets::SubAsset &subAsset : assets.GetSubAssets(m_Items[i].ID)) {
+		for (const SubAsset &subAsset : assets.GetSubAssets(m_Items[i].ID)) {
 			Item item;
 			item.Path = m_Items[i].Path;
 			item.Name = subAsset.Name;
@@ -338,7 +331,7 @@ void AssetBrowserPanel::UpdateListing() {
 
 void AssetBrowserPanel::DrawFolderTree() {
 	ImGui::Dummy(ImVec2(0.0f, Sizes::Space2));
-	for (const Assets::AssetRoot &root : m_Scene.GetAssets().GetRoots()) {
+	for (const AssetRoot &root : m_Scene.GetAssets().GetRoots()) {
 		DrawFolderRow(root.Folder, root.Name, 0, true, root.ReadOnly);
 	}
 }
@@ -466,8 +459,8 @@ void AssetBrowserPanel::DrawToolbar() {
 	Widgets::SearchField("##Search", m_Filter, "Search assets", searchWidth);
 
 	// The open folder's path from its root, each part a link to its folder.
-	const Assets::AssetRoot *root = nullptr;
-	for (const Assets::AssetRoot &candidate : m_Scene.GetAssets().GetRoots()) {
+	const AssetRoot *root = nullptr;
+	for (const AssetRoot &candidate : m_Scene.GetAssets().GetRoots()) {
 		if (candidate.Folder == m_Folder || m_Scene.GetAssets().FindRoot(m_Folder) == &candidate) {
 			root = &candidate;
 		}
@@ -596,7 +589,7 @@ void AssetBrowserPanel::DrawTile(const Item &item, f32 width) {
 	// The thumbnail: the texture's own image, or the type's icon.
 	ImVec2 thumbMin(std::floor(min.x + (width - kThumbSize) * 0.5f), min.y + Sizes::Space2);
 	ImVec2 thumbMax(thumbMin.x + kThumbSize, thumbMin.y + kThumbSize);
-	u64 image = !item.IsFolder && item.Type == Assets::AssetType::Texture ? GetThumbnail(item.ID, visible) : 0;
+	u64 image = !item.IsFolder && item.Type == AssetType::Texture ? GetThumbnail(item.ID, visible) : 0;
 	if (!item.IsFolder) {
 		draw->AddRectFilled(thumbMin, thumbMax, ToImColor(Colors::BgField), Sizes::RadiusSm);
 	}
@@ -614,7 +607,7 @@ void AssetBrowserPanel::DrawTile(const Item &item, f32 width) {
 	}
 
 	// A model's badge opens and closes it, to show what is inside.
-	if (!item.IsFolder && !item.IsSubAsset && item.Type == Assets::AssetType::Model) {
+	if (!item.IsFolder && !item.IsSubAsset && item.Type == AssetType::Model) {
 		bool open = m_OpenModels.count(item.ID) != 0;
 		ImFont *small = GetFont(TextStyle::UISmall);
 		const char *badgeIcon = open ? Icons::ChevronLeft : Icons::Layers;
@@ -703,7 +696,7 @@ void AssetBrowserPanel::DrawListRow(const Item &item) {
 	ImFont *font = GetFont(TextStyle::UI);
 	f32 textY = min.y + std::floor((Sizes::RowHeight - font->FontSize) * 0.5f);
 	f32 x = min.x + Sizes::Space4 + (item.IsSubAsset ? Sizes::Indent : 0.0f);
-	if (!item.IsFolder && !item.IsSubAsset && item.Type == Assets::AssetType::Model) {
+	if (!item.IsFolder && !item.IsSubAsset && item.Type == AssetType::Model) {
 		bool open = m_OpenModels.count(item.ID) != 0;
 		ImGui::SetCursorScreenPos(ImVec2(x, min.y));
 		if (ImGui::InvisibleButton("##Open", ImVec2(kIconWidth, Sizes::RowHeight))) {
@@ -762,7 +755,7 @@ void AssetBrowserPanel::HandleItem(const Item &item, bool released) {
 	// Selected on release, so dragging an asset onto a field of the selected one keeps it in the Inspector.
 	if (released || ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
 		m_SelectedPath = item.Path;
-		m_SelectedSubAsset = item.IsSubAsset ? item.ID : Assets::AssetID{};
+		m_SelectedSubAsset = item.IsSubAsset ? item.ID : AssetID{};
 		if (item.IsFolder) {
 			if (m_Scene.GetSelectedAsset().IsValid()) {
 				m_Scene.SelectAsset({});
@@ -775,11 +768,11 @@ void AssetBrowserPanel::HandleItem(const Item &item, bool released) {
 		if (item.IsFolder) {
 			m_Folder = item.Path;
 			m_Filter.clear();
-		} else if (!item.IsSubAsset && item.Type == Assets::AssetType::Scene) {
+		} else if (!item.IsSubAsset && item.Type == AssetType::Scene) {
 			m_SceneToOpen = item.ID;
-		} else if (!item.IsSubAsset && item.Type == Assets::AssetType::Prefab) {
+		} else if (!item.IsSubAsset && item.Type == AssetType::Prefab) {
 			m_Scene.AskToOpenPrefab(item.ID);
-		} else if (!item.IsSubAsset && item.Type == Assets::AssetType::Model) {
+		} else if (!item.IsSubAsset && item.Type == AssetType::Model) {
 			if (!m_OpenModels.erase(item.ID)) {
 				m_OpenModels.insert(item.ID);
 				if (m_Scene.GetAssets().GetSubAssets(item.ID).empty()) {
@@ -815,11 +808,11 @@ void AssetBrowserPanel::DrawItemMenu(const Item &item) {
 	if (item.IsFolder && ImGui::MenuItem(WithIcon(Icons::FolderOpen, "Open").c_str())) {
 		m_Folder = item.Path;
 	}
-	if (!item.IsSubAsset && item.Type == Assets::AssetType::Scene && !item.IsFolder &&
+	if (!item.IsSubAsset && item.Type == AssetType::Scene && !item.IsFolder &&
 			ImGui::MenuItem(WithIcon(Icons::Clapperboard, "Open scene").c_str())) {
 		m_SceneToOpen = item.ID;
 	}
-	if (!item.IsSubAsset && item.Type == Assets::AssetType::Prefab && !item.IsFolder &&
+	if (!item.IsSubAsset && item.Type == AssetType::Prefab && !item.IsFolder &&
 			ImGui::MenuItem(WithIcon(Icons::Package, "Open prefab").c_str())) {
 		m_Scene.AskToOpenPrefab(item.ID);
 	}
@@ -878,9 +871,9 @@ bool AssetBrowserPanel::AcceptMove(const std::filesystem::path &folder) {
 		return false;
 	}
 	ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
-	Assets::AssetManager &assets = m_Scene.GetAssets();
+	AssetManager &assets = m_Scene.GetAssets();
 	if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
-		Assets::AssetID id = *static_cast<const Assets::AssetID *>(payload->Data);
+		AssetID id = *static_cast<const AssetID *>(payload->Data);
 		std::filesystem::path file = assets.GetFile(id);
 		// Only asset files can move, and not into the folder they are in.
 		over = !file.empty() && assets.IsWritable(id) && file.parent_path() != folder;
@@ -908,8 +901,8 @@ bool AssetBrowserPanel::AcceptObject(const std::filesystem::path &folder) {
 	}
 	ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
 	if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload, flags)) {
-		auto handle = *static_cast<const Handle<Scene::GameObject> *>(payload->Data);
-		Scene::GameObject *object = m_Scene.GetScene().Get(handle);
+		auto handle = *static_cast<const Handle<GameObject> *>(payload->Data);
+		GameObject *object = m_Scene.GetScene().Get(handle);
 		over = object && m_Scene.CanCreatePrefab(*object);
 		if (over && payload->IsDelivery()) {
 			CreatePrefab(*object, folder);
@@ -919,7 +912,7 @@ bool AssetBrowserPanel::AcceptObject(const std::filesystem::path &folder) {
 	return over;
 }
 
-void AssetBrowserPanel::CreatePrefab(Scene::GameObject &object, const std::filesystem::path &folder) {
+void AssetBrowserPanel::CreatePrefab(GameObject &object, const std::filesystem::path &folder) {
 	// Named after the object, with what a file name can't have replaced.
 	std::string name = object.GetName();
 	for (char &c : name) {
@@ -928,7 +921,7 @@ void AssetBrowserPanel::CreatePrefab(Scene::GameObject &object, const std::files
 		}
 	}
 	std::filesystem::path file = MakeUniquePath(folder, name.empty() ? "Prefab" : name, ".prefab");
-	Assets::AssetID prefab = m_Scene.CreatePrefab(object, file);
+	AssetID prefab = m_Scene.CreatePrefab(object, file);
 	if (!prefab.IsValid()) {
 		return;
 	}
@@ -974,7 +967,7 @@ void AssetBrowserPanel::CreateFolder() {
 
 void AssetBrowserPanel::CreateMaterial() {
 	std::filesystem::path file = MakeUniquePath(m_Folder, "New Material", ".mat");
-	Assets::AssetID id = m_Scene.GetAssets().CreateMaterial(file);
+	AssetID id = m_Scene.GetAssets().CreateMaterial(file);
 	if (!id.IsValid()) {
 		return;
 	}
@@ -987,7 +980,7 @@ void AssetBrowserPanel::CreateMaterial() {
 	item.Path = file;
 	item.Name = file.stem().u8string();
 	item.ID = id;
-	item.Type = Assets::AssetType::Material;
+	item.Type = AssetType::Material;
 	StartRename(item);
 }
 
@@ -1074,8 +1067,8 @@ void AssetBrowserPanel::DrawDeleteDialog() {
 	if (!confirm) {
 		return;
 	}
-	Assets::AssetManager &assets = m_Scene.GetAssets();
-	Assets::AssetID selected = m_Scene.GetSelectedAsset();
+	AssetManager &assets = m_Scene.GetAssets();
+	AssetID selected = m_Scene.GetSelectedAsset();
 	if (!assets.Delete(m_ToDelete)) {
 		return;
 	}
@@ -1090,24 +1083,23 @@ void AssetBrowserPanel::DrawDeleteDialog() {
 	Refresh();
 }
 
-u64 AssetBrowserPanel::GetThumbnail(Assets::AssetID texture, bool visible) {
-	Assets::AssetManager &assets = m_Scene.GetAssets();
-	Handle<Assets::TextureData> handle = assets.FindLoadedTexture(texture);
+u64 AssetBrowserPanel::GetThumbnail(AssetID texture, bool visible) {
+	AssetManager &assets = m_Scene.GetAssets();
+	Handle<TextureData> handle = assets.FindLoadedTexture(texture);
 	if (!handle.IsValid()) {
 		// Loading reads and decodes the image, so the tiles in view take turns.
 		if (m_LoadedThumbnail || !visible) {
 			return 0;
 		}
 		m_LoadedThumbnail = true;
-		Assets::ColorSpace space = assets.GetColorSpace(texture) == Assets::TextureColorSpace::Linear
-				? Assets::ColorSpace::Linear
-				: Assets::ColorSpace::SRGB;
+		ColorSpace space =
+				assets.GetColorSpace(texture) == TextureColorSpace::Linear ? ColorSpace::Linear : ColorSpace::SRGB;
 		handle = assets.LoadTexture(texture, space);
 		if (!handle.IsValid()) {
 			return 0;
 		}
 	}
-	return m_UI.GetTextureID(Renderer::OverlayTexture::FromAsset(handle));
+	return m_UI.GetTextureID(OverlayTexture::FromAsset(handle));
 }
 
 } // namespace VKE::Editor

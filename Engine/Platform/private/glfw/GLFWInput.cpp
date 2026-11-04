@@ -5,7 +5,7 @@
 
 #include <GLFW/glfw3.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 GLFWInput::GLFWInput(GLFWWindow &window) : m_Handle(static_cast<GLFWwindow *>(window.GetNativeHandle())) {
 	window._SetInputSink(this);
@@ -82,4 +82,4 @@ Iunique<IInput> IInput::Create(IWindow &window) {
 	return MakeIunique<GLFWInput>(static_cast<GLFWWindow &>(window));
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

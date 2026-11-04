@@ -5,23 +5,23 @@
 
 #include <utility>
 
-namespace VKE::Scene {
+namespace VKE {
 
-MeshComponent::MeshComponent(Handle<Assets::MeshData> mesh) : m_Mesh(mesh) {}
+MeshComponent::MeshComponent(Handle<MeshData> mesh) : m_Mesh(mesh) {}
 
-void MeshComponent::SetMesh(Handle<Assets::MeshData> mesh) {
+void MeshComponent::SetMesh(Handle<MeshData> mesh) {
 	m_Mesh = mesh;
 	MarkSyncNeeded();
 }
 
-void MeshComponent::SetMaterials(std::vector<Handle<Assets::MaterialData>> materials) {
+void MeshComponent::SetMaterials(std::vector<Handle<MaterialData>> materials) {
 	m_Materials = std::move(materials);
 	MarkSyncNeeded();
 }
 
 void MeshComponent::ConnectToSystems(SceneSystems &systems) {
 	// Starts hidden; the first sync fills in the rest.
-	Renderer::MeshInstanceDesc desc;
+	MeshInstanceDesc desc;
 	desc.Visible = false;
 	desc.Owner = PackObjectHandle(GetOwner().GetHandle());
 	m_Instance = systems.Render.CreateMesh(desc);
@@ -40,4 +40,4 @@ void MeshComponent::DisconnectFromSystems(SceneSystems &systems) {
 	m_Instance = {};
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

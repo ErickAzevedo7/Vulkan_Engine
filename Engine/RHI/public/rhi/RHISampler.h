@@ -3,7 +3,7 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 
@@ -15,4 +15,4 @@ public:
 	static Iunique<RHISampler> Create(RHIDevice &device, const SamplerDesc &desc);
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

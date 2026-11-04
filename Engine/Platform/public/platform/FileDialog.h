@@ -8,7 +8,7 @@
 // Native dialogs for choosing files and folders, modal to the engine window.
 // Each returns nothing when the user cancels.
 
-namespace VKE::Platform::FileDialog {
+namespace VKE::FileDialog {
 
 // One entry of the dialog's file type list, e.g. {"Scene", "*.scene"}.
 // Several patterns are separated by ';' ("*.png;*.jpg").
@@ -27,4 +27,4 @@ std::optional<std::filesystem::path> SaveFile(const std::vector<Filter> &filters
 
 std::optional<std::filesystem::path> PickFolder(const std::filesystem::path &folder = {});
 
-} // namespace VKE::Platform::FileDialog
+} // namespace VKE::FileDialog

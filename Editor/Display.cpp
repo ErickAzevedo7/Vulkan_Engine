@@ -14,8 +14,6 @@
 
 namespace VKE::Editor::Display {
 
-namespace Icons = UI::Icons;
-
 namespace {
 bool IsUpper(char c) {
 	return std::isupper(static_cast<unsigned char>(c)) != 0;
@@ -68,7 +66,7 @@ std::string ToWords(std::string_view name) {
 	return result;
 }
 
-std::string GetComponentLabel(const Scene::ComponentTypeInfo &type) {
+std::string GetComponentLabel(const ComponentTypeInfo &type) {
 	std::string_view name = type.Name;
 	constexpr std::string_view kSuffix = "Component";
 	if (name.size() > kSuffix.size() && name.substr(name.size() - kSuffix.size()) == kSuffix) {
@@ -77,8 +75,7 @@ std::string GetComponentLabel(const Scene::ComponentTypeInfo &type) {
 	return ToWords(name);
 }
 
-const char *GetComponentIcon(const Scene::Component &component) {
-	using namespace Scene;
+const char *GetComponentIcon(const Component &component) {
 	ComponentTypeID type = component.GetTypeID();
 	const ComponentTypeInfo *info = ComponentRegistry::Find(type);
 	if (info->Missing) {
@@ -101,19 +98,19 @@ const char *GetComponentIcon(const Scene::Component &component) {
 	}
 	if (type == ComponentRegistry::GetID<LightComponent>()) {
 		switch (static_cast<const LightComponent &>(component).GetSettings().Type) {
-			case Renderer::LightType::Directional:
+			case LightType::Directional:
 				return Icons::Sun;
-			case Renderer::LightType::Point:
+			case LightType::Point:
 				return Icons::Lightbulb;
-			case Renderer::LightType::Spot:
+			case LightType::Spot:
 				return Icons::Flashlight;
 		}
 	}
 	return Icons::SlidersHorizontal;
 }
 
-const char *GetObjectIcon(const Scene::GameObject &object) {
-	for (const Scene::Component *component : object.GetComponents()) {
+const char *GetObjectIcon(const GameObject &object) {
+	for (const Component *component : object.GetComponents()) {
 		if (component != &object.GetTransform()) {
 			return GetComponentIcon(*component);
 		}

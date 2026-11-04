@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 const Vec3 kWorldUp(0.0f, 1.0f, 0.0f);
@@ -38,4 +38,4 @@ RenderView Camera::GetView() const {
 	return view;
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

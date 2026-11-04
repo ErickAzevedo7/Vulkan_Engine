@@ -4,7 +4,7 @@
 
 #include <cfloat>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // Descriptions of the fields of components and marked structs, written by the reflection
 // generator from the marks in reflection/Marks.h. Savers and editors go through them instead
@@ -29,9 +29,9 @@ enum class PropertyType : u8 {
 	Enum,
 	// A marked struct, described by PropertyInfo::Struct.
 	Struct,
-	// Handle<Assets::MeshData>.
+	// Handle<MeshData>.
 	Mesh,
-	// std::vector<Handle<Assets::MaterialData>>.
+	// std::vector<Handle<MaterialData>>.
 	Materials,
 };
 
@@ -130,4 +130,4 @@ bool AreEqual(const StructInfo &type, const void *a, const void *b);
 void CopyValue(const PropertyInfo &property, void *to, const void *from);
 void CopyValues(const StructInfo &type, void *to, const void *from);
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -6,44 +6,44 @@
 #include <rhi/RHIRenderPass.h>
 #include <rhi/RHITexture.h>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Offscreen color and depth pair that a pass renders into, built from the
 // textures and framebuffer the RHI already provides.
 struct RenderTarget {
-	Iunique<RHI::RHITexture> Color;
-	Iunique<RHI::RHITexture> Depth;
-	Iunique<RHI::RHIFramebuffer> Framebuffer;
+	Iunique<RHITexture> Color;
+	Iunique<RHITexture> Depth;
+	Iunique<RHIFramebuffer> Framebuffer;
 	u32 Width = 0;
 	u32 Height = 0;
 
-	void Create(RHI::RHIDevice &device, RHI::RHIRenderPass &renderPass, u32 width, u32 height, RHI::Format colorFormat,
-			RHI::Format depthFormat, const char *debugName) {
+	void Create(RHIDevice &device, RHIRenderPass &renderPass, u32 width, u32 height, Format colorFormat,
+			Format depthFormat, const char *debugName) {
 		Width = width;
 		Height = height;
 
-		RHI::TextureDesc colorDesc;
+		TextureDesc colorDesc;
 		colorDesc.Width = width;
 		colorDesc.Height = height;
 		colorDesc.Format = colorFormat;
-		colorDesc.Usage = RHI::TextureUsage::ColorAttachment | RHI::TextureUsage::Sampled;
+		colorDesc.Usage = TextureUsage::ColorAttachment | TextureUsage::Sampled;
 		colorDesc.DebugName = debugName;
-		Color = RHI::RHITexture::Create(device, colorDesc);
+		Color = RHITexture::Create(device, colorDesc);
 
-		RHI::TextureDesc depthDesc;
+		TextureDesc depthDesc;
 		depthDesc.Width = width;
 		depthDesc.Height = height;
 		depthDesc.Format = depthFormat;
-		depthDesc.Usage = RHI::TextureUsage::DepthAttachment;
+		depthDesc.Usage = TextureUsage::DepthAttachment;
 		depthDesc.DebugName = debugName;
-		Depth = RHI::RHITexture::Create(device, depthDesc);
+		Depth = RHITexture::Create(device, depthDesc);
 
-		RHI::FramebufferDesc framebufferDesc;
+		FramebufferDesc framebufferDesc;
 		framebufferDesc.AttachmentViews = { Color->GetAttachmentView(0, 0), Depth->GetAttachmentView(0, 0) };
 		framebufferDesc.Width = width;
 		framebufferDesc.Height = height;
-		Framebuffer = RHI::RHIFramebuffer::Create(device, renderPass, framebufferDesc);
+		Framebuffer = RHIFramebuffer::Create(device, renderPass, framebufferDesc);
 	}
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

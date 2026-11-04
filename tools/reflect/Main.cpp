@@ -1,7 +1,7 @@
 // VKE_Reflect: reads the reflection marks in headers (reflection/Marks.h, vke/Marks.h) and writes
 // the C++ the engine and games are built with.
 //
-// The engine's property tables. <RegisterFunction> is a static member of Scene::ComponentRegistry,
+// The engine's property tables. <RegisterFunction> is a static member of ComponentRegistry,
 // which the generated file defines:
 //     VKE_Reflect --output <file.cpp> --function <RegisterFunction> <header>...
 //

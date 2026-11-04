@@ -8,9 +8,9 @@
 #include <string>
 #include <unordered_set>
 
-namespace VKE::Scene {
+namespace VKE {
 class GameObject;
-} // namespace VKE::Scene
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -41,15 +41,15 @@ private:
 
 	void DrawToolbar();
 	void DrawTree();
-	void DrawRow(Scene::GameObject &object, u32 depth, bool canDrag);
-	void DrawRowMenu(Scene::GameObject &object);
+	void DrawRow(GameObject &object, u32 depth, bool canDrag);
+	void DrawRowMenu(GameObject &object);
 	void HandleShortcuts();
 
 	// Moves `dragged` next to or inside `target`; a null target makes it the last root.
-	void Move(Scene::GameObject &dragged, Scene::GameObject *target, DropPlace place);
-	void StartRename(Scene::GameObject &object);
+	void Move(GameObject &dragged, GameObject *target, DropPlace place);
+	void StartRename(GameObject &object);
 	// Opens the parents of the object, so its row shows.
-	void Reveal(const Scene::GameObject &object);
+	void Reveal(const GameObject &object);
 
 	EditorScene &m_Scene;
 	std::string m_Filter;
@@ -57,24 +57,24 @@ private:
 	bool m_Focused = false;
 
 	// The row being renamed and its text.
-	Handle<Scene::GameObject> m_Renaming;
+	Handle<GameObject> m_Renaming;
 	std::string m_RenameText;
 	bool m_FocusRename = false;
 
 	// The selection the panel last saw: when something else changes it, the row is revealed.
-	Handle<Scene::GameObject> m_LastSelected;
+	Handle<GameObject> m_LastSelected;
 	bool m_ScrollToSelected = false;
 
 	// Changes to the hierarchy wait until the tree is drawn, which walks it.
-	Handle<Scene::GameObject> m_Dragged;
-	Handle<Scene::GameObject> m_DropTarget;
+	Handle<GameObject> m_Dragged;
+	Handle<GameObject> m_DropTarget;
 	DropPlace m_DropPlace = DropPlace::Inside;
 	bool m_DropPending = false;
 	// An asset dropped from Assets, placed under m_PlaceParent, or at the root if it is invalid.
-	Assets::AssetID m_AssetToPlace;
-	Handle<Scene::GameObject> m_PlaceParent;
-	Handle<Scene::GameObject> m_ToDestroy;
-	Handle<Scene::GameObject> m_ToUnpack;
+	AssetID m_AssetToPlace;
+	Handle<GameObject> m_PlaceParent;
+	Handle<GameObject> m_ToDestroy;
+	Handle<GameObject> m_ToUnpack;
 };
 
 } // namespace VKE::Editor

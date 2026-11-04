@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace VKE::RHI {
+namespace VKE {
 
 namespace {
 VkImageUsageFlags ToVkImageUsage(TextureUsage usage) {
@@ -271,4 +271,4 @@ Iunique<RHITexture> RHITexture::Create(RHIDevice &device, const TextureDesc &des
 	return MakeIunique<VulkanTexture>(static_cast<VulkanDevice &>(device), desc, initialData);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

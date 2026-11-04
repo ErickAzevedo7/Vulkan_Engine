@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanBindGroupLayout::VulkanBindGroupLayout(VulkanDevice &device, const BindGroupLayoutDesc &desc) :
 		m_Device(device), m_Slots(desc.Slots) {
@@ -132,4 +132,4 @@ Iunique<RHIBindGroup> RHIBindGroup::Create(RHIDevice &device, const BindGroupDes
 	return MakeIunique<VulkanBindGroup>(static_cast<VulkanDevice &>(device), desc);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -3,14 +3,14 @@
 // Engine-wide, non-owning access to the active Window/Input instances.
 // Populated by PlatformSystem::OnInitialize, cleared in OnShutdown.
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
 class IInput;
-} // namespace VKE::Platform
+} // namespace VKE
 
 namespace VKE {
 
-extern Platform::IWindow *Window;
-extern Platform::IInput *Input;
+extern IWindow *Window;
+extern IInput *Input;
 
 } // namespace VKE

@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-namespace VKE::UI {
+namespace VKE {
 
 namespace {
 ImVec4 Color(u32 rgba) {
@@ -127,4 +127,4 @@ void ApplyTheme(ImGuiStyle &style, f32 uiFontSize) {
 	colors[ImGuiCol_ModalWindowDimBg] = Color(Colors::Scrim);
 }
 
-} // namespace VKE::UI
+} // namespace VKE

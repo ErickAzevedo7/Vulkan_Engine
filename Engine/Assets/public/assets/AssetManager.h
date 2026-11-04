@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace VKE::Assets {
+namespace VKE {
 
 class AssetCatalog;
 
@@ -156,4 +156,4 @@ private:
 	std::array<Handle<TextureData>, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures{};
 };
 
-} // namespace VKE::Assets
+} // namespace VKE

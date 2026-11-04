@@ -7,7 +7,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanAllocator {
 public:
@@ -23,4 +23,4 @@ private:
 	VmaAllocator m_Allocator = VK_NULL_HANDLE;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

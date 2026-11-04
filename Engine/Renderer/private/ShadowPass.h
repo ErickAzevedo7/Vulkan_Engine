@@ -17,7 +17,7 @@
 
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 class LightClusters;
 
@@ -28,10 +28,10 @@ class LightClusters;
 // important lights lose resolution first.
 class ShadowPass {
 public:
-	explicit ShadowPass(RHI::RHIDevice &device);
+	explicit ShadowPass(RHIDevice &device);
 
-	RHI::RHITexture &GetAtlas() { return *m_Atlas; }
-	RHI::RHISampler &GetSampler() { return *m_Sampler; }
+	RHITexture &GetAtlas() { return *m_Atlas; }
+	RHISampler &GetSampler() { return *m_Sampler; }
 
 	// Divides the atlas among the frame's lights that cast shadows, writing their shadow
 	// data into `outShadows` and their indices into the lights. `pixelsAtOneMeter` is how
@@ -43,7 +43,7 @@ public:
 	void Clear() { m_Views.clear(); }
 
 	// Must be called outside any render pass.
-	void Record(RHI::RHICommandBuffer &cmd, const std::vector<DrawItem> &items);
+	void Record(RHICommandBuffer &cmd, const std::vector<DrawItem> &items);
 
 private:
 	// One depth render of the scene, into one tile of the atlas.
@@ -56,11 +56,11 @@ private:
 		f32 Range = 0.0f;
 	};
 
-	Iunique<RHI::RHIRenderPass> m_RenderPass;
-	Iunique<RHI::RHITexture> m_Atlas;
-	Iunique<RHI::RHIFramebuffer> m_Framebuffer;
-	Iunique<RHI::RHIPipeline> m_Pipeline;
-	Iunique<RHI::RHISampler> m_Sampler;
+	Iunique<RHIRenderPass> m_RenderPass;
+	Iunique<RHITexture> m_Atlas;
+	Iunique<RHIFramebuffer> m_Framebuffer;
+	Iunique<RHIPipeline> m_Pipeline;
+	Iunique<RHISampler> m_Sampler;
 
 	u32 m_AtlasSize = 0;
 	std::vector<ShadowView> m_Views;
@@ -69,4 +69,4 @@ private:
 	bool m_SpaceWarned = false;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

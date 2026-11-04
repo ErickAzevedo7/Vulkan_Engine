@@ -6,7 +6,7 @@
 
 #include <cstring>
 
-namespace VKE::RHI {
+namespace VKE {
 
 namespace {
 VkBufferUsageFlags ToVkBufferUsage(BufferUsage usage) {
@@ -123,4 +123,4 @@ Iunique<RHIBuffer> RHIBuffer::Create(RHIDevice &device, const BufferDesc &desc, 
 	return MakeIunique<VulkanBuffer>(static_cast<VulkanDevice &>(device), desc, initialData);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

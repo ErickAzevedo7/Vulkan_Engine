@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-namespace VKE::Scripting {
+namespace VKE {
 
 // The engine's side of a script on an object: a component holding the instance in the game's
 // DLL, which the registry's tables read and write. Every script type shares this class, each
@@ -19,15 +19,15 @@ namespace VKE::Scripting {
 // faults only stops the game. A script that couldn't be constructed, or that faulted, is
 // broken: it runs no more. If it couldn't be constructed, a plain copy of the default instance
 // holds its fields instead, which the tables reach all the same, so its values aren't lost.
-class ScriptComponent final : public Scene::Component {
+class ScriptComponent final : public Component {
 public:
 	explicit ScriptComponent(const ScriptType &type);
 	~ScriptComponent() override;
 
 	// `component` as a script, or null.
-	static ScriptComponent *From(Scene::Component &component);
+	static ScriptComponent *From(Component &component);
 
-	Scene::ComponentTypeID GetTypeID() const override { return m_TypeID; }
+	ComponentTypeID GetTypeID() const override { return m_TypeID; }
 	const std::string &GetTypeName() const { return m_Type->Name; }
 	void *GetInstance() const { return m_Instance; }
 	bool IsBroken() const { return m_Broken; }
@@ -60,12 +60,12 @@ private:
 	// Points the ObjectRef fields at their objects, for the ones that hold one.
 	void ResolveReferences();
 
-	void ConnectToSystems(Scene::SceneSystems &systems) override;
-	void DisconnectFromSystems(Scene::SceneSystems &systems) override;
-	void OnPropertiesChanged(const Assets::AssetManager &assets) override;
+	void ConnectToSystems(SceneSystems &systems) override;
+	void DisconnectFromSystems(SceneSystems &systems) override;
+	void OnPropertiesChanged(const AssetManager &assets) override;
 
 	const ScriptType *m_Type;
-	Scene::ComponentTypeID m_TypeID;
+	ComponentTypeID m_TypeID;
 	void *m_Instance = nullptr;
 	vke::Script *m_Script = nullptr;
 	std::unique_ptr<char[]> m_FailedInstance;
@@ -74,4 +74,4 @@ private:
 	bool m_Started = false;
 };
 
-} // namespace VKE::Scripting
+} // namespace VKE

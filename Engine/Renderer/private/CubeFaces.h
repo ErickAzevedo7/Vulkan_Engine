@@ -5,7 +5,7 @@
 
 #include <array>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Cameras that render the six faces of a cube texture, in the order the layers
 // are stored: +X, -X, +Y, -Y, +Z, -Z.
@@ -31,4 +31,4 @@ inline std::array<Mat4, 6> GetCubeFaceViews(const Vec3 &origin) {
 	};
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

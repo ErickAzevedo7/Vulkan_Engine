@@ -9,7 +9,7 @@
 #include <array>
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 // Sorts a frame's lights by where they reach, so a pixel only computes the ones near it.
 //
@@ -56,4 +56,4 @@ private:
 	f32 m_SliceBias = 0.0f;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

@@ -10,7 +10,7 @@
 
 #include <algorithm>
 
-namespace VKE::Platform::Process {
+namespace VKE::Process {
 
 namespace {
 std::wstring ToWide(const std::string &text) {
@@ -206,4 +206,4 @@ std::string ConsoleTextToUtf8(const std::string &text) {
 	return ToUtf8(wide.c_str());
 }
 
-} // namespace VKE::Platform::Process
+} // namespace VKE::Process

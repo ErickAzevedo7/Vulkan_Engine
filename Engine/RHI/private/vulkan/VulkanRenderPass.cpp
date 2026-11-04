@@ -3,7 +3,7 @@
 #include "VulkanDevice.h"
 #include "VulkanUtils.h"
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanRenderPass::VulkanRenderPass(VulkanDevice &device, const RenderPassDesc &desc) :
 		m_Device(device),
@@ -148,4 +148,4 @@ Iunique<RHIRenderPass> RHIRenderPass::Create(RHIDevice &device, const RenderPass
 	return MakeIunique<VulkanRenderPass>(static_cast<VulkanDevice &>(device), desc);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

@@ -10,11 +10,6 @@
 
 namespace VKE::Editor::Widgets {
 
-using UI::GetFont;
-using UI::TextStyle;
-namespace Colors = UI::Colors;
-namespace Sizes = UI::Sizes;
-
 ImVec4 ToVec4(u32 rgba) {
 	return ImVec4(static_cast<f32>((rgba >> 24) & 0xFF) / 255.0f, static_cast<f32>((rgba >> 16) & 0xFF) / 255.0f,
 			static_cast<f32>((rgba >> 8) & 0xFF) / 255.0f, static_cast<f32>(rgba & 0xFF) / 255.0f);
@@ -77,14 +72,13 @@ void Badge(const char *text, u32 color) {
 
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	ImVec2 end(position.x + size.x, position.y + size.y);
-	draw->AddRect(position, end, UI::ToImColor(color), 2.0f);
+	draw->AddRect(position, end, ToImColor(color), 2.0f);
 	draw->AddText(font, font->FontSize,
-			ImVec2(position.x + 5.0f, position.y + std::floor((size.y - textSize.y) * 0.5f)), UI::ToImColor(color),
-			text);
+			ImVec2(position.x + 5.0f, position.y + std::floor((size.y - textSize.y) * 0.5f)), ToImColor(color), text);
 }
 
 bool SearchField(const char *id, std::string &text, const char *hint, f32 width) {
-	std::string fullHint = std::string(UI::Icons::Search) + "  " + hint;
+	std::string fullHint = std::string(Icons::Search) + "  " + hint;
 	ImGui::SetNextItemWidth(width > 0.0f ? width : -FLT_MIN);
 	return ImGui::InputTextWithHint(id, fullHint.c_str(), &text);
 }
@@ -119,7 +113,7 @@ bool DialogHeader(const char *title) {
 
 	f32 buttonSize = Sizes::ControlHeight;
 	ImGui::SameLine(ImGui::GetContentRegionMax().x - buttonSize);
-	bool clicked = GhostButton(UI::Icons::X, ImVec2(buttonSize, buttonSize));
+	bool clicked = GhostButton(Icons::X, ImVec2(buttonSize, buttonSize));
 	ImGui::Dummy(ImVec2(0.0f, Sizes::Space4));
 	return clicked;
 }
@@ -130,7 +124,7 @@ void Dot(u32 color) {
 	f32 height = ImGui::GetTextLineHeight();
 	ImGui::ItemSize(ImVec2(kRadius * 2.0f, height));
 	ImGui::GetWindowDrawList()->AddCircleFilled(
-			ImVec2(position.x + kRadius, position.y + height * 0.5f), kRadius, UI::ToImColor(color));
+			ImVec2(position.x + kRadius, position.y + height * 0.5f), kRadius, ToImColor(color));
 }
 
 } // namespace VKE::Editor::Widgets

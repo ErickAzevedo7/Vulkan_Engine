@@ -30,7 +30,7 @@ public:
 	// Frames a sphere: looks at its center from far enough to see all of it.
 	void Focus(const Vec3 &center, f32 radius);
 
-	Renderer::RenderView GetView() const { return m_Camera.GetView(); }
+	RenderView GetView() const { return m_Camera.GetView(); }
 	Vec3 GetPosition() const { return m_Camera.Position; }
 	Vec3 GetForward() const { return m_Camera.GetForward(); }
 	f32 GetFlySpeed() const { return m_FlySpeed; }
@@ -39,7 +39,7 @@ private:
 	Vec3 GetPivot() const { return m_Camera.Position + m_Camera.GetForward() * m_Distance; }
 	void SetAnglesKeepingPivot(f32 yaw, f32 pitch);
 
-	Renderer::Camera m_Camera;
+	Camera m_Camera;
 	// How far in front the orbit point is.
 	f32 m_Distance = 8.0f;
 	// Meters per second.

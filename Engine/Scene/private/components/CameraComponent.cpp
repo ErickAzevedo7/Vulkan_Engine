@@ -2,16 +2,16 @@
 
 #include "scene/GameObject.h"
 
-namespace VKE::Scene {
+namespace VKE {
 
-Renderer::RenderView CameraComponent::GetView() const {
+RenderView CameraComponent::GetView() const {
 	// Built from the rotation alone, so scale on the object doesn't stretch the view.
 	const Transform &world = GetTransform().GetWorld();
 	Vec3 position = world.Position;
 	Vec3 forward = world.GetForward();
 	Vec3 up = world.GetUp();
 
-	Renderer::RenderView view;
+	RenderView view;
 	view.View = glm::lookAt(position, position + forward, up);
 	view.Position = position;
 	view.FieldOfView = FieldOfView;
@@ -20,4 +20,4 @@ Renderer::RenderView CameraComponent::GetView() const {
 	return view;
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

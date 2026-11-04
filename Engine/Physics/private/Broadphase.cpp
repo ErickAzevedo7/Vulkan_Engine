@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace VKE::Physics {
+namespace VKE {
 
 const std::vector<std::pair<u32, u32>> &Broadphase::FindPairs(std::vector<Entry> &entries) {
 	m_Pairs.clear();
@@ -28,4 +28,4 @@ const std::vector<std::pair<u32, u32>> &Broadphase::FindPairs(std::vector<Entry>
 	return m_Pairs;
 }
 
-} // namespace VKE::Physics
+} // namespace VKE

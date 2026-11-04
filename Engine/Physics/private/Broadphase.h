@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace VKE::Physics {
+namespace VKE {
 
 // Finds the pairs of bodies whose bounds overlap by sorting them along X and sweeping,
 // so only bodies that share a stretch of X are compared.
@@ -27,4 +27,4 @@ private:
 	std::vector<std::pair<u32, u32>> m_Pairs;
 };
 
-} // namespace VKE::Physics
+} // namespace VKE

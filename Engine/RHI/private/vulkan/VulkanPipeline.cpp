@@ -8,7 +8,7 @@
 
 #include <vector>
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanPipeline::VulkanPipeline(VulkanDevice &device, VulkanRenderPass &renderPass, const PipelineDesc &desc) :
 		m_Device(device) {
@@ -186,4 +186,4 @@ Iunique<RHIPipeline> RHIPipeline::Create(RHIDevice &device, RHIRenderPass &rende
 			static_cast<VulkanDevice &>(device), static_cast<VulkanRenderPass &>(renderPass), desc);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

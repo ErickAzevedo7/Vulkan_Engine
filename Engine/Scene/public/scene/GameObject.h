@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // Something in a scene: a name, a place in the hierarchy and a set of components, at most
 // one of each type. Every object has a TransformComponent. Created and destroyed through
@@ -86,7 +86,7 @@ public:
 
 	// The prefab this object is an instance's copy of a part of; invalid for other objects.
 	// Set by PrefabLibrary.
-	Assets::AssetID GetPrefab() const { return m_Prefab; }
+	AssetID GetPrefab() const { return m_Prefab; }
 	// The ID of the object this one copies, inside the prefab.
 	ObjectID GetPrefabPart() const { return m_PrefabPart; }
 	bool IsPrefabPart() const { return m_Prefab.IsValid(); }
@@ -106,7 +106,7 @@ public:
 
 	// Returns the existing component if the object already has one of this type.
 	template <typename T, typename... Args> T *AddComponent(Args &&...args) {
-		static_assert(std::is_base_of_v<Component, T>, "T must derive from VKE::Scene::Component");
+		static_assert(std::is_base_of_v<Component, T>, "T must derive from VKE::Component");
 		static_assert(!std::is_same_v<T, TransformComponent>, "Every object already has a TransformComponent");
 		if (T *existing = GetComponent<T>()) {
 			return existing;
@@ -174,7 +174,7 @@ private:
 	Scene &m_Scene;
 	Handle<GameObject> m_Handle;
 	ObjectID m_ID;
-	Assets::AssetID m_Prefab;
+	AssetID m_Prefab;
 	ObjectID m_PrefabPart;
 	std::string m_Name;
 	bool m_Active = true;
@@ -191,4 +191,4 @@ private:
 	std::vector<ComponentEntry> m_Components;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

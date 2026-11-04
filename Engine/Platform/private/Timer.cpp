@@ -1,6 +1,6 @@
 #include "platform/Timer.h"
 
-namespace VKE::Platform {
+namespace VKE {
 
 Timer::Timer() {
 	Reset();
@@ -15,4 +15,4 @@ f64 Timer::GetElapsedSeconds() const {
 	return std::chrono::duration<f64>(now - m_Start).count();
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

@@ -28,7 +28,7 @@ Application::~Application() {
 
 void Application::Run() {
 	// Per-frame delta time, via std::chrono directly (no dependency
-	// on Platform::Timer or any other module).
+	// on Timer or any other module).
 	auto lastTime = std::chrono::steady_clock::now();
 
 	while (m_Running) {

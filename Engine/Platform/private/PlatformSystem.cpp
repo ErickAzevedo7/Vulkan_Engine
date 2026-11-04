@@ -5,7 +5,7 @@
 #include <core/Globals.h>
 #include <core/Log.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 PlatformSystem::PlatformSystem(const WindowDesc &desc) : m_Desc(desc) {}
 
@@ -40,4 +40,4 @@ void PlatformSystem::OnShutdown() {
 	VKE_CORE_INFO("PlatformSystem shutdown");
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

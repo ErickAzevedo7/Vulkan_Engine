@@ -5,7 +5,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
@@ -31,4 +31,4 @@ private:
 	BufferMemory m_Memory = BufferMemory::GpuOnly;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

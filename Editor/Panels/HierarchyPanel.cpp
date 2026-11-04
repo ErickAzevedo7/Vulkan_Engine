@@ -23,13 +23,6 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-using UI::ToImColor;
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
 // The chevron's and the icon's columns.
 constexpr f32 kIconWidth = 14.0f;
@@ -45,11 +38,11 @@ bool ContainsIgnoringCase(const std::string &text, const std::string &part) {
 	return it != text.end();
 }
 
-void CollectMatches(Scene::GameObject &object, const std::string &filter, std::vector<Scene::GameObject *> &out) {
+void CollectMatches(GameObject &object, const std::string &filter, std::vector<GameObject *> &out) {
 	if (ContainsIgnoringCase(object.GetName(), filter)) {
 		out.push_back(&object);
 	}
-	for (Scene::GameObject *child : object.GetChildren()) {
+	for (GameObject *child : object.GetChildren()) {
 		CollectMatches(*child, filter, out);
 	}
 }
@@ -79,8 +72,8 @@ void HierarchyPanel::Draw(bool *open) {
 		m_Focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 		// Selected from elsewhere, like the GameObject menu: show its row.
-		Scene::GameObject *selected = m_Scene.GetSelected();
-		Handle<Scene::GameObject> selection = selected ? selected->GetHandle() : Handle<Scene::GameObject>();
+		GameObject *selected = m_Scene.GetSelected();
+		Handle<GameObject> selection = selected ? selected->GetHandle() : Handle<GameObject>();
 		if (selection != m_LastSelected) {
 			m_LastSelected = selection;
 			if (selected) {
@@ -95,30 +88,30 @@ void HierarchyPanel::Draw(bool *open) {
 	}
 	ImGui::End();
 
-	Scene::Scene &scene = m_Scene.GetScene();
+	Scene &scene = m_Scene.GetScene();
 	if (m_DropPending) {
 		m_DropPending = false;
-		Scene::GameObject *dragged = scene.Get(m_Dragged);
-		Scene::GameObject *target = scene.Get(m_DropTarget);
+		GameObject *dragged = scene.Get(m_Dragged);
+		GameObject *target = scene.Get(m_DropTarget);
 		if (dragged && (target || !m_DropTarget.IsValid())) {
 			Move(*dragged, target, m_DropPlace);
 		}
 	}
 	if (m_AssetToPlace.IsValid()) {
-		Scene::GameObject *parent = scene.Get(m_PlaceParent);
+		GameObject *parent = scene.Get(m_PlaceParent);
 		if (parent || !m_PlaceParent.IsValid()) {
-			if (Scene::GameObject *placed = m_Scene.Place(m_AssetToPlace, parent)) {
+			if (GameObject *placed = m_Scene.Place(m_AssetToPlace, parent)) {
 				m_Scene.Select(placed);
 			}
 		}
 		m_AssetToPlace = {};
 	}
-	if (Scene::GameObject *doomed = scene.Get(m_ToDestroy)) {
+	if (GameObject *doomed = scene.Get(m_ToDestroy)) {
 		VKE_CORE_INFO("Editor: destroyed '{}'", doomed->GetName());
 		m_Scene.Destroy(*doomed);
 	}
 	m_ToDestroy = {};
-	if (Scene::GameObject *instance = scene.Get(m_ToUnpack)) {
+	if (GameObject *instance = scene.Get(m_ToUnpack)) {
 		m_Scene.Unpack(*instance);
 	}
 	m_ToUnpack = {};
@@ -149,16 +142,16 @@ void HierarchyPanel::DrawTree() {
 
 	// Copies: the menus can add objects while the rows are drawn.
 	if (m_Filter.empty()) {
-		std::vector<Scene::GameObject *> roots = m_Scene.GetScene().GetRootObjects();
-		for (Scene::GameObject *root : roots) {
+		std::vector<GameObject *> roots = m_Scene.GetScene().GetRootObjects();
+		for (GameObject *root : roots) {
 			DrawRow(*root, 0, true);
 		}
 	} else {
-		std::vector<Scene::GameObject *> matches;
-		for (Scene::GameObject *root : m_Scene.GetScene().GetRootObjects()) {
+		std::vector<GameObject *> matches;
+		for (GameObject *root : m_Scene.GetScene().GetRootObjects()) {
 			CollectMatches(*root, m_Filter, matches);
 		}
-		for (Scene::GameObject *match : matches) {
+		for (GameObject *match : matches) {
 			DrawRow(*match, 0, false);
 		}
 	}
@@ -171,12 +164,12 @@ void HierarchyPanel::DrawTree() {
 	}
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload)) {
-			m_Dragged = *static_cast<const Handle<Scene::GameObject> *>(payload->Data);
+			m_Dragged = *static_cast<const Handle<GameObject> *>(payload->Data);
 			m_DropTarget = {};
 			m_DropPending = true;
 		} else if (const ImGuiPayload *asset = ImGui::AcceptDragDropPayload(
 						   Fields::kAssetPayload, ImGuiDragDropFlags_AcceptBeforeDelivery)) {
-			Assets::AssetID dropped = *static_cast<const Assets::AssetID *>(asset->Data);
+			AssetID dropped = *static_cast<const AssetID *>(asset->Data);
 			if (m_Scene.CanPlace(dropped) && asset->IsDelivery()) {
 				m_AssetToPlace = dropped;
 				m_PlaceParent = {};
@@ -193,9 +186,9 @@ void HierarchyPanel::DrawTree() {
 	ImGui::EndChild();
 }
 
-void HierarchyPanel::DrawRow(Scene::GameObject &object, u32 depth, bool canDrag) {
-	Scene::Scene &scene = m_Scene.GetScene();
-	Handle<Scene::GameObject> handle = object.GetHandle();
+void HierarchyPanel::DrawRow(GameObject &object, u32 depth, bool canDrag) {
+	Scene &scene = m_Scene.GetScene();
+	Handle<GameObject> handle = object.GetHandle();
 	bool hasChildren = canDrag && !object.GetChildren().empty();
 	bool open = hasChildren && m_Open.count(object.GetID()) != 0;
 	bool selected = &object == m_Scene.GetSelected();
@@ -243,8 +236,8 @@ void HierarchyPanel::DrawRow(Scene::GameObject &object, u32 depth, bool canDrag)
 	if (canDrag && ImGui::BeginDragDropTarget()) {
 		ImGuiDragDropFlags flags = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
 		if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(Fields::kObjectPayload, flags)) {
-			Handle<Scene::GameObject> draggedHandle = *static_cast<const Handle<Scene::GameObject> *>(payload->Data);
-			Scene::GameObject *dragged = scene.Get(draggedHandle);
+			Handle<GameObject> draggedHandle = *static_cast<const Handle<GameObject> *>(payload->Data);
+			GameObject *dragged = scene.Get(draggedHandle);
 			f32 y = ImGui::GetMousePos().y - min.y;
 			place = y < Sizes::RowHeight * 0.25f   ? DropPlace::Before
 					: y > Sizes::RowHeight * 0.75f ? DropPlace::After
@@ -259,7 +252,7 @@ void HierarchyPanel::DrawRow(Scene::GameObject &object, u32 depth, bool canDrag)
 			}
 		} else if (const ImGuiPayload *asset = ImGui::AcceptDragDropPayload(Fields::kAssetPayload, flags)) {
 			// Goes inside the row's object.
-			Assets::AssetID dropped = *static_cast<const Assets::AssetID *>(asset->Data);
+			AssetID dropped = *static_cast<const AssetID *>(asset->Data);
 			dropping = m_Scene.CanPlace(dropped) && m_Scene.AcceptsChildren(&object);
 			if (dropping && asset->IsDelivery()) {
 				m_AssetToPlace = dropped;
@@ -366,19 +359,19 @@ void HierarchyPanel::DrawRow(Scene::GameObject &object, u32 depth, bool canDrag)
 	ImGui::PopID();
 
 	if (open) {
-		std::vector<Scene::GameObject *> children = object.GetChildren();
-		for (Scene::GameObject *child : children) {
+		std::vector<GameObject *> children = object.GetChildren();
+		for (GameObject *child : children) {
 			DrawRow(*child, depth + 1, canDrag);
 		}
 	}
 }
 
-void HierarchyPanel::DrawRowMenu(Scene::GameObject &object) {
+void HierarchyPanel::DrawRowMenu(GameObject &object) {
 	if (ImGui::BeginMenu(WithIcon(Icons::Plus, "Create child").c_str(), m_Scene.AcceptsChildren(&object))) {
 		DrawCreateObjectItems(m_Scene, &object);
 		ImGui::EndMenu();
 	}
-	if (Scene::GameObject *instance = object.GetPrefabRoot()) {
+	if (GameObject *instance = object.GetPrefabRoot()) {
 		ImGui::Separator();
 		if (ImGui::MenuItem(WithIcon(Icons::Package, "Open prefab").c_str())) {
 			m_Scene.AskToOpenPrefab(instance->GetPrefab());
@@ -404,7 +397,7 @@ void HierarchyPanel::DrawRowMenu(Scene::GameObject &object) {
 }
 
 void HierarchyPanel::HandleShortcuts() {
-	Scene::GameObject *selected = m_Scene.GetSelected();
+	GameObject *selected = m_Scene.GetSelected();
 	if (!m_Focused || !selected || ImGui::GetIO().WantTextInput) {
 		return;
 	}
@@ -416,7 +409,7 @@ void HierarchyPanel::HandleShortcuts() {
 	}
 }
 
-void HierarchyPanel::Move(Scene::GameObject &dragged, Scene::GameObject *target, DropPlace place) {
+void HierarchyPanel::Move(GameObject &dragged, GameObject *target, DropPlace place) {
 	if (m_Scene.IsFixed(dragged)) {
 		return;
 	}
@@ -439,15 +432,15 @@ void HierarchyPanel::Move(Scene::GameObject &dragged, Scene::GameObject *target,
 	m_Scene.MarkDirty();
 }
 
-void HierarchyPanel::StartRename(Scene::GameObject &object) {
+void HierarchyPanel::StartRename(GameObject &object) {
 	Reveal(object);
 	m_Renaming = object.GetHandle();
 	m_RenameText = object.GetName();
 	m_FocusRename = true;
 }
 
-void HierarchyPanel::Reveal(const Scene::GameObject &object) {
-	for (const Scene::GameObject *parent = object.GetParent(); parent; parent = parent->GetParent()) {
+void HierarchyPanel::Reveal(const GameObject &object) {
+	for (const GameObject *parent = object.GetParent(); parent; parent = parent->GetParent()) {
 		m_Open.insert(parent->GetID());
 	}
 }

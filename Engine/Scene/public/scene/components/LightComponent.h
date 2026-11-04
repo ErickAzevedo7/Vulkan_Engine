@@ -5,11 +5,11 @@
 #include <renderer/RenderTypes.h>
 #include <scene/Component.h>
 
-namespace VKE::Scene {
+namespace VKE {
 
 // Everything about a light except where it is and where it points, which come from its object.
 VKE_STRUCT() struct LightSettings {
-	VKE_PROPERTY() Renderer::LightType Type = Renderer::LightType::Directional;
+	VKE_PROPERTY() LightType Type = LightType::Directional;
 	VKE_PROPERTY(Display = Color) Vec3 Color{ 1.0f };
 	VKE_PROPERTY(Min = 0) f32 Intensity = 1.0f;
 	// Point and spot lights.
@@ -36,7 +36,7 @@ private:
 	void DisconnectFromSystems(SceneSystems &systems) override;
 
 	VKE_PROPERTY() LightSettings m_Settings;
-	Renderer::LightID m_Light;
+	LightID m_Light;
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

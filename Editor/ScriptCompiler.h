@@ -48,7 +48,7 @@ public:
 	};
 
 	// `sdkFolder` is the SDK next to the editor.
-	ScriptCompiler(const Project::Project &project, std::filesystem::path sdkFolder);
+	ScriptCompiler(const Project &project, std::filesystem::path sdkFolder);
 	~ScriptCompiler();
 
 	ScriptCompiler(const ScriptCompiler &) = delete;
@@ -74,7 +74,7 @@ private:
 	bool FindTools(Result &result);
 	bool Configure(const Files &files, Result &result);
 	// Runs a program to its end, adding what it prints to `output`. False if it failed.
-	bool Run(const Platform::Process::Child::Desc &desc, std::string &output);
+	bool Run(const Process::Child::Desc &desc, std::string &output);
 	// Turns what the tools printed into messages. When a build fails and none of it
 	// reads as an error, its last lines are all there is to show.
 	void ReadOutput(const std::string &output, bool failed, Result &result) const;
@@ -97,7 +97,7 @@ private:
 	std::mutex m_Mutex;
 	std::condition_variable m_Wake;
 	bool m_Stopping = false;
-	Platform::Process::Child *m_Running = nullptr;
+	Process::Child *m_Running = nullptr;
 	std::optional<Result> m_Result;
 };
 

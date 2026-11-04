@@ -8,7 +8,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace VKE::Scene {
+namespace VKE {
 
 class Component;
 class ComponentRegistry;
@@ -37,13 +37,13 @@ constexpr ComponentTypeID kInvalidComponentType = ~ComponentTypeID(0);
 public: \
 	using ComponentSelf = Type; \
 	static constexpr const char *kComponentTypeName = #Type; \
-	::VKE::Scene::ComponentTypeID GetTypeID() const override { \
+	::VKE::ComponentTypeID GetTypeID() const override { \
 		return s_ComponentTypeID; \
 	} \
 \
 private: \
-	friend class ::VKE::Scene::ComponentRegistry; \
-	static inline ::VKE::Scene::ComponentTypeID s_ComponentTypeID = ::VKE::Scene::kInvalidComponentType;
+	friend class ::VKE::ComponentRegistry; \
+	static inline ::VKE::ComponentTypeID s_ComponentTypeID = ::VKE::kInvalidComponentType;
 
 struct ComponentTypeInfo {
 	ComponentTypeID ID = kInvalidComponentType;
@@ -116,4 +116,4 @@ private:
 	static ComponentTypeID Add(ComponentTypeInfo info);
 };
 
-} // namespace VKE::Scene
+} // namespace VKE

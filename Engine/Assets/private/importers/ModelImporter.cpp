@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace VKE::Assets::Importers {
+namespace VKE::Importers {
 
 namespace {
 Vec3 ToVec3(const aiVector3D &v) {
@@ -254,4 +254,4 @@ bool ImportModel(AssetManager &assets, const std::filesystem::path &file, ModelD
 	return !meshesBySource.empty();
 }
 
-} // namespace VKE::Assets::Importers
+} // namespace VKE::Importers

@@ -9,11 +9,11 @@
 namespace vke::api {
 
 namespace {
-using VKE::Scripting::ToEngine;
-using VKE::Scripting::ToSDK;
+using VKE::ToEngine;
+using VKE::ToSDK;
 
-VKE::Scene::TransformComponent *Find(Transform self) {
-	VKE::Scene::GameObject *object = VKE::Scripting::FindObject(self.GetObject());
+VKE::TransformComponent *Find(Transform self) {
+	VKE::GameObject *object = VKE::FindObject(self.GetObject());
 	return object ? &object->GetTransform() : nullptr;
 }
 

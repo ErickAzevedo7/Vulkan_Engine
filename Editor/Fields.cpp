@@ -15,13 +15,6 @@
 
 namespace VKE::Editor::Fields {
 
-using UI::GetFont;
-using UI::TextStyle;
-using UI::ToImColor;
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
 constexpr f32 kPi = 3.14159265358979f;
 // The axis letter's cell in a vector field.
@@ -255,8 +248,8 @@ bool Angle(const char *id, f32 &radians, f32 minRadians, f32 maxRadians) {
 	constexpr f32 kToDegrees = 180.0f / kPi;
 	f32 degrees = radians * kToDegrees;
 	// Bounds that aren't set stay unset: FLT_MAX in degrees would overflow.
-	f32 min = minRadians == Scene::kNoMinimum ? Scene::kNoMinimum : minRadians * kToDegrees;
-	f32 max = maxRadians == Scene::kNoMaximum ? Scene::kNoMaximum : maxRadians * kToDegrees;
+	f32 min = minRadians == kNoMinimum ? kNoMinimum : minRadians * kToDegrees;
+	f32 max = maxRadians == kNoMaximum ? kNoMaximum : maxRadians * kToDegrees;
 	if (!Float(id, degrees, 0.5f, min, max, "%.1f\xc2\xb0")) {
 		return false;
 	}
@@ -342,7 +335,7 @@ bool Choice(const char *id, const std::vector<std::string> &names, int &current)
 	return changed;
 }
 
-bool Enum(const char *id, const Scene::EnumInfo &info, void *value) {
+bool Enum(const char *id, const EnumInfo &info, void *value) {
 	u32 stored = info.Read(value);
 	std::vector<std::string> names;
 	int current = -1;
@@ -414,17 +407,17 @@ bool Color(const char *id, Vec3 &linear) {
 }
 
 AssetAction Asset(const char *id, const char *icon, const std::string &name, const char *typeName,
-		const std::function<bool(Assets::AssetID)> &accepts, Assets::AssetID &dropped) {
+		const std::function<bool(AssetID)> &accepts, AssetID &dropped) {
 	return Reference(
 			id, icon, name, typeName, kAssetPayload,
-			[&](const void *data) { return accepts(*static_cast<const Assets::AssetID *>(data)); },
-			[&](const void *data) { dropped = *static_cast<const Assets::AssetID *>(data); });
+			[&](const void *data) { return accepts(*static_cast<const AssetID *>(data)); },
+			[&](const void *data) { dropped = *static_cast<const AssetID *>(data); });
 }
 
-AssetAction ObjectReference(const char *id, const std::string &name, Handle<Scene::GameObject> &dropped) {
+AssetAction ObjectReference(const char *id, const std::string &name, Handle<GameObject> &dropped) {
 	return Reference(
 			id, Icons::Box, name, "Object", kObjectPayload, [](const void *) { return true; },
-			[&](const void *data) { dropped = *static_cast<const Handle<Scene::GameObject> *>(data); });
+			[&](const void *data) { dropped = *static_cast<const Handle<GameObject> *>(data); });
 }
 
 } // namespace VKE::Editor::Fields

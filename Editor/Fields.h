@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-namespace VKE::Scene {
+namespace VKE {
 struct EnumInfo;
 class GameObject;
-} // namespace VKE::Scene
+} // namespace VKE
 
 // The Inspector's property rows and the fields in them, after the design system's Field,
 // Vec3Field, Checkbox, Dropdown, ColorField and AssetField. Each field takes ImGui's item width
@@ -44,7 +44,7 @@ bool Checkbox(const char *id, bool &value);
 // One of `names`, by its index.
 bool Choice(const char *id, const std::vector<std::string> &names, int &current);
 // A value of a reflected enum, by its names in words.
-bool Enum(const char *id, const Scene::EnumInfo &info, void *value);
+bool Enum(const char *id, const EnumInfo &info, void *value);
 // A linear RGB color, shown as its sRGB swatch and hex; a click opens a picker. Values over 1
 // show the HDR factor, and the picker edits the color divided by it.
 bool Color(const char *id, Vec3 &linear);
@@ -60,8 +60,8 @@ enum class AssetAction {
 // A reference to an asset: the type's icon and the asset's name, or "None (<typeName>)".
 // Takes assets dragged onto it that `accepts` takes, and shows a refusal for the others.
 AssetAction Asset(const char *id, const char *icon, const std::string &name, const char *typeName,
-		const std::function<bool(Assets::AssetID)> &accepts, Assets::AssetID &dropped);
+		const std::function<bool(AssetID)> &accepts, AssetID &dropped);
 // The same for a reference to an object, with an object from the Hierarchy in `dropped`.
-AssetAction ObjectReference(const char *id, const std::string &name, Handle<Scene::GameObject> &dropped);
+AssetAction ObjectReference(const char *id, const std::string &name, Handle<GameObject> &dropped);
 
 } // namespace VKE::Editor::Fields

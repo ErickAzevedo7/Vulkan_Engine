@@ -13,7 +13,7 @@
 #include <array>
 #include <vector>
 
-namespace VKE::Renderer {
+namespace VKE {
 
 namespace {
 constexpr u32 kRadianceSize = 512;
@@ -22,75 +22,75 @@ constexpr u32 kPrefilterSize = 128;
 constexpr u32 kPrefilterMips = 5; // Matches kMaxReflectionLod in the shaders.
 constexpr u32 kBrdfLutSize = 512;
 
-constexpr RHI::Format kCubemapFormat = RHI::Format::R16G16B16A16_SFLOAT;
-constexpr RHI::Format kBrdfLutFormat = RHI::Format::R16G16_SFLOAT;
+constexpr Format kCubemapFormat = Format::R16G16B16A16_SFLOAT;
+constexpr Format kBrdfLutFormat = Format::R16G16_SFLOAT;
 constexpr u32 kCubeVertexCount = 36;
 constexpr u32 kFullscreenVertexCount = 3;
 } // namespace
 
-EnvironmentBaker::EnvironmentBaker(RHI::RHIDevice &device) : m_Device(device) {
-	RHI::RenderPassDesc cubePassDesc;
-	RHI::AttachmentDesc cubeFace;
+EnvironmentBaker::EnvironmentBaker(RHIDevice &device) : m_Device(device) {
+	RenderPassDesc cubePassDesc;
+	AttachmentDesc cubeFace;
 	cubeFace.Format = kCubemapFormat;
 	cubeFace.SampledAfter = true;
 	cubePassDesc.ColorAttachments = { cubeFace };
-	m_FacePass = RHI::RHIRenderPass::Create(m_Device, cubePassDesc);
+	m_FacePass = RHIRenderPass::Create(m_Device, cubePassDesc);
 
-	RHI::RenderPassDesc brdfPassDesc;
-	RHI::AttachmentDesc brdfTarget;
+	RenderPassDesc brdfPassDesc;
+	AttachmentDesc brdfTarget;
 	brdfTarget.Format = kBrdfLutFormat;
 	brdfTarget.SampledAfter = true;
 	brdfPassDesc.ColorAttachments = { brdfTarget };
-	m_BrdfPass = RHI::RHIRenderPass::Create(m_Device, brdfPassDesc);
+	m_BrdfPass = RHIRenderPass::Create(m_Device, brdfPassDesc);
 
-	RHI::BindGroupLayoutDesc layoutDesc;
-	layoutDesc.Slots = { { 0, RHI::BindingType::CombinedImageSampler, RHI::ShaderStageFlags::Fragment } };
+	BindGroupLayoutDesc layoutDesc;
+	layoutDesc.Slots = { { 0, BindingType::CombinedImageSampler, ShaderStageFlags::Fragment } };
 	layoutDesc.DebugName = "EnvironmentSourceLayout";
-	m_SourceLayout = RHI::RHIBindGroupLayout::Create(m_Device, layoutDesc);
+	m_SourceLayout = RHIBindGroupLayout::Create(m_Device, layoutDesc);
 
-	RHI::SamplerDesc samplerDesc;
-	samplerDesc.AddressModeU = RHI::SamplerAddressMode::ClampToEdge;
-	samplerDesc.AddressModeV = RHI::SamplerAddressMode::ClampToEdge;
-	samplerDesc.AddressModeW = RHI::SamplerAddressMode::ClampToEdge;
+	SamplerDesc samplerDesc;
+	samplerDesc.AddressModeU = SamplerAddressMode::ClampToEdge;
+	samplerDesc.AddressModeV = SamplerAddressMode::ClampToEdge;
+	samplerDesc.AddressModeW = SamplerAddressMode::ClampToEdge;
 	samplerDesc.MaxAnisotropy = 1.0f;
 	samplerDesc.DebugName = "EnvironmentSourceSampler";
-	m_Sampler = RHI::RHISampler::Create(m_Device, samplerDesc);
+	m_Sampler = RHISampler::Create(m_Device, samplerDesc);
 
-	const auto shaderDir = Platform::FileSystem::GetExecutableDirectory() / "shaders";
+	const auto shaderDir = FileSystem::GetExecutableDirectory() / "shaders";
 
 	// The cube is drawn from inside, so its faces point away from the camera.
-	RHI::PipelineDesc cubeDesc;
+	PipelineDesc cubeDesc;
 	cubeDesc.VertexShaderPath = (shaderDir / "cubemap.vert.spv").string();
-	cubeDesc.PushConstantRanges = { { RHI::ShaderStageFlags::AllGraphics, 0, sizeof(CapturePushConstants) } };
-	cubeDesc.CullMode = RHI::CullMode::None;
+	cubeDesc.PushConstantRanges = { { ShaderStageFlags::AllGraphics, 0, sizeof(CapturePushConstants) } };
+	cubeDesc.CullMode = CullMode::None;
 
 	cubeDesc.FragmentShaderPath = (shaderDir / "equirect_to_cubemap.frag.spv").string();
 	cubeDesc.BindGroupLayouts = { m_SourceLayout.get() };
-	m_EquirectPipeline = RHI::RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
+	m_EquirectPipeline = RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
 
 	cubeDesc.FragmentShaderPath = (shaderDir / "irradiance.frag.spv").string();
-	m_IrradiancePipeline = RHI::RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
+	m_IrradiancePipeline = RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
 
 	cubeDesc.FragmentShaderPath = (shaderDir / "prefilter.frag.spv").string();
-	m_PrefilterPipeline = RHI::RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
+	m_PrefilterPipeline = RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
 
 	cubeDesc.FragmentShaderPath = (shaderDir / "procedural_sky.frag.spv").string();
 	cubeDesc.BindGroupLayouts.clear();
-	m_SkyPipeline = RHI::RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
+	m_SkyPipeline = RHIPipeline::Create(m_Device, *m_FacePass, cubeDesc);
 
-	RHI::PipelineDesc brdfDesc;
+	PipelineDesc brdfDesc;
 	brdfDesc.VertexShaderPath = (shaderDir / "fullscreen.vert.spv").string();
 	brdfDesc.FragmentShaderPath = (shaderDir / "brdf_lut.frag.spv").string();
-	brdfDesc.CullMode = RHI::CullMode::None;
-	m_BrdfPipeline = RHI::RHIPipeline::Create(m_Device, *m_BrdfPass, brdfDesc);
+	brdfDesc.CullMode = CullMode::None;
+	m_BrdfPipeline = RHIPipeline::Create(m_Device, *m_BrdfPass, brdfDesc);
 }
 
-Iunique<GpuEnvironment> EnvironmentBaker::Bake(RHI::RHITexture *source) {
+Iunique<GpuEnvironment> EnvironmentBaker::Bake(RHITexture *source) {
 	auto environment = MakeIunique<GpuEnvironment>();
 
 	environment->Radiance = CreateCubemap(kRadianceSize, 0, "EnvironmentRadiance");
-	Iunique<RHI::RHIBindGroup> sourceGroup = source ? CreateSourceGroup(*source) : nullptr;
-	RHI::RHIPipeline &radiancePipeline = source ? *m_EquirectPipeline : *m_SkyPipeline;
+	Iunique<RHIBindGroup> sourceGroup = source ? CreateSourceGroup(*source) : nullptr;
+	RHIPipeline &radiancePipeline = source ? *m_EquirectPipeline : *m_SkyPipeline;
 
 	// Every mip is rendered from the source, so the prefilter pass can read
 	// whichever one matches the part of the sphere a sample covers.
@@ -98,7 +98,7 @@ Iunique<GpuEnvironment> EnvironmentBaker::Bake(RHI::RHITexture *source) {
 		RenderCubeFaces(*environment->Radiance, radiancePipeline, sourceGroup.get(), mip, 0.0f);
 	}
 
-	Iunique<RHI::RHIBindGroup> radianceGroup = CreateSourceGroup(*environment->Radiance);
+	Iunique<RHIBindGroup> radianceGroup = CreateSourceGroup(*environment->Radiance);
 
 	environment->Irradiance = CreateCubemap(kIrradianceSize, 1, "EnvironmentIrradiance");
 	RenderCubeFaces(*environment->Irradiance, *m_IrradiancePipeline, radianceGroup.get(), 0, 0.0f);
@@ -115,53 +115,53 @@ Iunique<GpuEnvironment> EnvironmentBaker::Bake(RHI::RHITexture *source) {
 	return environment;
 }
 
-Iunique<RHI::RHITexture> EnvironmentBaker::CreateCubemap(u32 size, u32 mipLevels, const char *debugName) {
-	RHI::TextureDesc desc;
+Iunique<RHITexture> EnvironmentBaker::CreateCubemap(u32 size, u32 mipLevels, const char *debugName) {
+	TextureDesc desc;
 	desc.Width = size;
 	desc.Height = size;
 	desc.ArrayLayers = 6;
 	desc.MipLevels = mipLevels;
-	desc.Type = RHI::TextureType::TextureCube;
+	desc.Type = TextureType::TextureCube;
 	desc.Format = kCubemapFormat;
-	desc.Usage = RHI::TextureUsage::ColorAttachment | RHI::TextureUsage::Sampled;
+	desc.Usage = TextureUsage::ColorAttachment | TextureUsage::Sampled;
 	desc.DebugName = debugName;
-	return RHI::RHITexture::Create(m_Device, desc);
+	return RHITexture::Create(m_Device, desc);
 }
 
-Iunique<RHI::RHIBindGroup> EnvironmentBaker::CreateSourceGroup(RHI::RHITexture &texture) {
-	RHI::BindGroupDesc groupDesc;
+Iunique<RHIBindGroup> EnvironmentBaker::CreateSourceGroup(RHITexture &texture) {
+	BindGroupDesc groupDesc;
 	groupDesc.Layout = m_SourceLayout.get();
 	groupDesc.DebugName = "EnvironmentSource";
 
-	RHI::BoundResource resource;
+	BoundResource resource;
 	resource.Binding = 0;
 	resource.Texture = &texture;
 	resource.Sampler = m_Sampler.get();
 	groupDesc.Resources = { resource };
 
-	return RHI::RHIBindGroup::Create(m_Device, groupDesc);
+	return RHIBindGroup::Create(m_Device, groupDesc);
 }
 
-void EnvironmentBaker::RenderCubeFaces(RHI::RHITexture &target, RHI::RHIPipeline &pipeline,
-		RHI::RHIBindGroup *sourceGroup, u32 mipLevel, f32 roughness) {
+void EnvironmentBaker::RenderCubeFaces(
+		RHITexture &target, RHIPipeline &pipeline, RHIBindGroup *sourceGroup, u32 mipLevel, f32 roughness) {
 	u32 size = std::max(target.GetWidth() >> mipLevel, 1u);
 
-	std::vector<Iunique<RHI::RHIFramebuffer>> faceTargets;
+	std::vector<Iunique<RHIFramebuffer>> faceTargets;
 	faceTargets.reserve(6);
 	for (u32 face = 0; face < 6; ++face) {
-		RHI::FramebufferDesc framebufferDesc;
+		FramebufferDesc framebufferDesc;
 		framebufferDesc.AttachmentViews = { target.GetAttachmentView(mipLevel, face) };
 		framebufferDesc.Width = size;
 		framebufferDesc.Height = size;
-		faceTargets.push_back(RHI::RHIFramebuffer::Create(m_Device, *m_FacePass, framebufferDesc));
+		faceTargets.push_back(RHIFramebuffer::Create(m_Device, *m_FacePass, framebufferDesc));
 	}
 
 	const Mat4 projection = GetCubeFaceProjection(0.1f, 10.0f);
 	const std::array<Mat4, 6> views = GetCubeFaceViews(Vec3(0.0f));
 
-	m_Device.ExecuteImmediate([&](RHI::RHICommandBuffer &cmd) {
+	m_Device.ExecuteImmediate([&](RHICommandBuffer &cmd) {
 		for (u32 face = 0; face < 6; ++face) {
-			RHI::ClearValue clear;
+			ClearValue clear;
 			cmd.BeginRenderPass(*m_FacePass, *faceTargets[face], clear);
 			cmd.BindPipeline(pipeline);
 			if (sourceGroup) {
@@ -171,7 +171,7 @@ void EnvironmentBaker::RenderCubeFaces(RHI::RHITexture &target, RHI::RHIPipeline
 			CapturePushConstants constants{};
 			constants.ViewProjection = projection * views[face];
 			constants.Parameters = Vec4(roughness, 0.0f, 0.0f, 0.0f);
-			cmd.PushConstants(RHI::ShaderStageFlags::AllGraphics, 0, sizeof(constants), &constants);
+			cmd.PushConstants(ShaderStageFlags::AllGraphics, 0, sizeof(constants), &constants);
 
 			cmd.Draw(kCubeVertexCount, 1, 0, 0);
 			cmd.EndRenderPass();
@@ -179,23 +179,23 @@ void EnvironmentBaker::RenderCubeFaces(RHI::RHITexture &target, RHI::RHIPipeline
 	});
 }
 
-Iunique<RHI::RHITexture> EnvironmentBaker::BakeBrdfLut() {
-	RHI::TextureDesc desc;
+Iunique<RHITexture> EnvironmentBaker::BakeBrdfLut() {
+	TextureDesc desc;
 	desc.Width = kBrdfLutSize;
 	desc.Height = kBrdfLutSize;
 	desc.Format = kBrdfLutFormat;
-	desc.Usage = RHI::TextureUsage::ColorAttachment | RHI::TextureUsage::Sampled;
+	desc.Usage = TextureUsage::ColorAttachment | TextureUsage::Sampled;
 	desc.DebugName = "EnvironmentBrdfLut";
-	Iunique<RHI::RHITexture> brdfLut = RHI::RHITexture::Create(m_Device, desc);
+	Iunique<RHITexture> brdfLut = RHITexture::Create(m_Device, desc);
 
-	RHI::FramebufferDesc framebufferDesc;
+	FramebufferDesc framebufferDesc;
 	framebufferDesc.AttachmentViews = { brdfLut->GetAttachmentView(0, 0) };
 	framebufferDesc.Width = kBrdfLutSize;
 	framebufferDesc.Height = kBrdfLutSize;
-	Iunique<RHI::RHIFramebuffer> target = RHI::RHIFramebuffer::Create(m_Device, *m_BrdfPass, framebufferDesc);
+	Iunique<RHIFramebuffer> target = RHIFramebuffer::Create(m_Device, *m_BrdfPass, framebufferDesc);
 
-	m_Device.ExecuteImmediate([&](RHI::RHICommandBuffer &cmd) {
-		RHI::ClearValue clear;
+	m_Device.ExecuteImmediate([&](RHICommandBuffer &cmd) {
+		ClearValue clear;
 		cmd.BeginRenderPass(*m_BrdfPass, *target, clear);
 		cmd.BindPipeline(*m_BrdfPipeline);
 		cmd.Draw(kFullscreenVertexCount, 1, 0, 0);
@@ -205,4 +205,4 @@ Iunique<RHI::RHITexture> EnvironmentBaker::BakeBrdfLut() {
 	return brdfLut;
 }
 
-} // namespace VKE::Renderer
+} // namespace VKE

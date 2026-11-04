@@ -19,15 +19,15 @@
 
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 
 class RenderScene;
 
@@ -35,10 +35,10 @@ class RenderScene;
 // color the 2D layer samples, one per frame in flight; and what picking in it needs.
 struct ViewTexture {
 	Iunique<SceneTargets> Scene;
-	std::vector<Iunique<RHI::RHITexture>> Colors;
-	std::vector<Iunique<RHI::RHIFramebuffer>> Framebuffers;
+	std::vector<Iunique<RHITexture>> Colors;
+	std::vector<Iunique<RHIFramebuffer>> Framebuffers;
 	// The color with the scene's depth, for world draw lists.
-	std::vector<Iunique<RHI::RHIFramebuffer>> WorldFramebuffers;
+	std::vector<Iunique<RHIFramebuffer>> WorldFramebuffers;
 	u32 Width = 0;
 	u32 Height = 0;
 
@@ -54,14 +54,14 @@ struct ViewTexture {
 };
 
 struct OverlayImage {
-	Iunique<RHI::RHITexture> Texture;
+	Iunique<RHITexture> Texture;
 };
 
 // The renderer's working parts: the device and swapchain, the frame being recorded, the
 // view textures and overlay images, and the passes that fill them. See Renderer.h.
 class FrameRenderer {
 public:
-	FrameRenderer(Platform::IWindow &window, Assets::AssetManager &assets);
+	FrameRenderer(IWindow &window, AssetManager &assets);
 	~FrameRenderer();
 
 	bool BeginFrame();
@@ -97,19 +97,19 @@ private:
 	void Retire(ViewTexture view);
 	void Retire(OverlayImage image);
 	void ReleaseRetired(bool all);
-	RHI::RHITexture *ResolveOverlayTexture(const OverlayTexture &texture);
+	RHITexture *ResolveOverlayTexture(const OverlayTexture &texture);
 
-	Platform::IWindow &m_Window;
+	IWindow &m_Window;
 
 	// Destroyed in reverse declaration order.
-	Iunique<RHI::RHIDevice> m_Device;
-	Iunique<RHI::RHISwapchain> m_Swapchain;
+	Iunique<RHIDevice> m_Device;
+	Iunique<RHISwapchain> m_Swapchain;
 	// Draws into the swapchain image, presented afterwards.
-	Iunique<RHI::RHIRenderPass> m_OutputPass;
+	Iunique<RHIRenderPass> m_OutputPass;
 	// Draws into a view texture's color, sampled afterwards.
-	Iunique<RHI::RHIRenderPass> m_ViewPass;
+	Iunique<RHIRenderPass> m_ViewPass;
 	// Draws over a view texture's color, with the scene's depth.
-	Iunique<RHI::RHIRenderPass> m_WorldRenderPass;
+	Iunique<RHIRenderPass> m_WorldRenderPass;
 
 	Iunique<ForwardPath> m_ForwardPath;
 	Iunique<OverlayPass> m_OverlayPass;
@@ -119,9 +119,9 @@ private:
 	// The scene drawn straight to the window, at the swapchain's size.
 	Iunique<SceneTargets> m_WindowScene;
 	// One per swapchain image.
-	std::vector<Iunique<RHI::RHIFramebuffer>> m_OutputFramebuffers;
+	std::vector<Iunique<RHIFramebuffer>> m_OutputFramebuffers;
 	// One per frame in flight.
-	std::vector<Iunique<RHI::RHICommandBuffer>> m_CommandBuffers;
+	std::vector<Iunique<RHICommandBuffer>> m_CommandBuffers;
 
 	SlotMap<ViewTexture> m_Views;
 	SlotMap<OverlayImage> m_Images;
@@ -141,4 +141,4 @@ private:
 	bool m_OutputNeedsEncoding = true;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

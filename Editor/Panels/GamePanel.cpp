@@ -18,11 +18,7 @@
 
 namespace VKE::Editor {
 
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
-GamePanel::GamePanel(EditorScene &scene, Renderer::Renderer &renderer, UI::UISystem &ui) :
+GamePanel::GamePanel(EditorScene &scene, Renderer &renderer, UISystem &ui) :
 		m_Scene(scene), m_Renderer(renderer), m_UI(ui) {}
 
 void GamePanel::Create() {
@@ -50,7 +46,7 @@ void GamePanel::Draw(bool *open, const std::string &stats) {
 		return;
 	}
 
-	Scene::CameraComponent *camera = m_Scene.GetScene().GetMainCamera();
+	CameraComponent *camera = m_Scene.GetScene().GetMainCamera();
 	if (!camera) {
 		const char *note = "The scene has no camera.";
 		ImVec2 size = ImGui::CalcTextSize(note);
@@ -71,19 +67,19 @@ void GamePanel::Draw(bool *open, const std::string &stats) {
 	m_ViewX = min.x - ImGui::GetMainViewport()->Pos.x;
 	m_ViewY = min.y - ImGui::GetMainViewport()->Pos.y;
 	ImDrawList *draw = ImGui::GetWindowDrawList();
-	draw->AddImage(m_UI.GetTextureID(Renderer::OverlayTexture::FromView(m_Texture)), min, max);
+	draw->AddImage(m_UI.GetTextureID(OverlayTexture::FromView(m_Texture)), min, max);
 	m_Visible = true;
 
 	// The camera's name at the top and the frame's numbers at the bottom, in pills.
-	ImFont *mono = UI::GetFont(UI::TextStyle::MonoSmall);
+	ImFont *mono = GetFont(TextStyle::MonoSmall);
 	auto pill = [&](const std::string &text, f32 y) {
 		ImVec2 textSize = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, text.c_str());
 		ImVec2 pillMin(min.x + Sizes::Space4, y);
 		ImVec2 pillMax(pillMin.x + textSize.x + 2.0f * Sizes::Space4, y + 24.0f);
-		draw->AddRectFilled(pillMin, pillMax, UI::ToImColor(Colors::Overlay), Sizes::RadiusMd);
+		draw->AddRectFilled(pillMin, pillMax, ToImColor(Colors::Overlay), Sizes::RadiusMd);
 		draw->AddText(mono, mono->FontSize,
 				ImVec2(pillMin.x + Sizes::Space4, std::floor(y + (24.0f - textSize.y) * 0.5f)),
-				UI::ToImColor(Colors::OverlayText), text.c_str());
+				ToImColor(Colors::OverlayText), text.c_str());
 	};
 	pill(camera->GetOwner().GetName(), min.y + Sizes::Space4);
 	pill(stats, max.y - Sizes::Space4 - 24.0f);

@@ -3,7 +3,7 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 
@@ -29,4 +29,4 @@ public:
 	virtual void *GetAttachmentView(u32 mipLevel, u32 layer) = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

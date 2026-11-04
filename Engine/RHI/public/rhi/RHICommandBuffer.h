@@ -3,7 +3,7 @@
 #include <core/Types.h>
 #include <rhi/RHITypes.h>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 class RHIRenderPass;
@@ -53,4 +53,4 @@ public:
 			RHITexture &source, const ScissorRect &rect, RHIBuffer &destination, size_t offset = 0) = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

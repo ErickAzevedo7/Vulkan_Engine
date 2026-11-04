@@ -29,28 +29,22 @@
 
 namespace VKE::Editor {
 
-using UI::GetFont;
-using UI::TextStyle;
-namespace Colors = UI::Colors;
-namespace Icons = UI::Icons;
-namespace Sizes = UI::Sizes;
-
 namespace {
-const std::vector<Platform::FileDialog::Filter> kSceneFilter = { { "Scene", "*.scene" } };
+const std::vector<FileDialog::Filter> kSceneFilter = { { "Scene", "*.scene" } };
 
 std::string WithIcon(const char *icon, const char *label) {
 	return std::string(icon) + "  " + label;
 }
 } // namespace
 
-EditorSystem::EditorSystem(Project::Project project, Platform::PlatformSystem &platform, Assets::AssetManager &assets,
-		Renderer::Renderer &renderer, UI::UISystem &ui) :
+EditorSystem::EditorSystem(
+		Project project, PlatformSystem &platform, AssetManager &assets, Renderer &renderer, UISystem &ui) :
 		m_Project(std::move(project)),
 		m_Platform(platform),
 		m_Assets(assets),
 		m_Renderer(renderer),
 		m_UI(ui),
-		m_ScriptCompiler(m_Project, Platform::FileSystem::GetExecutablePath().parent_path() / "SDK"),
+		m_ScriptCompiler(m_Project, FileSystem::GetExecutablePath().parent_path() / "SDK"),
 		m_Scene(assets),
 		m_MaterialEdits(assets),
 		m_Hierarchy(m_Scene),
@@ -82,8 +76,8 @@ void EditorSystem::OnInitialize() {
 
 	VKE_CORE_INFO("Editor: opened project '{}' in '{}'", m_Project.GetName(), m_Project.GetFolder().u8string());
 	bool opened = false;
-	for (Assets::AssetID scene : { m_LastScene, m_Project.GetStartScene() }) {
-		if (!opened && scene.IsValid() && m_Assets.GetType(scene) == Assets::AssetType::Scene) {
+	for (AssetID scene : { m_LastScene, m_Project.GetStartScene() }) {
+		if (!opened && scene.IsValid() && m_Assets.GetType(scene) == AssetType::Scene) {
 			opened = OpenScene(scene);
 		}
 	}
@@ -113,7 +107,7 @@ void EditorSystem::LoadEditorState() {
 	try {
 		YAML::Node root = YAML::Load(stream);
 		if (root["LastScene"] && root["LastScene"].IsScalar()) {
-			m_LastScene = Assets::AssetID::Parse(root["LastScene"].Scalar());
+			m_LastScene = AssetID::Parse(root["LastScene"].Scalar());
 		}
 	} catch (const YAML::Exception &error) {
 		VKE_CORE_WARN("Editor: the editor's settings can't be read: {}", error.what());
@@ -136,7 +130,7 @@ void EditorSystem::OnUpdate(FrameTime ft) {
 	m_Console.Update();
 	UpdateFrameStats(ft.GetDeltaF());
 
-	Platform::IWindow &window = m_Platform.GetWindow();
+	IWindow &window = m_Platform.GetWindow();
 	if (window.ShouldClose()) {
 		window.CancelClose();
 		Request(Action::Quit);
@@ -175,10 +169,10 @@ void EditorSystem::OnUpdate(FrameTime ft) {
 	if (m_ShowAssets) {
 		m_AssetBrowser.Draw(&m_ShowAssets);
 	}
-	if (Assets::AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
+	if (AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
 		Request(Action::OpenScene, scene);
 	}
-	if (Assets::AssetID prefab = m_Scene.TakePrefabToOpen(); prefab.IsValid()) {
+	if (AssetID prefab = m_Scene.TakePrefabToOpen(); prefab.IsValid()) {
 		Request(Action::OpenPrefab, prefab);
 	}
 	DrawUnsavedDialog();
@@ -195,7 +189,7 @@ void EditorSystem::OnUpdate(FrameTime ft) {
 		m_FaultMessage = std::move(fault);
 		m_OpenFaultDialog = true;
 	}
-	Scene::Scene &scene = m_Scene.GetScene();
+	Scene &scene = m_Scene.GetScene();
 
 	if (m_Renderer.BeginFrame()) {
 		if (m_ShowViewport && m_Viewport.IsVisible()) {
@@ -294,7 +288,7 @@ void EditorSystem::StopPlay() {
 	}
 }
 
-void EditorSystem::Request(Action action, Assets::AssetID asset) {
+void EditorSystem::Request(Action action, AssetID asset) {
 	// What the action asks about is the scene as it was before Play.
 	if (m_Scene.IsPlaying()) {
 		StopPlay();
@@ -318,7 +312,7 @@ void EditorSystem::Request(Action action, Assets::AssetID asset) {
 	Perform(action, asset);
 }
 
-void EditorSystem::Perform(Action action, Assets::AssetID asset) {
+void EditorSystem::Perform(Action action, AssetID asset) {
 	switch (action) {
 		case Action::None:
 			break;
@@ -341,7 +335,7 @@ void EditorSystem::Perform(Action action, Assets::AssetID asset) {
 			break;
 		case Action::CloseProject:
 			// Back to the project screen, which is the editor started without a project.
-			if (!Platform::Process::Launch(Platform::FileSystem::GetExecutablePath(), {})) {
+			if (!Process::Launch(FileSystem::GetExecutablePath(), {})) {
 				return;
 			}
 			RequestExit();
@@ -363,7 +357,7 @@ bool EditorSystem::SaveSceneAs() {
 	std::filesystem::path folder =
 			m_Scene.GetFile().empty() ? m_Project.GetAssetsFolder() : m_Scene.GetFile().parent_path();
 	std::string name = m_Scene.GetFile().empty() ? std::string("NewScene") : m_Scene.GetFile().stem().u8string();
-	std::optional<std::filesystem::path> file = Platform::FileDialog::SaveFile(kSceneFilter, name, folder);
+	std::optional<std::filesystem::path> file = FileDialog::SaveFile(kSceneFilter, name, folder);
 	if (!file) {
 		return false;
 	}
@@ -381,19 +375,19 @@ bool EditorSystem::SaveSceneAs() {
 void EditorSystem::ChooseSceneToOpen() {
 	std::filesystem::path folder =
 			m_Scene.GetFile().empty() ? m_Project.GetAssetsFolder() : m_Scene.GetFile().parent_path();
-	std::optional<std::filesystem::path> file = Platform::FileDialog::OpenFile(kSceneFilter, folder);
+	std::optional<std::filesystem::path> file = FileDialog::OpenFile(kSceneFilter, folder);
 	if (!file) {
 		return;
 	}
-	Assets::AssetID scene = m_Assets.FindAsset(file->u8string());
-	if (!scene.IsValid() || m_Assets.GetType(scene) != Assets::AssetType::Scene) {
+	AssetID scene = m_Assets.FindAsset(file->u8string());
+	if (!scene.IsValid() || m_Assets.GetType(scene) != AssetType::Scene) {
 		VKE_CORE_ERROR("Editor: '{}' isn't a scene in the project's assets", file->u8string());
 		return;
 	}
 	Request(Action::OpenScene, scene);
 }
 
-bool EditorSystem::OpenScene(Assets::AssetID scene) {
+bool EditorSystem::OpenScene(AssetID scene) {
 	if (!m_Scene.Open(scene)) {
 		return false;
 	}
@@ -551,7 +545,7 @@ void EditorSystem::DrawPlayBar() {
 	bool editingPrefab = m_Scene.IsEditingPrefab();
 	ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, min.y + Sizes::ToolbarHeight - 1.0f),
 			ImVec2(min.x + width, min.y + Sizes::ToolbarHeight - 1.0f),
-			UI::ToImColor(playing			? Colors::Live
+			ToImColor(playing				? Colors::Live
 							: editingPrefab ? Colors::Info
 											: Colors::Line));
 
@@ -645,7 +639,7 @@ void EditorSystem::DrawStatusBar() {
 	ImDrawList *draw = ImGui::GetWindowDrawList();
 	ImVec2 min = ImGui::GetWindowPos();
 	f32 width = ImGui::GetWindowWidth();
-	draw->AddLine(min, ImVec2(min.x + width, min.y), UI::ToImColor(Colors::Line));
+	draw->AddLine(min, ImVec2(min.x + width, min.y), ToImColor(Colors::Line));
 
 	// The newest log message on the left.
 	ImFont *small = GetFont(TextStyle::UISmall);
@@ -675,22 +669,22 @@ void EditorSystem::DrawStatusBar() {
 		u32 color = last->Level == LogLevel::Error ? Colors::Danger
 				: last->Level == LogLevel::Warning ? Colors::Warning
 												   : Colors::TextMuted;
-		draw->AddText(small, small->FontSize, ImVec2(x, textY), UI::ToImColor(color), icon);
+		draw->AddText(small, small->FontSize, ImVec2(x, textY), ToImColor(color), icon);
 		x += small->FontSize + Sizes::Space2;
 		ImVec4 clip(x, min.y, min.x + width - rightWidth - 2.0f * gap, min.y + Sizes::StatusBarHeight);
-		draw->AddText(small, small->FontSize, ImVec2(x, textY), UI::ToImColor(Colors::TextMuted), last->Message.c_str(),
+		draw->AddText(small, small->FontSize, ImVec2(x, textY), ToImColor(Colors::TextMuted), last->Message.c_str(),
 				nullptr, 0.0f, &clip);
 	}
 
 	// The scripts, frame time, object count and mode on the right.
 	f32 right = min.x + width - Sizes::Space4 - rightWidth;
 	if (!scripts.empty()) {
-		draw->AddText(small, small->FontSize, ImVec2(right, textY), UI::ToImColor(scriptColor), scripts.c_str());
+		draw->AddText(small, small->FontSize, ImVec2(right, textY), ToImColor(scriptColor), scripts.c_str());
 		right += small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, scripts.c_str()).x + gap;
 	}
 	f32 monoY = min.y + std::floor((Sizes::StatusBarHeight - mono->FontSize) * 0.5f);
 	for (const char *text : { static_cast<const char *>(frame), objects.c_str(), mode }) {
-		draw->AddText(mono, mono->FontSize, ImVec2(right, monoY), UI::ToImColor(Colors::TextMuted), text);
+		draw->AddText(mono, mono->FontSize, ImVec2(right, monoY), ToImColor(Colors::TextMuted), text);
 		right += mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, text).x + gap;
 	}
 	ImGui::End();
@@ -878,7 +872,7 @@ void EditorSystem::DrawUnsavedDialog() {
 	bool save = Widgets::PrimaryButton("Save") || ImGui::IsKeyPressed(ImGuiKey_Enter);
 
 	Action action = m_PendingAction;
-	Assets::AssetID asset = m_PendingAsset;
+	AssetID asset = m_PendingAsset;
 	if (cancel || discard || save) {
 		ImGui::CloseCurrentPopup();
 		m_PendingAction = Action::None;

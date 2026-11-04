@@ -3,7 +3,7 @@
 #include "SceneSystems.h"
 #include "scene/GameObject.h"
 
-namespace VKE::Scene {
+namespace VKE {
 
 LightComponent::LightComponent(const LightSettings &settings) : m_Settings(settings) {}
 
@@ -24,7 +24,7 @@ void LightComponent::SyncToSystems(SceneSystems &systems) {
 		return;
 	}
 
-	Renderer::LightDesc desc;
+	LightDesc desc;
 	desc.Type = m_Settings.Type;
 	desc.Color = m_Settings.Color;
 	desc.Intensity = m_Settings.Intensity;
@@ -50,4 +50,4 @@ void LightComponent::DisconnectFromSystems(SceneSystems &systems) {
 	m_Light = {};
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

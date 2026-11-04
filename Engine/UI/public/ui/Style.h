@@ -7,7 +7,7 @@
 
 struct ImFont;
 
-namespace VKE::UI {
+namespace VKE {
 
 // Colors of the design system's dark theme (tokens.json), sRGB-encoded, as 0xRRGGBBAA.
 // The token each one comes from is its name in kebab case.
@@ -97,4 +97,4 @@ enum class TextStyle {
 // The font for `style`, once a UISystem has built the atlas; null before that.
 ImFont *GetFont(TextStyle style);
 
-} // namespace VKE::UI
+} // namespace VKE

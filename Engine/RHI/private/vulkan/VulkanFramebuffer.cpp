@@ -4,7 +4,7 @@
 #include "VulkanRenderPass.h"
 #include "VulkanUtils.h"
 
-namespace VKE::RHI {
+namespace VKE {
 
 VulkanFramebuffer::VulkanFramebuffer(VulkanDevice &device, VulkanRenderPass &renderPass, const FramebufferDesc &desc) :
 		m_Device(device), m_Width(desc.Width), m_Height(desc.Height) {
@@ -38,4 +38,4 @@ Iunique<RHIFramebuffer> RHIFramebuffer::Create(
 			static_cast<VulkanDevice &>(device), static_cast<VulkanRenderPass &>(renderPass), desc);
 }
 
-} // namespace VKE::RHI
+} // namespace VKE

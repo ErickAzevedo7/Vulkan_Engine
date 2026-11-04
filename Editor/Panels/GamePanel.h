@@ -5,13 +5,13 @@
 
 #include <string>
 
-namespace VKE::Renderer {
+namespace VKE {
 class Renderer;
-} // namespace VKE::Renderer
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 class UISystem;
-} // namespace VKE::UI
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -20,7 +20,7 @@ class EditorScene;
 // The scene as the game sees it: from its main camera, with nothing of the editor over it.
 class GamePanel {
 public:
-	GamePanel(EditorScene &scene, Renderer::Renderer &renderer, UI::UISystem &ui);
+	GamePanel(EditorScene &scene, Renderer &renderer, UISystem &ui);
 
 	void Create();
 	void Destroy();
@@ -33,7 +33,7 @@ public:
 
 	// Whether the scene must be drawn into the panel's texture this frame.
 	bool IsVisible() const { return m_Visible; }
-	Renderer::ViewTextureID GetTexture() const { return m_Texture; }
+	ViewTextureID GetTexture() const { return m_Texture; }
 
 	// Whether the player is on the panel, so the keyboard and the mouse are the game's.
 	bool IsFocused() const { return m_Focused; }
@@ -43,9 +43,9 @@ public:
 
 private:
 	EditorScene &m_Scene;
-	Renderer::Renderer &m_Renderer;
-	UI::UISystem &m_UI;
-	Renderer::ViewTextureID m_Texture;
+	Renderer &m_Renderer;
+	UISystem &m_UI;
+	ViewTextureID m_Texture;
 	bool m_Visible = false;
 	bool m_Focused = false;
 	f32 m_ViewX = 0.0f;

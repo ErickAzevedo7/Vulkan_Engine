@@ -6,17 +6,17 @@
 
 #include <vector>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::RHI {
+namespace VKE {
 
 class VulkanDevice;
 
 class VulkanSwapchain : public RHISwapchain {
 public:
-	VulkanSwapchain(VulkanDevice &device, Platform::IWindow &window);
+	VulkanSwapchain(VulkanDevice &device, IWindow &window);
 	~VulkanSwapchain() override;
 
 	void Recreate() override;
@@ -42,7 +42,7 @@ private:
 	void CleanupSwapchain(); // destroys image views + swapchain only, not sync objects
 
 	VulkanDevice &m_Device;
-	Platform::IWindow &m_Window;
+	IWindow &m_Window;
 
 	VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
 	VkFormat m_ImageFormat = VK_FORMAT_UNDEFINED;
@@ -57,4 +57,4 @@ private:
 	u32 m_CurrentImageIndex = 0;
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

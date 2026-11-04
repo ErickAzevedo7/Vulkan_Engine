@@ -6,15 +6,15 @@
 #include <renderer/RenderTypes.h>
 #include <renderer/WorldDraw.h>
 
-namespace VKE::Platform {
+namespace VKE {
 class IWindow;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 
 class FrameRenderer;
 class RenderScene;
@@ -29,7 +29,7 @@ class RenderScene;
 //   }
 class Renderer : public System {
 public:
-	Renderer(Platform::IWindow &window, Assets::AssetManager &assets);
+	Renderer(IWindow &window, AssetManager &assets);
 	~Renderer() override;
 
 	void OnInitialize() override;
@@ -81,11 +81,11 @@ public:
 	void SetShadowsEnabled(bool enabled);
 
 private:
-	Platform::IWindow &m_Window;
-	Assets::AssetManager &m_Assets;
+	IWindow &m_Window;
+	AssetManager &m_Assets;
 	f32 m_Exposure = 1.0f;
 	bool m_ShadowsEnabled = true;
 	Iunique<FrameRenderer> m_Frame;
 };
 
-} // namespace VKE::Renderer
+} // namespace VKE

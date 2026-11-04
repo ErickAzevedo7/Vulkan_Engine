@@ -2,7 +2,7 @@
 
 #include "scene/GameObject.h"
 
-namespace VKE::Scene {
+namespace VKE {
 
 void TransformComponent::SetLocal(const Transform &local) {
 	m_Local = local;
@@ -24,7 +24,7 @@ void TransformComponent::SetLocalScale(const Vec3 &scale) {
 	MarkChanged();
 }
 
-void TransformComponent::OnPropertiesChanged(const Assets::AssetManager &) {
+void TransformComponent::OnPropertiesChanged(const AssetManager &) {
 	// The local values were written directly, so the world values of the object and its
 	// children are stale.
 	MarkChanged();
@@ -91,4 +91,4 @@ void TransformComponent::MarkChanged() {
 	}
 }
 
-} // namespace VKE::Scene
+} // namespace VKE

@@ -18,21 +18,21 @@
 
 #include <string>
 
-namespace VKE::Platform {
+namespace VKE {
 class PlatformSystem;
-} // namespace VKE::Platform
+} // namespace VKE
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Renderer {
+namespace VKE {
 class Renderer;
-} // namespace VKE::Renderer
+} // namespace VKE
 
-namespace VKE::UI {
+namespace VKE {
 class UISystem;
-} // namespace VKE::UI
+} // namespace VKE
 
 namespace VKE::Editor {
 
@@ -41,8 +41,7 @@ namespace VKE::Editor {
 // start scene, and asks before anything would lose unsaved changes.
 class EditorSystem : public System {
 public:
-	EditorSystem(Project::Project project, Platform::PlatformSystem &platform, Assets::AssetManager &assets,
-			Renderer::Renderer &renderer, UI::UISystem &ui);
+	EditorSystem(Project project, PlatformSystem &platform, AssetManager &assets, Renderer &renderer, UISystem &ui);
 	~EditorSystem() override;
 
 	void OnInitialize() override;
@@ -66,16 +65,16 @@ private:
 	// Does `action`, asking first to save the scene if it has unsaved changes, and the
 	// materials too when the project closes. `asset` is the scene or prefab to open. With a
 	// prefab open, it is closed first, the same way.
-	void Request(Action action, Assets::AssetID asset = {});
+	void Request(Action action, AssetID asset = {});
 	// Whether `action` would lose changes: the scene's, and for closing, the materials'.
 	bool HasUnsavedChanges(Action action) const;
-	void Perform(Action action, Assets::AssetID asset);
+	void Perform(Action action, AssetID asset);
 
 	// Saves to the scene's file, or asks for one; false if it wasn't saved.
 	bool SaveScene();
 	bool SaveSceneAs();
 	void ChooseSceneToOpen();
-	bool OpenScene(Assets::AssetID scene);
+	bool OpenScene(AssetID scene);
 	void SetStartScene();
 
 	void HandleShortcuts();
@@ -98,17 +97,17 @@ private:
 	void LoadEditorState();
 	void SaveEditorState() const;
 
-	Project::Project m_Project;
-	Platform::PlatformSystem &m_Platform;
-	Assets::AssetManager &m_Assets;
-	Renderer::Renderer &m_Renderer;
-	UI::UISystem &m_UI;
+	Project m_Project;
+	PlatformSystem &m_Platform;
+	AssetManager &m_Assets;
+	Renderer &m_Renderer;
+	UISystem &m_UI;
 
 	ScriptCompiler m_ScriptCompiler;
 	bool m_GameLoadFailed = false;
 	u32 m_ScriptErrors = 0;
 	// Before the scene, which holds objects of the game's types.
-	Scripting::GameModule m_GameModule;
+	GameModule m_GameModule;
 	EditorScene m_Scene;
 	MaterialEdits m_MaterialEdits;
 	HierarchyPanel m_Hierarchy;
@@ -130,7 +129,7 @@ private:
 	bool m_LayoutChecked = false;
 
 	Action m_PendingAction = Action::None;
-	Assets::AssetID m_PendingAsset;
+	AssetID m_PendingAsset;
 	bool m_OpenUnsavedDialog = false;
 	bool m_OpenRecoveryDialog = false;
 	// What crashed in Play, while the dialog about it shows.
@@ -138,9 +137,9 @@ private:
 	bool m_OpenFaultDialog = false;
 	// What goes on once the open prefab is closed.
 	Action m_AfterPrefab = Action::None;
-	Assets::AssetID m_AfterPrefabAsset;
+	AssetID m_AfterPrefabAsset;
 	// Read from the editor's settings: the scene to open first.
-	Assets::AssetID m_LastScene;
+	AssetID m_LastScene;
 
 	std::string m_Title;
 	f32 m_FrameTimeSum = 0.0f;

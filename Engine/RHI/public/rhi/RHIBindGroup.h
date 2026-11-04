@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace VKE::RHI {
+namespace VKE {
 
 class RHIDevice;
 class RHIBuffer;
@@ -64,4 +64,4 @@ public:
 	static Iunique<RHIBindGroup> Create(RHIDevice &device, const BindGroupDesc &desc);
 };
 
-} // namespace VKE::RHI
+} // namespace VKE

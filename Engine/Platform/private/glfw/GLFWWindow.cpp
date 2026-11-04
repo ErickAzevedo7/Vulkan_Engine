@@ -5,7 +5,7 @@
 #include <core/Assert.h>
 #include <core/Log.h>
 
-namespace VKE::Platform {
+namespace VKE {
 
 namespace {
 u32 s_GLFWWindowCount = 0;
@@ -165,4 +165,4 @@ Iunique<IWindow> IWindow::Create(const WindowDesc &desc) {
 	return MakeIunique<GLFWWindow>(desc);
 }
 
-} // namespace VKE::Platform
+} // namespace VKE

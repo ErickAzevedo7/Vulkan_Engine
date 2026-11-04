@@ -6,9 +6,9 @@
 namespace vke::api {
 
 namespace {
-using VKE::Platform::IInput;
-using VKE::Platform::KeyCode;
-using VKE::Scripting::ScriptRun;
+using VKE::IInput;
+using VKE::KeyCode;
+using VKE::ScriptRun;
 
 static_assert(static_cast<int>(Key::Count) == static_cast<int>(KeyCode::Count));
 static_assert(static_cast<int>(Key::Pad0) == static_cast<int>(KeyCode::KP0));
@@ -24,8 +24,8 @@ KeyCode ToEngine(Key key) {
 	return static_cast<KeyCode>(key);
 }
 
-VKE::Platform::MouseButton ToEngine(MouseButton button) {
-	return static_cast<VKE::Platform::MouseButton>(button);
+VKE::MouseButton ToEngine(MouseButton button) {
+	return static_cast<VKE::MouseButton>(button);
 }
 } // namespace
 
@@ -91,15 +91,13 @@ int Time_GetFrame() {
 
 bool Physics_Raycast(Vec3 origin, Vec3 direction, RaycastHit &hit, float maxDistance) {
 	ScriptRun *run = ScriptRun::GetCurrent();
-	VKE::Scene::RaycastHit found;
-	if (!run ||
-			!run->GetScene().Raycast(
-					VKE::Scripting::ToEngine(origin), VKE::Scripting::ToEngine(direction), maxDistance, false, found)) {
+	VKE::RaycastHit found;
+	if (!run || !run->GetScene().Raycast(VKE::ToEngine(origin), VKE::ToEngine(direction), maxDistance, false, found)) {
 		return false;
 	}
-	hit.object = found.Object ? VKE::Scripting::ToObject(found.Object->GetHandle()) : Object();
-	hit.point = VKE::Scripting::ToSDK(found.Point);
-	hit.normal = VKE::Scripting::ToSDK(found.Normal);
+	hit.object = found.Object ? VKE::ToObject(found.Object->GetHandle()) : Object();
+	hit.point = VKE::ToSDK(found.Point);
+	hit.normal = VKE::ToSDK(found.Normal);
 	hit.distance = found.Distance;
 	return true;
 }

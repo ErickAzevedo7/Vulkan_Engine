@@ -4,11 +4,11 @@
 
 #include <filesystem>
 
-namespace VKE::Assets {
+namespace VKE {
 class AssetManager;
-} // namespace VKE::Assets
+} // namespace VKE
 
-namespace VKE::Assets::Importers {
+namespace VKE::Importers {
 
 // Reads the node hierarchy, geometry and materials of a model file (glTF, OBJ, FBX, ...).
 // Meshes and materials are added to `assets`.
@@ -23,4 +23,4 @@ bool ImportMaterial(AssetManager &assets, const std::filesystem::path &file, Mat
 // default ones, are left out. The name isn't written: it is the file's.
 bool ExportMaterial(const AssetManager &assets, const MaterialData &material, const std::filesystem::path &file);
 
-} // namespace VKE::Assets::Importers
+} // namespace VKE::Importers
