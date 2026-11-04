@@ -9,7 +9,7 @@ target_sources(VKE_Scene PRIVATE
     private/ComponentRegistry.cpp
     private/ModelInstantiation.cpp
     private/Prefab.cpp
-    private/Properties.cpp
+    private/PropertyOps.cpp
     private/SceneSerializer.cpp
     private/MeshShapeCache.cpp
     private/components/TransformComponent.cpp
