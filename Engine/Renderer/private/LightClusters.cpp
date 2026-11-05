@@ -22,28 +22,29 @@ Vec3 SafeNormalize(const Vec3 &v) {
 // sphere of its range, whose rim is the widest part of the cone.
 Sphere GetBounds(const LightDesc &light) {
 	Vec3 direction = SafeNormalize(light.Direction);
-	f32 angle = light.OuterConeAngle;
-	if (light.Type != LightType::Spot || angle >= kHalfPi || direction == Vec3(0.0f)) {
-		return { light.Position, light.Range };
+	f32 angle = light.Settings.OuterConeAngle;
+	if (light.Settings.Type != LightType::Spot || angle >= kHalfPi || direction == Vec3(0.0f)) {
+		return { light.Position, light.Settings.Range };
 	}
 
 	f32 cosine = std::cos(angle);
 	if (cosine > 0.7071f) {
 		// Narrow: the sphere through the tip and the rim.
-		f32 radius = light.Range / (2.0f * cosine);
+		f32 radius = light.Settings.Range / (2.0f * cosine);
 		return { light.Position + direction * radius, radius };
 	}
 	// Wide: the sphere around the rim.
-	return { light.Position + direction * (light.Range * cosine), light.Range * std::sin(angle) };
+	return { light.Position + direction * (light.Settings.Range * cosine), light.Settings.Range * std::sin(angle) };
 }
 } // namespace
 
 void LightClusters::AddLight(const LightDesc &light) {
 	GpuLight gpuLight;
-	gpuLight.PositionAndRange = Vec4(light.Position, light.Range);
-	gpuLight.DirectionAndType = Vec4(SafeNormalize(light.Direction), static_cast<f32>(light.Type));
-	gpuLight.ColorAndIntensity = Vec4(light.Color, light.Intensity);
-	gpuLight.SpotAndShadow = Vec4(std::cos(light.InnerConeAngle), std::cos(light.OuterConeAngle), -1.0f, 0.0f);
+	gpuLight.PositionAndRange = Vec4(light.Position, light.Settings.Range);
+	gpuLight.DirectionAndType = Vec4(SafeNormalize(light.Direction), static_cast<f32>(light.Settings.Type));
+	gpuLight.ColorAndIntensity = Vec4(light.Settings.Color, light.Settings.Intensity);
+	gpuLight.SpotAndShadow =
+			Vec4(std::cos(light.Settings.InnerConeAngle), std::cos(light.Settings.OuterConeAngle), -1.0f, 0.0f);
 	m_Lights.push_back(gpuLight);
 	m_Sources.push_back(&light);
 }
@@ -68,7 +69,7 @@ void LightClusters::Build(const std::vector<LightDesc> &lights, const RenderView
 	m_SliceBias = -m_SliceScale * std::log(nearPlane);
 
 	for (const LightDesc &light : lights) {
-		if (light.Type == LightType::Directional) {
+		if (light.Settings.Type == LightType::Directional) {
 			AddLight(light);
 		}
 	}
@@ -77,7 +78,7 @@ void LightClusters::Build(const std::vector<LightDesc> &lights, const RenderView
 	f32 tanX = 1.0f / std::abs(projection[0][0]);
 	f32 tanY = 1.0f / std::abs(projection[1][1]);
 	for (const LightDesc &light : lights) {
-		if (light.Type == LightType::Directional) {
+		if (light.Settings.Type == LightType::Directional) {
 			continue;
 		}
 		Sphere bounds = GetBounds(light);

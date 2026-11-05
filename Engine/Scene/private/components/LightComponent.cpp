@@ -25,13 +25,7 @@ void LightComponent::SyncToSystems(SceneSystems &systems) {
 	}
 
 	LightDesc desc;
-	desc.Type = m_Settings.Type;
-	desc.Color = m_Settings.Color;
-	desc.Intensity = m_Settings.Intensity;
-	desc.Range = m_Settings.Range;
-	desc.InnerConeAngle = m_Settings.InnerConeAngle;
-	desc.OuterConeAngle = m_Settings.OuterConeAngle;
-	desc.CastsShadow = m_Settings.CastsShadow;
+	desc.Settings = m_Settings;
 	const Transform &world = GetTransform().GetWorld();
 	desc.Position = world.Position;
 	desc.Direction = world.GetForward();

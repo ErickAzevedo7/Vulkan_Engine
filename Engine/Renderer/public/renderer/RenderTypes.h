@@ -30,20 +30,26 @@ VKE_ENUM() enum class LightType : u32 {
 	Spot = 2,
 };
 
-struct LightDesc {
-	LightType Type = LightType::Directional;
-	Vec3 Color{ 1.0f };
-	f32 Intensity = 1.0f;
+// Everything about a light except where it is and where it points.
+VKE_STRUCT() struct LightSettings {
+	VKE_PROPERTY() LightType Type = LightType::Directional;
+	VKE_PROPERTY(Display = Color) Vec3 Color{ 1.0f };
+	VKE_PROPERTY(Min = 0) f32 Intensity = 1.0f;
 	// Point and spot lights.
-	Vec3 Position{ 0.0f };
-	f32 Range = 10.0f;
-	// Directional and spot lights: the direction the light travels.
-	Vec3 Direction{ 0.0f, -1.0f, 0.0f };
+	VKE_PROPERTY(Min = 0) f32 Range = 10.0f;
 	// Spot lights, in radians from the center of the cone. Light fades from
 	// full strength at the inner angle to nothing at the outer one.
-	f32 InnerConeAngle = glm::radians(20.0f);
-	f32 OuterConeAngle = glm::radians(30.0f);
-	bool CastsShadow = false;
+	VKE_PROPERTY(Min = 0, Max = 3.14159265, Display = Angle) f32 InnerConeAngle = glm::radians(20.0f);
+	VKE_PROPERTY(Min = 0, Max = 3.14159265, Display = Angle) f32 OuterConeAngle = glm::radians(30.0f);
+	VKE_PROPERTY() bool CastsShadow = false;
+};
+
+struct LightDesc {
+	LightSettings Settings;
+	// Point and spot lights.
+	Vec3 Position{ 0.0f };
+	// Directional and spot lights: the direction the light travels.
+	Vec3 Direction{ 0.0f, -1.0f, 0.0f };
 };
 
 // What surrounds the scene, lighting it and showing behind everything else.

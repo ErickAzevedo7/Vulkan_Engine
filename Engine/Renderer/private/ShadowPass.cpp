@@ -64,8 +64,8 @@ Mat4 FitDirectional(const Vec3 &direction, const AABB &bounds, u32 size, f32 &te
 }
 
 Mat4 FitSpot(const LightDesc &light, const Vec3 &direction, u32 size, f32 &texelSize) {
-	f32 halfAngle = glm::clamp(light.OuterConeAngle, glm::radians(1.0f), glm::radians(89.0f));
-	f32 farPlane = std::max(light.Range, kSpotNearPlane * 2.0f);
+	f32 halfAngle = glm::clamp(light.Settings.OuterConeAngle, glm::radians(1.0f), glm::radians(89.0f));
+	f32 farPlane = std::max(light.Settings.Range, kSpotNearPlane * 2.0f);
 	texelSize = 2.0f * std::tan(halfAngle) / static_cast<f32>(size);
 	Mat4 projection = glm::perspectiveRH_ZO(2.0f * halfAngle, 1.0f, kSpotNearPlane, farPlane);
 	return projection * LookAlong(light.Position, direction);
@@ -155,21 +155,21 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 	const std::vector<const LightDesc *> &sources = lights.GetSources();
 	for (u32 i = 0; i < sources.size(); ++i) {
 		const LightDesc &light = *sources[i];
-		if (!light.CastsShadow) {
+		if (!light.Settings.CastsShadow) {
 			continue;
 		}
 
 		ShadowRequest request;
 		request.Light = i;
-		if (light.Type == LightType::Directional) {
+		if (light.Settings.Type == LightType::Directional) {
 			// Directional lights reach the whole scene, so they come before all others.
 			request.Size = kMaxShadowSize;
 			request.Priority = FLT_MAX;
 		} else {
 			// How large what the light reaches looks on screen.
-			f32 distance = std::max(glm::length(light.Position - viewPosition) - light.Range, 1.0f);
-			f32 pixels = 2.0f * light.Range * pixelsAtOneMeter / distance;
-			bool isPoint = light.Type == LightType::Point;
+			f32 distance = std::max(glm::length(light.Position - viewPosition) - light.Settings.Range, 1.0f);
+			f32 pixels = 2.0f * light.Settings.Range * pixelsAtOneMeter / distance;
+			bool isPoint = light.Settings.Type == LightType::Point;
 			request.FaceCount = isPoint ? 6 : 1;
 			request.Size = GetTileSize(pixels, isPoint ? kMaxPointFaceSize : kMaxShadowSize);
 			request.Priority = pixels;
@@ -192,9 +192,9 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 		const LightDesc &light = *sources[request.Light];
 		gpuLight.SpotAndShadow.z = static_cast<f32>(outShadows.size());
 
-		if (light.Type == LightType::Point) {
+		if (light.Settings.Type == LightType::Point) {
 			// The shader rebuilds depth from the same planes.
-			f32 farPlane = std::max(light.Range, kPointShadowNearPlane * 2.0f);
+			f32 farPlane = std::max(light.Settings.Range, kPointShadowNearPlane * 2.0f);
 			Mat4 projection = GetCubeFaceProjection(kPointShadowNearPlane, farPlane);
 
 			// Widened so the face's own 90 degrees leave a border in the tile.
@@ -218,12 +218,12 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 		Vec3 direction = directionLength > 0.0f ? light.Direction / directionLength : Vec3(0.0f, -1.0f, 0.0f);
 
 		f32 texelSize = 0.0f;
-		bool isSpot = light.Type == LightType::Spot;
+		bool isSpot = light.Settings.Type == LightType::Spot;
 		Mat4 viewProjection = isSpot ? FitSpot(light, direction, request.Size, texelSize)
 									 : FitDirectional(direction, sceneBounds, request.Size, texelSize);
 
 		const ShadowTile &tile = m_Tiles[request.FirstTile];
-		m_Views.push_back({ viewProjection, tile, isSpot, light.Position, light.Range });
+		m_Views.push_back({ viewProjection, tile, isSpot, light.Position, light.Settings.Range });
 		outShadows.push_back({ viewProjection, Vec4(texelSize, 0.0f, 0.0f, 0.0f), ToAtlasRect(tile, m_AtlasSize) });
 	}
 }
