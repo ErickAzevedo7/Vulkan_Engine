@@ -3,10 +3,13 @@
 #include "Broadphase.h"
 #include "Narrowphase.h"
 #include "TriangleTree.h"
+#include "jolt/JoltMath.h"
 #include "jolt/JoltWorld.h"
 
 #include <core/Log.h>
 #include <core/SlotMap.h>
+
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
 #include <algorithm>
 #include <unordered_map>
@@ -15,6 +18,8 @@ namespace VKE {
 
 struct MeshShape {
 	TriangleTree Tree;
+	// The same triangles for Jolt. Null if Jolt couldn't build them.
+	JPH::ShapeRefC Jolt;
 };
 
 struct Body {
@@ -302,6 +307,25 @@ MeshShapeID PhysicsWorld::CreateMeshShape(const MeshShapeDesc &desc) {
 	shape.Tree.Build(desc.Positions, desc.Indices);
 	if (shape.Tree.IsEmpty()) {
 		VKE_CORE_WARN("PhysicsWorld: mesh shape has no triangles");
+		return m_Storage->Shapes.Emplace(std::move(shape));
+	}
+
+	JPH::VertexList vertices;
+	vertices.reserve(desc.Positions.size());
+	for (const Vec3 &position : desc.Positions) {
+		vertices.push_back(ToJoltFloat3(position));
+	}
+	JPH::IndexedTriangleList triangles;
+	triangles.reserve(desc.Indices.size() / 3);
+	for (size_t i = 0; i + 2 < desc.Indices.size(); i += 3) {
+		triangles.emplace_back(desc.Indices[i], desc.Indices[i + 1], desc.Indices[i + 2]);
+	}
+
+	JPH::ShapeSettings::ShapeResult result = JPH::MeshShapeSettings(std::move(vertices), std::move(triangles)).Create();
+	if (result.HasError()) {
+		VKE_CORE_WARN("PhysicsWorld: Jolt couldn't build a mesh shape: {}", result.GetError().c_str());
+	} else {
+		shape.Jolt = result.Get();
 	}
 	return m_Storage->Shapes.Emplace(std::move(shape));
 }
