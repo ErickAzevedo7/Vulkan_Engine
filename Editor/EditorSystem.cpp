@@ -52,7 +52,7 @@ EditorSystem::EditorSystem(
 		m_Viewport(m_Scene, assets, renderer, ui),
 		m_AssetBrowser(m_Scene, m_MaterialEdits, ui),
 		m_Game(m_Scene, renderer, ui) {
-	m_Scene.SetInput(platform.GetInput());
+	m_Scene.GetPlay().SetInput(platform.GetInput());
 	m_GameModule.Load(m_Project.GetGameLibrary(), m_Project.GetGameWorkFolder());
 }
 
@@ -85,8 +85,8 @@ void EditorSystem::OnInitialize() {
 		m_Scene.New();
 	}
 
-	m_Scene.SetRecoveryFile(m_Project.GetSettingsFolder() / "Recovery.yaml");
-	m_OpenRecoveryDialog = m_Scene.HasRecovery();
+	m_Scene.GetRecovery().SetFile(m_Project.GetSettingsFolder() / "Recovery.yaml");
+	m_OpenRecoveryDialog = m_Scene.GetRecovery().Exists();
 
 	m_Console.SetSourceFolder(m_Project.GetScriptsFolder());
 	m_ScriptCompiler.Start();
@@ -181,11 +181,11 @@ void EditorSystem::OnUpdate(FrameTime ft) {
 	UpdateTitle();
 	UpdateScripts();
 
-	m_Scene.SetInputArea(m_Game.IsFocused(), m_Game.GetViewX(), m_Game.GetViewY());
+	m_Scene.GetPlay().SetInputArea(m_Game.IsFocused(), m_Game.GetViewX(), m_Game.GetViewY());
 
 	// Only now: the dialogs can replace the scene.
 	m_Scene.Update(ft.GetDeltaF());
-	if (std::string fault = m_Scene.TakeFault(); !fault.empty()) {
+	if (std::string fault = m_Scene.GetPlay().TakeFault(); !fault.empty()) {
 		m_FaultMessage = std::move(fault);
 		m_OpenFaultDialog = true;
 	}
@@ -537,12 +537,12 @@ void EditorSystem::DrawPlayBar() {
 		return;
 	}
 
-	PlayMode mode = m_Scene.GetPlayMode();
-	bool playing = mode != PlayMode::Edit;
+	EditorMode mode = m_Scene.GetMode();
+	bool playing = mode == EditorMode::Playing || mode == EditorMode::Paused;
 	ImVec2 min = ImGui::GetWindowPos();
 	f32 width = ImGui::GetWindowWidth();
 	// The bar's lower edge turns green while playing, so the mode can't be missed.
-	bool editingPrefab = m_Scene.IsEditingPrefab();
+	bool editingPrefab = mode == EditorMode::EditingPrefab;
 	ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, min.y + Sizes::ToolbarHeight - 1.0f),
 			ImVec2(min.x + width, min.y + Sizes::ToolbarHeight - 1.0f),
 			ToImColor(playing				? Colors::Live
@@ -570,7 +570,7 @@ void EditorSystem::DrawPlayBar() {
 	ImVec2 size(kButtonWidth, Sizes::ControlHeight);
 	ImGui::SetCursorPos(ImVec2(std::floor((width - 3.0f * kButtonWidth - 2.0f * Sizes::Space2) * 0.5f), y));
 
-	bool playLit = mode == PlayMode::Playing;
+	bool playLit = mode == EditorMode::Playing;
 	if (playLit) {
 		ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::Live));
 	}
@@ -587,13 +587,13 @@ void EditorSystem::DrawPlayBar() {
 	}
 
 	ImGui::SameLine(0.0f, Sizes::Space2);
-	bool pauseLit = mode == PlayMode::Paused;
+	bool pauseLit = mode == EditorMode::Paused;
 	if (pauseLit) {
 		ImGui::PushStyleColor(ImGuiCol_Text, Widgets::ToVec4(Colors::Accent));
 	}
 	ImGui::BeginDisabled(!playing);
 	if (Widgets::GhostButton(Icons::Pause, size)) {
-		m_Scene.TogglePause();
+		m_Scene.GetPlay().TogglePause();
 	}
 	ImGui::EndDisabled();
 	if (pauseLit) {
@@ -611,12 +611,12 @@ void EditorSystem::DrawPlayBar() {
 	}
 
 	if (playing) {
-		const char *badge = mode == PlayMode::Playing ? "PLAYING" : "PAUSED";
+		const char *badge = mode == EditorMode::Playing ? "PLAYING" : "PAUSED";
 		ImFont *small = GetFont(TextStyle::UISmall);
 		f32 badgeWidth = small->CalcTextSizeA(small->FontSize, FLT_MAX, 0.0f, badge).x + 10.0f;
 		ImGui::SetCursorPos(ImVec2(width - Sizes::Space4 - badgeWidth,
 				std::floor((Sizes::ToolbarHeight - ImGui::GetTextLineHeight()) * 0.5f)));
-		Widgets::Badge(badge, mode == PlayMode::Playing ? Colors::Live : Colors::Accent);
+		Widgets::Badge(badge, mode == EditorMode::Playing ? Colors::Live : Colors::Accent);
 	}
 	ImGui::End();
 }
@@ -649,9 +649,10 @@ void EditorSystem::DrawStatusBar() {
 	char frame[32];
 	std::snprintf(frame, sizeof(frame), "%.1f ms", 1000.0f * m_AverageFrameTime);
 	std::string objects = std::to_string(m_Scene.GetScene().GetObjectCount()) + " objects";
-	const char *mode = m_Scene.GetPlayMode() == PlayMode::Playing ? "Play"
-			: m_Scene.GetPlayMode() == PlayMode::Paused			  ? "Paused"
-																  : "Edit";
+	EditorMode editorMode = m_Scene.GetMode();
+	const char *mode = editorMode == EditorMode::Playing ? "Play"
+			: editorMode == EditorMode::Paused			 ? "Paused"
+														 : "Edit";
 	f32 gap = Sizes::Space5;
 	f32 rightWidth = mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, frame).x +
 			mono->CalcTextSizeA(mono->FontSize, FLT_MAX, 0.0f, objects.c_str()).x +
@@ -774,7 +775,7 @@ void EditorSystem::DrawRecoveryDialog() {
 		m_Scene.RestoreRecovery();
 	}
 	if (discard) {
-		m_Scene.DiscardRecovery();
+		m_Scene.GetRecovery().Discard();
 	}
 }
 

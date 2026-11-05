@@ -2,6 +2,10 @@ add_executable(Editor
     EditorApp.cpp
     EditorSystem.cpp
     EditorScene.cpp
+    PlaySession.cpp
+    PrefabEditing.cpp
+    SceneDocument.cpp
+    SceneRecovery.cpp
     DevTools.cpp
     Display.cpp
     Fields.cpp

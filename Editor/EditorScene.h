@@ -1,13 +1,15 @@
 #pragma once
 
+#include "PlaySession.h"
+#include "PrefabEditing.h"
+#include "SceneDocument.h"
+#include "SceneRecovery.h"
+
 #include <assets/AssetTypes.h>
-#include <core/Handle.h>
-#include <core/ObjectID.h>
 #include <core/Types.h>
 #include <math/MathTypes.h>
 #include <renderer/RenderTypes.h>
 #include <scene/Prefab.h>
-#include <scripting/ScriptRunner.h>
 
 #include <filesystem>
 #include <functional>
@@ -15,19 +17,9 @@
 
 namespace VKE {
 class AssetManager;
-} // namespace VKE
-
-namespace VKE {
-class IInput;
-} // namespace VKE
-
-namespace VKE {
+class GameModule;
 class GameObject;
 class Scene;
-} // namespace VKE
-
-namespace VKE {
-class GameModule;
 } // namespace VKE
 
 namespace VKE::Editor {
@@ -40,9 +32,11 @@ enum class Shape {
 	Cylinder,
 };
 
-// What the scene in the editor is doing.
-enum class PlayMode {
-	Edit,
+// What the editor is doing with the open objects. One at a time: Play starts only from the
+// scene, and a prefab opens only outside Play.
+enum class EditorMode {
+	EditingScene,
+	EditingPrefab,
 	Playing,
 	// Playing, stopped in time.
 	Paused,
@@ -51,11 +45,8 @@ enum class PlayMode {
 // The scene open in the editor: its objects, the scene asset it was opened from and is
 // saved to, whether it changed since, and what is selected: an object or an asset.
 //
-// Play keeps the scene as text in memory and runs it with its scripts; Stop puts that text
-// back, so everything that happened in between is lost.
-//
-// A prefab can be opened in place of the scene, which waits in memory: the objects are then
-// the prefab's, and Save writes the prefab and remakes the scene's instances from it.
+// It moves between the modes: the game runs in a PlaySession, and a prefab opens in place of
+// the scene through PrefabEditing.
 class EditorScene {
 public:
 	explicit EditorScene(AssetManager &assets);
@@ -71,52 +62,44 @@ public:
 	// the scene's file. False, logged, if it isn't or the write fails.
 	bool SaveAs(const std::filesystem::path &file);
 
-	Scene &GetScene() { return *m_Scene; }
-	const Scene &GetScene() const { return *m_Scene; }
+	Scene &GetScene() { return *m_Document.Objects; }
+	const Scene &GetScene() const { return *m_Document.Objects; }
 	AssetManager &GetAssets() { return m_Assets; }
 	PrefabLibrary &GetPrefabs() { return m_Prefabs; }
 
 	// Invalid until the scene is saved. While a prefab is open, these are the prefab's.
-	AssetID GetID() const { return m_ID; }
+	AssetID GetID() const { return m_Document.ID; }
 	// Where the scene asset is now, which follows it when it is moved; empty until saved, or
 	// once its file is deleted.
 	std::filesystem::path GetFile() const;
 	// "Sponza.scene", or "Untitled" until saved.
-	std::string GetFileName() const;
+	std::string GetFileName() const { return Editor::GetFileName(m_Assets, m_Document.ID); }
 
 	// While playing, whether it had changed when Play was pressed: nothing done since counts.
-	bool IsDirty() const { return IsPlaying() ? m_DirtyAtPlay : m_Dirty; }
-	void MarkDirty() { m_Dirty = true; }
+	bool IsDirty() const { return IsPlaying() ? m_Play.WasDirtyAtPlay() : m_Document.Dirty; }
+	void MarkDirty() { m_Document.Dirty = true; }
 
-	PlayMode GetPlayMode() const { return m_PlayMode; }
+	EditorMode GetMode() const;
 	// True while playing or paused.
-	bool IsPlaying() const { return m_PlayMode != PlayMode::Edit; }
-	// False, logged, if the scene can't be kept.
+	bool IsPlaying() const { return m_Play.IsRunning(); }
+	bool IsEditingPrefab() const { return m_PrefabEditing.IsOpen(); }
+
+	// False, logged, while a prefab is open or if the scene can't be kept.
 	bool Play();
-	// Between playing and paused.
-	void TogglePause();
-	// Back to the scene as it was at Play, with the same object selected if it was there.
-	void Stop();
-	// What scripts read the keyboard and the mouse from.
-	void SetInput(const IInput &input) { m_Input = &input; }
-	// Whether they are the game's now, and where its view starts in the window.
-	void SetInputArea(bool focused, f32 viewX, f32 viewY) { m_Runner.SetInputArea(focused, viewX, viewY); }
-	// Where the scene is kept during Play if it has unsaved changes, in case the game takes
-	// the editor down. Removed on Stop, so finding it means that happened.
-	void SetRecoveryFile(std::filesystem::path file) { m_RecoveryFile = std::move(file); }
-	bool HasRecovery() const;
+	void Stop() { m_Play.Stop(); }
+	// Pause, input and faults of the running game.
+	PlaySession &GetPlay() { return m_Play; }
+
+	// Where the scene is kept during Play if it has unsaved changes.
+	SceneRecovery &GetRecovery() { return m_Recovery; }
 	// Opens the scene kept there, with its changes unsaved. False, logged, if it can't be read.
 	bool RestoreRecovery();
-	void DiscardRecovery();
-
-	// What a script that crashed in Play said, once; empty if none did since the last call.
-	std::string TakeFault();
 
 	// Replaces the game with the DLL `library`, as GameModule::Prepare takes it. In Play the
-	// objects stay and the scripts on them change, as ScriptRunner::SwitchGame does. Otherwise
-	// every object is destroyed and made again from what it held, including a prefab open
-	// now, unsaved changes and selection. False, logged, if something can't be kept or the
-	// DLL can't be loaded, and then the running game stays if it can.
+	// objects stay and the scripts on them change. Otherwise every object is destroyed and made
+	// again from what it held, including a prefab open now, unsaved changes and selection.
+	// False, logged, if something can't be kept or the DLL can't be loaded, and then the
+	// running game stays if it can.
 	bool SwitchGame(GameModule &game, const std::filesystem::path &library, const std::filesystem::path &workFolder);
 
 	// Runs the frame's update for the mode, `deltaTime` seconds after the last. Call it once
@@ -126,13 +109,12 @@ public:
 	// Changes when another scene is opened, but not when Stop restores this one.
 	u32 GetOpenCount() const { return m_OpenCount; }
 
-	bool IsEditingPrefab() const { return m_Waiting.Objects != nullptr; }
-	// The name of the scene waiting while a prefab is open.
-	std::string GetWaitingFileName() const;
-	// False, logged, if the asset isn't a prefab or can't be read; the scene stays.
+	// False, logged, while playing, if the asset isn't a prefab or can't be read; the scene stays.
 	bool OpenPrefab(AssetID prefab);
 	// Back to the scene, dropping what wasn't saved of the prefab.
 	void ClosePrefab();
+	// The name of the scene waiting while a prefab is open.
+	std::string GetWaitingFileName() const { return m_PrefabEditing.GetWaitingFileName(); }
 
 	// Asks for a prefab to be opened, for what can't replace the scene while drawing it.
 	void AskToOpenPrefab(AssetID prefab) { m_PrefabToOpen = prefab; }
@@ -185,40 +167,20 @@ public:
 	void Destroy(GameObject &object);
 
 private:
-	// The scene while a prefab is open in its place.
-	struct WaitingScene {
-		Iunique<Scene> Objects;
-		AssetID ID;
-		bool Dirty = false;
-		Handle<GameObject> Selected;
-	};
-
-	// Replaces `scene` with the one `text` holds, with the same object selected if it's there.
-	bool Reload(Iunique<Scene> &scene, Handle<GameObject> &selected, const std::string &text, const std::string &name);
-	bool SavePrefab();
-	void WriteRecovery(const std::string &text, AssetID scene) const;
-	GameContext MakeGameContext();
-	// A script asked for another scene. Stop still goes back to the one Play started from.
-	void SwitchPlayedScene(AssetID scene);
+	// Makes `objects` the open scene, saved as `id`, with nothing selected.
+	void Replace(Iunique<Scene> objects, AssetID id, bool dirty);
 
 	AssetManager &m_Assets;
 	PrefabLibrary m_Prefabs;
-	Iunique<Scene> m_Scene;
-	AssetID m_ID;
+	SceneDocument m_Document;
 	u32 m_OpenCount = 0;
-	bool m_Dirty = false;
-	PlayMode m_PlayMode = PlayMode::Edit;
-	std::string m_PlaySnapshot;
-	bool m_DirtyAtPlay = false;
-	Handle<GameObject> m_Selected;
 	AssetID m_SelectedAsset;
-	WaitingScene m_Waiting;
 	AssetID m_PrefabToOpen;
-	const IInput *m_Input = nullptr;
-	std::filesystem::path m_RecoveryFile;
-	std::string m_Fault;
+	SceneRecovery m_Recovery;
+	// It holds the scene waiting while a prefab is open.
+	PrefabEditing m_PrefabEditing;
 	// Last: it stops the scripts of a scene that is still there.
-	ScriptRunner m_Runner;
+	PlaySession m_Play;
 };
 
 } // namespace VKE::Editor

@@ -12,10 +12,7 @@
 #include <scene/components/MeshComponent.h>
 #include <scripting/GameModule.h>
 
-#include <yaml-cpp/yaml.h>
-
 #include <cmath>
-#include <fstream>
 
 namespace VKE::Editor {
 
@@ -61,19 +58,30 @@ Handle<GameObject> FindHandle(Scene &scene, ObjectID id) {
 }
 } // namespace
 
-EditorScene::EditorScene(AssetManager &assets) : m_Assets(assets), m_Prefabs(assets), m_Scene(MakeIunique<Scene>()) {}
+EditorScene::EditorScene(AssetManager &assets) :
+		m_Assets(assets),
+		m_Prefabs(assets),
+		m_PrefabEditing(m_Document, m_Prefabs, assets),
+		m_Play(m_Document, m_Prefabs, assets, m_Recovery) {
+	m_Document.Objects = MakeIunique<Scene>();
+}
 
 EditorScene::~EditorScene() = default;
 
-void EditorScene::New() {
-	m_Scene = MakeIunique<Scene>();
-	m_ID = {};
+void EditorScene::Replace(Iunique<Scene> objects, AssetID id, bool dirty) {
+	m_Document.Objects = std::move(objects);
+	m_Document.ID = id;
+	m_Document.Dirty = dirty;
+	m_Document.Selected = {};
 	++m_OpenCount;
-	m_PlayMode = PlayMode::Edit;
-	m_Dirty = false;
-	m_Selected = {};
+}
 
-	GameObject &camera = m_Scene->CreateObject("Main camera");
+void EditorScene::New() {
+	Stop();
+	Replace(MakeIunique<Scene>(), {}, false);
+	Scene &scene = GetScene();
+
+	GameObject &camera = scene.CreateObject("Main camera");
 	Vec3 position(0.0f, 1.5f, 5.0f);
 	camera.GetTransform().SetLocalPosition(position);
 	camera.GetTransform().SetLocalRotation(RotationTowards(Vec3(0.0f, 0.5f, 0.0f) - position));
@@ -83,7 +91,7 @@ void EditorScene::New() {
 	sun.Color = Vec3(1.0f, 0.96f, 0.9f);
 	sun.Intensity = 3.0f;
 	sun.CastsShadow = true;
-	GameObject &light = m_Scene->CreateObject("Sun");
+	GameObject &light = scene.CreateObject("Sun");
 	light.GetTransform().SetLocalRotation(RotationTowards(Vec3(-0.4f, -1.0f, -0.6f)));
 	light.AddComponent<LightComponent>(sun);
 	VKE_CORE_INFO("Editor: new scene");
@@ -94,33 +102,24 @@ bool EditorScene::Open(AssetID scene) {
 		VKE_CORE_ERROR("Editor: {} isn't a scene", scene.ToString());
 		return false;
 	}
-	std::filesystem::path file = m_Assets.GetFile(scene);
 	auto loaded = MakeIunique<Scene>();
-	if (!SceneSerializer::Load(*loaded, m_Prefabs, file)) {
+	if (!SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
 		return false;
 	}
-
-	m_Scene = std::move(loaded);
-	m_ID = scene;
-	++m_OpenCount;
-	m_PlayMode = PlayMode::Edit;
-	m_Dirty = false;
-	m_Selected = {};
+	Stop();
+	Replace(std::move(loaded), scene, false);
 	return true;
 }
 
 bool EditorScene::Save() {
 	if (IsEditingPrefab()) {
-		return SavePrefab();
+		return m_PrefabEditing.Save();
 	}
 	std::filesystem::path file = GetFile();
-	if (file.empty()) {
+	if (file.empty() || !SceneSerializer::Save(GetScene(), m_Prefabs, file)) {
 		return false;
 	}
-	if (!SceneSerializer::Save(*m_Scene, m_Prefabs, file)) {
-		return false;
-	}
-	m_Dirty = false;
+	m_Document.Dirty = false;
 	return true;
 }
 
@@ -130,7 +129,7 @@ bool EditorScene::SaveAs(const std::filesystem::path &file) {
 		VKE_CORE_ERROR("Editor: scenes are saved inside the project's assets folder, '{}'", root.Folder.u8string());
 		return false;
 	}
-	if (!SceneSerializer::Save(*m_Scene, m_Prefabs, file)) {
+	if (!SceneSerializer::Save(GetScene(), m_Prefabs, file)) {
 		return false;
 	}
 
@@ -139,92 +138,40 @@ bool EditorScene::SaveAs(const std::filesystem::path &file) {
 	if (!id.IsValid()) {
 		return false;
 	}
-	m_ID = id;
-	m_Dirty = false;
+	m_Document.ID = id;
+	m_Document.Dirty = false;
 	return true;
+}
+
+EditorMode EditorScene::GetMode() const {
+	if (m_Play.IsRunning()) {
+		return m_Play.IsPaused() ? EditorMode::Paused : EditorMode::Playing;
+	}
+	return m_PrefabEditing.IsOpen() ? EditorMode::EditingPrefab : EditorMode::EditingScene;
 }
 
 bool EditorScene::Play() {
-	if (IsPlaying()) {
-		return true;
-	}
-	m_PlaySnapshot = SceneSerializer::ToText(*m_Scene, m_Prefabs);
-	if (m_PlaySnapshot.empty()) {
+	if (IsEditingPrefab()) {
+		VKE_CORE_ERROR("Editor: Play starts from the scene; close the prefab first");
 		return false;
 	}
-	m_DirtyAtPlay = m_Dirty;
-	m_PlayMode = PlayMode::Playing;
-	if (m_Dirty) {
-		WriteRecovery(m_PlaySnapshot, m_ID);
-	}
-	m_Runner.Start(*m_Scene, MakeGameContext());
-	VKE_CORE_INFO("Editor: Play: scene kept in memory ({} objects); Stop restores it", m_Scene->GetObjectCount());
-	return true;
-}
-
-GameContext EditorScene::MakeGameContext() {
-	return { m_Prefabs, *m_Input, [this](AssetID scene) { SwitchPlayedScene(scene); }, [this] { Stop(); },
-		[this](const std::string &message) {
-			m_Fault = message;
-			Stop();
-		} };
-}
-
-void EditorScene::WriteRecovery(const std::string &text, AssetID scene) const {
-	YAML::Emitter out;
-	out << YAML::BeginMap;
-	out << YAML::Key << "Scene" << YAML::Value << YAML::DoubleQuoted << scene.ToString();
-	out << YAML::Key << "Text" << YAML::Value << YAML::Literal << text;
-	out << YAML::EndMap;
-	std::ofstream stream(m_RecoveryFile, std::ios::binary | std::ios::trunc);
-	stream << out.c_str() << '\n';
-	if (!stream) {
-		VKE_CORE_WARN("Editor: couldn't write '{}'", m_RecoveryFile.u8string());
-	}
-}
-
-bool EditorScene::HasRecovery() const {
-	std::error_code ec;
-	return std::filesystem::exists(m_RecoveryFile, ec);
+	return m_Play.Play();
 }
 
 bool EditorScene::RestoreRecovery() {
-	YAML::Node root;
-	try {
-		root = YAML::LoadFile(m_RecoveryFile.string());
-	} catch (const YAML::Exception &error) {
-		VKE_CORE_ERROR("Editor: the recovered scene can't be read: {}", error.what());
+	std::string text;
+	AssetID id;
+	if (!m_Recovery.Read(text, id)) {
 		return false;
 	}
-	std::string text = root["Text"] && root["Text"].IsScalar() ? root["Text"].Scalar() : std::string();
 	auto loaded = MakeIunique<Scene>();
 	if (!SceneSerializer::LoadText(*loaded, m_Prefabs, text, "the recovered scene")) {
 		return false;
 	}
-
-	AssetID id;
-	if (root["Scene"] && root["Scene"].IsScalar()) {
-		id = AssetID::Parse(root["Scene"].Scalar());
-	}
-	m_Scene = std::move(loaded);
-	m_ID = m_Assets.GetType(id) == AssetType::Scene ? id : AssetID();
-	++m_OpenCount;
-	m_Dirty = true;
-	m_Selected = {};
-	DiscardRecovery();
+	Replace(std::move(loaded), m_Assets.GetType(id) == AssetType::Scene ? id : AssetID(), true);
+	m_Recovery.Discard();
 	VKE_CORE_INFO("Editor: restored the unsaved changes of {}", GetFileName());
 	return true;
-}
-
-void EditorScene::DiscardRecovery() {
-	std::error_code ec;
-	std::filesystem::remove(m_RecoveryFile, ec);
-}
-
-std::string EditorScene::TakeFault() {
-	std::string fault;
-	fault.swap(m_Fault);
-	return fault;
 }
 
 bool EditorScene::SwitchGame(
@@ -234,38 +181,39 @@ bool EditorScene::SwitchGame(
 		if (!game.Prepare(library, workFolder)) {
 			return false;
 		}
-		m_Runner.SwitchGame(game);
+		m_Play.SwitchGame(game);
 		return true;
 	}
 
 	bool prefab = IsEditingPrefab();
-	Iunique<Scene> &sceneObjects = prefab ? m_Waiting.Objects : m_Scene;
-	std::string sceneText = SceneSerializer::ToText(*sceneObjects, m_Prefabs);
+	SceneDocument &waiting = m_PrefabEditing.GetWaiting();
+	SceneDocument &scene = prefab ? waiting : m_Document;
+	std::string sceneText = SceneSerializer::ToText(*scene.Objects, m_Prefabs);
 	std::string prefabText =
-			prefab ? SceneSerializer::PrefabToText(*m_Scene->GetRootObjects().front(), m_Assets) : std::string();
+			prefab ? SceneSerializer::PrefabToText(*GetScene().GetRootObjects().front(), m_Assets) : std::string();
 	if (sceneText.empty() || (prefab && prefabText.empty())) {
 		VKE_CORE_ERROR("Editor: the scene can't be kept, so the new scripts aren't loaded");
 		return false;
 	}
 
 	// The new game's globals and constructors run from here on, and they can take the editor down.
-	AssetID sceneID = prefab ? m_Waiting.ID : m_ID;
-	bool sceneDirty = prefab ? m_Waiting.Dirty : m_Dirty;
+	AssetID sceneID = scene.ID;
+	bool sceneDirty = scene.Dirty;
 	if (sceneDirty) {
-		WriteRecovery(sceneText, sceneID);
+		m_Recovery.Write(sceneText, sceneID);
 	}
 	if (!game.Prepare(library, workFolder)) {
 		if (sceneDirty) {
-			DiscardRecovery();
+			m_Recovery.Discard();
 		}
 		return false;
 	}
 
 	ObjectID selected = GetObjectID(GetSelected());
-	ObjectID waitingSelected = prefab ? GetObjectID(m_Waiting.Objects->Get(m_Waiting.Selected)) : ObjectID();
+	ObjectID waitingSelected = prefab ? GetObjectID(waiting.Objects->Get(waiting.Selected)) : ObjectID();
 
-	m_Scene.reset();
-	m_Waiting.Objects.reset();
+	m_Document.Objects.reset();
+	waiting.Objects.reset();
 	m_Prefabs.ForgetAll();
 	game.Switch();
 
@@ -273,10 +221,9 @@ bool EditorScene::SwitchGame(
 	if (!SceneSerializer::LoadText(*loadedScene, m_Prefabs, sceneText, "the scene before the reload")) {
 		// Not saved over what's on disk; the copy for recovery stays for the next start.
 		VKE_CORE_ERROR("Editor: the scene can't be made again after the reload, and the editor keeps it empty");
-		m_Scene = std::move(loadedScene);
-		m_ID = {};
-		m_Waiting = {};
-		m_Selected = {};
+		waiting = {};
+		m_Document = {};
+		m_Document.Objects = std::move(loadedScene);
 		return false;
 	}
 
@@ -285,124 +232,50 @@ bool EditorScene::SwitchGame(
 			prefab && SceneSerializer::LoadPrefabText(*loadedPrefab, m_Assets, prefabText, "the open prefab");
 	if (prefab && (!prefabLoaded || loadedPrefab->GetRootObjects().empty())) {
 		VKE_CORE_ERROR("Editor: the open prefab can't be made again after the reload, and it was closed");
-		m_ID = sceneID;
-		m_Dirty = sceneDirty;
-		m_Waiting = {};
-		m_Scene = std::move(loadedScene);
-		m_Selected = FindHandle(*m_Scene, waitingSelected);
+		waiting = {};
+		m_Document.Objects = std::move(loadedScene);
+		m_Document.ID = sceneID;
+		m_Document.Dirty = sceneDirty;
+		m_Document.Selected = FindHandle(GetScene(), waitingSelected);
 		return false;
 	}
 
 	if (prefab) {
-		m_Waiting.Selected = FindHandle(*loadedScene, waitingSelected);
-		m_Waiting.Objects = std::move(loadedScene);
-		m_Scene = std::move(loadedPrefab);
+		waiting.Selected = FindHandle(*loadedScene, waitingSelected);
+		waiting.Objects = std::move(loadedScene);
+		m_Document.Objects = std::move(loadedPrefab);
 	} else {
-		m_Scene = std::move(loadedScene);
+		m_Document.Objects = std::move(loadedScene);
 	}
-	m_Selected = FindHandle(*m_Scene, selected);
+	m_Document.Selected = FindHandle(GetScene(), selected);
 	if (sceneDirty) {
-		DiscardRecovery();
+		m_Recovery.Discard();
 	}
-	return true;
-}
-
-void EditorScene::SwitchPlayedScene(AssetID scene) {
-	auto loaded = MakeIunique<Scene>();
-	if (m_Assets.GetType(scene) != AssetType::Scene ||
-			!SceneSerializer::Load(*loaded, m_Prefabs, m_Assets.GetFile(scene))) {
-		VKE_CORE_ERROR("Editor: the game asked for scene {}, which can't be loaded", scene.ToString());
-		return;
-	}
-	m_Runner.Stop();
-	m_Scene = std::move(loaded);
-	m_Selected = {};
-	m_Runner.Start(*m_Scene, MakeGameContext());
-}
-
-void EditorScene::TogglePause() {
-	if (!IsPlaying()) {
-		return;
-	}
-	m_PlayMode = m_PlayMode == PlayMode::Playing ? PlayMode::Paused : PlayMode::Playing;
-}
-
-void EditorScene::Stop() {
-	if (!IsPlaying()) {
-		return;
-	}
-	m_Runner.Stop();
-	DiscardRecovery();
-	if (!Reload(m_Scene, m_Selected, m_PlaySnapshot, "the scene kept at Play")) {
-		VKE_CORE_ERROR("Editor: the scene kept at Play can't be restored; what is open stays");
-		return;
-	}
-	m_PlaySnapshot.clear();
-	m_PlayMode = PlayMode::Edit;
-	m_Dirty = m_DirtyAtPlay;
-	VKE_CORE_INFO("Editor: Stop: scene restored");
-}
-
-bool EditorScene::Reload(
-		Iunique<Scene> &scene, Handle<GameObject> &selected, const std::string &text, const std::string &name) {
-	GameObject *current = scene->Get(selected);
-	ObjectID selectedID = current ? current->GetID() : ObjectID();
-
-	auto loaded = MakeIunique<Scene>();
-	if (!SceneSerializer::LoadText(*loaded, m_Prefabs, text, name)) {
-		return false;
-	}
-	scene = std::move(loaded);
-	GameObject *same = selectedID.IsValid() ? scene->FindByID(selectedID) : nullptr;
-	selected = same ? same->GetHandle() : Handle<GameObject>();
 	return true;
 }
 
 void EditorScene::Update(f32 deltaTime) {
-	if (m_PlayMode == PlayMode::Playing) {
-		m_Runner.Update(deltaTime);
+	if (GetMode() == EditorMode::Playing) {
+		m_Play.Update(deltaTime);
 	} else {
-		m_Scene->Sync();
+		GetScene().Sync();
 	}
 }
 
 std::filesystem::path EditorScene::GetFile() const {
-	return m_ID.IsValid() ? m_Assets.GetFile(m_ID) : std::filesystem::path();
-}
-
-std::string EditorScene::GetFileName() const {
-	std::filesystem::path file = GetFile();
-	return file.empty() ? std::string("Untitled") : file.filename().u8string();
-}
-
-std::string EditorScene::GetWaitingFileName() const {
-	std::filesystem::path file = m_Waiting.ID.IsValid() ? m_Assets.GetFile(m_Waiting.ID) : std::filesystem::path();
-	return file.empty() ? std::string("Untitled") : file.filename().u8string();
+	return m_Document.ID.IsValid() ? m_Assets.GetFile(m_Document.ID) : std::filesystem::path();
 }
 
 bool EditorScene::OpenPrefab(AssetID prefab) {
-	if (m_Assets.GetType(prefab) != AssetType::Prefab) {
-		VKE_CORE_ERROR("Editor: {} isn't a prefab", prefab.ToString());
+	if (IsPlaying()) {
+		VKE_CORE_ERROR("Editor: a prefab can't be opened while playing");
 		return false;
 	}
-	auto objects = MakeIunique<Scene>();
-	std::filesystem::path file = m_Assets.GetFile(prefab);
-	if (!SceneSerializer::LoadPrefab(*objects, m_Assets, file) || objects->GetRootObjects().empty()) {
-		VKE_CORE_ERROR("Editor: '{}' can't be read", file.u8string());
+	if (!m_PrefabEditing.Open(prefab)) {
 		return false;
 	}
-
-	m_Waiting.Objects = std::move(m_Scene);
-	m_Waiting.ID = m_ID;
-	m_Waiting.Dirty = m_Dirty;
-	m_Waiting.Selected = m_Selected;
-	m_Scene = std::move(objects);
-	m_ID = prefab;
-	m_Dirty = false;
 	++m_OpenCount;
-	m_Selected = m_Scene->GetRootObjects().front()->GetHandle();
 	m_SelectedAsset = {};
-	VKE_CORE_INFO("Editor: editing {}", GetFileName());
 	return true;
 }
 
@@ -410,33 +283,9 @@ void EditorScene::ClosePrefab() {
 	if (!IsEditingPrefab()) {
 		return;
 	}
-	m_Scene = std::move(m_Waiting.Objects);
-	m_ID = m_Waiting.ID;
-	m_Dirty = m_Waiting.Dirty;
-	m_Selected = m_Waiting.Selected;
+	m_PrefabEditing.Close();
 	m_SelectedAsset = {};
-	m_Waiting = {};
 	++m_OpenCount;
-}
-
-bool EditorScene::SavePrefab() {
-	std::filesystem::path file = GetFile();
-	if (file.empty() || !m_Assets.IsWritable(m_ID)) {
-		VKE_CORE_ERROR("Editor: {} can't be written", GetFileName());
-		return false;
-	}
-	// The scene as it is against the prefab before the change, to keep the overrides.
-	std::string text = SceneSerializer::ToText(*m_Waiting.Objects, m_Prefabs);
-	if (text.empty()) {
-		return false;
-	}
-	if (!SceneSerializer::SavePrefab(*m_Scene->GetRootObjects().front(), m_Assets, file)) {
-		return false;
-	}
-
-	m_Prefabs.Forget(m_ID);
-	m_Dirty = false;
-	return Reload(m_Waiting.Objects, m_Waiting.Selected, text, "the scene's instances");
 }
 
 AssetID EditorScene::TakePrefabToOpen() {
@@ -460,28 +309,29 @@ AssetID EditorScene::CreatePrefab(GameObject &object, const std::filesystem::pat
 	}
 
 	// The IDs of the objects are their parts' now, which says what to find in the instance.
+	Scene &scene = GetScene();
 	auto isInside = [&](const GameObject *other) { return other && (other == &object || other->IsChildOf(&object)); };
-	CameraComponent *camera = m_Scene->GetMainCamera();
+	CameraComponent *camera = scene.GetMainCamera();
 	ObjectID cameraPart = camera && isInside(&camera->GetOwner()) ? camera->GetOwner().GetID() : ObjectID();
 	ObjectID selectedPart = isInside(GetSelected()) ? GetSelected()->GetID() : ObjectID();
 	GameObject *parent = object.GetParent();
 	size_t index = object.GetIndexInParent();
 	ObjectID id = object.GetID();
 
-	m_Scene->Destroy(object);
-	GameObject *instance = m_Prefabs.Instantiate(*m_Scene, prefab, parent, id);
+	scene.Destroy(object);
+	GameObject *instance = m_Prefabs.Instantiate(scene, prefab, parent, id);
 	if (!instance) {
 		return {};
 	}
 	instance->SetIndexInParent(index);
 	if (cameraPart.IsValid()) {
 		GameObject *part = PrefabLibrary::FindInstancePart(*instance, cameraPart);
-		m_Scene->SetMainCamera(part ? part->GetComponent<CameraComponent>() : nullptr);
+		scene.SetMainCamera(part ? part->GetComponent<CameraComponent>() : nullptr);
 	}
 	if (selectedPart.IsValid()) {
 		Select(PrefabLibrary::FindInstancePart(*instance, selectedPart));
 	}
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	VKE_CORE_INFO("Editor: created the prefab {}", file.filename().u8string());
 	return prefab;
 }
@@ -492,7 +342,7 @@ bool EditorScene::ChangePrefab(AssetID prefab, const std::function<void(GameObje
 		VKE_CORE_ERROR("Editor: the prefab {} can't be written", prefab.ToString());
 		return false;
 	}
-	std::string text = SceneSerializer::ToText(*m_Scene, m_Prefabs);
+	std::string text = SceneSerializer::ToText(GetScene(), m_Prefabs);
 	if (text.empty()) {
 		return false;
 	}
@@ -500,12 +350,12 @@ bool EditorScene::ChangePrefab(AssetID prefab, const std::function<void(GameObje
 	change(*root);
 	bool saved = m_Prefabs.Save(prefab);
 	m_Prefabs.Forget(prefab);
-	return Reload(m_Scene, m_Selected, text, "the scene's instances") && saved;
+	return Reload(m_Document, m_Prefabs, text, "the scene's instances") && saved;
 }
 
 void EditorScene::Unpack(GameObject &instance) {
 	PrefabLibrary::Unpack(instance);
-	m_Dirty = true;
+	m_Document.Dirty = true;
 }
 
 bool EditorScene::IsFixed(const GameObject &object) const {
@@ -520,26 +370,26 @@ bool EditorScene::AcceptsChildren(const GameObject *parent) const {
 }
 
 GameObject *EditorScene::GetDefaultParent() const {
-	return IsEditingPrefab() ? m_Scene->GetRootObjects().front() : nullptr;
+	return IsEditingPrefab() ? GetScene().GetRootObjects().front() : nullptr;
 }
 
 GameObject *EditorScene::GetSelected() const {
-	return m_Scene->Get(m_Selected);
+	return GetScene().Get(m_Document.Selected);
 }
 
 void EditorScene::Select(GameObject *object) {
-	m_Selected = object ? object->GetHandle() : Handle<GameObject>();
+	m_Document.Selected = object ? object->GetHandle() : Handle<GameObject>();
 	m_SelectedAsset = {};
 }
 
 void EditorScene::SelectAsset(AssetID asset) {
-	m_Selected = {};
+	m_Document.Selected = {};
 	m_SelectedAsset = asset;
 }
 
 GameObject &EditorScene::CreateEmpty(GameObject *parent) {
-	m_Dirty = true;
-	return m_Scene->CreateObject("GameObject", parent ? parent : GetDefaultParent());
+	m_Document.Dirty = true;
+	return GetScene().CreateObject("GameObject", parent ? parent : GetDefaultParent());
 }
 
 GameObject *EditorScene::CreateShape(Shape shape, GameObject *parent) {
@@ -556,21 +406,21 @@ GameObject *EditorScene::CreateShape(Shape shape, GameObject *parent) {
 		return nullptr;
 	}
 
-	GameObject &object = m_Scene->CreateObject(name, parent ? parent : GetDefaultParent());
+	GameObject &object = GetScene().CreateObject(name, parent ? parent : GetDefaultParent());
 	auto *component = object.AddComponent<MeshComponent>(mesh);
 	Handle<MaterialData> material = m_Assets.LoadMaterial((content / "Materials" / "Default.mat").u8string());
 	if (material.IsValid()) {
 		component->SetMaterials({ material });
 	}
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	return &object;
 }
 
 GameObject &EditorScene::CreateCamera(GameObject *parent) {
-	GameObject &camera = m_Scene->CreateObject("Camera", parent ? parent : GetDefaultParent());
+	GameObject &camera = GetScene().CreateObject("Camera", parent ? parent : GetDefaultParent());
 	camera.GetTransform().SetLocalPosition(Vec3(0.0f, 1.0f, 5.0f));
 	camera.AddComponent<CameraComponent>();
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	return camera;
 }
 
@@ -591,11 +441,11 @@ GameObject &EditorScene::CreateLight(LightType type, GameObject *parent) {
 		settings.Intensity = 40.0f;
 	}
 
-	GameObject &light = m_Scene->CreateObject(name, parent ? parent : GetDefaultParent());
+	GameObject &light = GetScene().CreateObject(name, parent ? parent : GetDefaultParent());
 	light.GetTransform().SetLocalPosition(position);
 	light.GetTransform().SetLocalRotation(RotationTowards(direction));
 	light.AddComponent<LightComponent>(settings);
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	return light;
 }
 
@@ -604,13 +454,13 @@ GameObject *EditorScene::InstantiateModel(AssetID model, GameObject *parent, con
 		VKE_CORE_ERROR("Editor: {} isn't a model", model.ToString());
 		return nullptr;
 	}
-	GameObject *root =
-			VKE::InstantiateModel(*m_Scene, m_Assets, m_Assets.LoadModel(model), parent ? parent : GetDefaultParent());
+	GameObject *root = VKE::InstantiateModel(
+			GetScene(), m_Assets, m_Assets.LoadModel(model), parent ? parent : GetDefaultParent());
 	if (!root) {
 		return nullptr;
 	}
 	root->GetTransform().SetLocalPosition(position);
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	return root;
 }
 
@@ -623,18 +473,18 @@ GameObject *EditorScene::Place(AssetID asset, GameObject *parent, const Vec3 &po
 	if (m_Assets.GetType(asset) != AssetType::Prefab) {
 		return InstantiateModel(asset, parent, position);
 	}
-	GameObject *instance = m_Prefabs.Instantiate(*m_Scene, asset, parent, ObjectID::Generate());
+	GameObject *instance = m_Prefabs.Instantiate(GetScene(), asset, parent, ObjectID::Generate());
 	if (!instance) {
 		return nullptr;
 	}
 	instance->GetTransform().SetLocalPosition(position);
-	m_Dirty = true;
+	m_Document.Dirty = true;
 	return instance;
 }
 
 void EditorScene::Destroy(GameObject &object) {
-	m_Scene->Destroy(object);
-	m_Dirty = true;
+	GetScene().Destroy(object);
+	m_Document.Dirty = true;
 }
 
 } // namespace VKE::Editor
