@@ -7,6 +7,7 @@ target_sources(VKE_Physics PRIVATE
     private/Broadphase.cpp
     private/Narrowphase.cpp
     private/TriangleTree.cpp
+    private/jolt/JoltWorld.cpp
 )
 
 target_include_directories(VKE_Physics

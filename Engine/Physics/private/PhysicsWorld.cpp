@@ -3,6 +3,7 @@
 #include "Broadphase.h"
 #include "Narrowphase.h"
 #include "TriangleTree.h"
+#include "jolt/JoltWorld.h"
 
 #include <core/Log.h>
 #include <core/SlotMap.h>
@@ -131,6 +132,9 @@ bool RayHitsBox(
 } // namespace
 
 struct PhysicsWorld::Storage {
+	// Jolt's side of the world. Nothing is in it yet.
+	JoltWorld Jolt;
+
 	SlotMap<MeshShape> Shapes;
 	SlotMap<Body> Bodies;
 
