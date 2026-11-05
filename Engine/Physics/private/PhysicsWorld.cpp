@@ -9,7 +9,12 @@
 #include <core/Log.h>
 #include <core/SlotMap.h>
 
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaleHelpers.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
 #include <algorithm>
 #include <unordered_map>
@@ -30,6 +35,8 @@ struct Body {
 	// Mesh bodies: the mesh's space to world, and back.
 	Mat4 MeshToWorld{ 1.0f };
 	Mat4 WorldToMesh{ 1.0f };
+	// The body's copy in Jolt. Invalid while it has no shape Jolt can use.
+	JPH::BodyID Jolt;
 };
 
 namespace {
@@ -73,6 +80,34 @@ OrientedBox MakeBox(const BodyDesc &desc) {
 	box.HalfExtents = glm::abs(desc.HalfExtents * desc.Pose.Scale);
 	box.Center = desc.Pose.Position + rotation * (desc.Center * desc.Pose.Scale);
 	return box;
+}
+
+// Jolt can't build a box thinner than this.
+constexpr f32 kMinJoltHalfExtent = 0.001f;
+
+// Stored in each Jolt body, so its hits lead back to the engine's body.
+u64 PackBodyID(BodyID id) {
+	return (static_cast<u64>(id.Index) << 32) | id.Generation;
+}
+
+JPH::ObjectLayer GetJoltLayer(const BodyDesc &desc) {
+	if (desc.IsTrigger) {
+		return JoltLayers::Trigger;
+	}
+	return IsStatic(desc) ? JoltLayers::Static : JoltLayers::Movable;
+}
+
+// A box body sits in Jolt at the box's center, so its shape needs no offset.
+JPH::RVec3 GetJoltPosition(const BodyDesc &desc) {
+	return ToJolt(desc.Shape == ShapeType::Box ? MakeBox(desc).Center : desc.Pose.Position);
+}
+
+// Whether the change from `before` to `after` only moved or turned the body, which Jolt can
+// do in place; anything else rebuilds the Jolt body.
+bool OnlyPlacementChanged(const BodyDesc &before, const BodyDesc &after) {
+	return before.Shape == after.Shape && before.Center == after.Center && before.HalfExtents == after.HalfExtents &&
+			before.Mesh == after.Mesh && before.Pose.Scale == after.Pose.Scale && before.Motion == after.Motion &&
+			before.IsTrigger == after.IsTrigger;
 }
 
 AABB TransformBounds(const AABB &bounds, const Mat4 &matrix) {
@@ -296,6 +331,72 @@ struct PhysicsWorld::Storage {
 			}
 		}
 	}
+
+	JPH::BodyInterface &GetJoltBodies() { return Jolt.GetSystem().GetBodyInterface(); }
+
+	// The body's shape for Jolt, or null if it has none Jolt can use.
+	JPH::ShapeRefC MakeJoltShape(const BodyDesc &desc) const {
+		if (desc.Shape == ShapeType::Box) {
+			Vec3 halfExtents = glm::max(glm::abs(desc.HalfExtents * desc.Pose.Scale), Vec3(kMinJoltHalfExtent));
+			// Jolt rounds a box's edges by its convex radius, which can't exceed its thinnest side.
+			f32 thinnest = std::min({ halfExtents.x, halfExtents.y, halfExtents.z });
+			return new JPH::BoxShape(ToJolt(halfExtents), std::min(JPH::cDefaultConvexRadius, 0.5f * thinnest));
+		}
+
+		const MeshShape *shape = Shapes.Get(desc.Mesh);
+		JPH::Vec3 scale = ToJolt(desc.Pose.Scale);
+		if (!shape || !shape->Jolt || JPH::ScaleHelpers::IsZeroScale(scale)) {
+			return nullptr;
+		}
+		if (JPH::ScaleHelpers::IsNotScaled(scale)) {
+			return shape->Jolt;
+		}
+		return new JPH::ScaledShape(shape->Jolt, scale);
+	}
+
+	void AddToJolt(BodyID id, Body &body) {
+		JPH::ShapeRefC shape = MakeJoltShape(body.Desc);
+		if (!shape) {
+			return;
+		}
+
+		JPH::ObjectLayer layer = GetJoltLayer(body.Desc);
+		JPH::EMotionType motion = layer == JoltLayers::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
+		JPH::BodyCreationSettings settings(
+				shape, GetJoltPosition(body.Desc), ToJolt(glm::normalize(body.Desc.Pose.Rotation)), motion, layer);
+		settings.mIsSensor = body.Desc.IsTrigger;
+		settings.mUserData = PackBodyID(id);
+		body.Jolt = GetJoltBodies().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+		if (body.Jolt.IsInvalid()) {
+			VKE_CORE_WARN("PhysicsWorld: Jolt is out of bodies");
+		}
+	}
+
+	void RemoveFromJolt(Body &body) {
+		if (body.Jolt.IsInvalid()) {
+			return;
+		}
+		GetJoltBodies().RemoveBody(body.Jolt);
+		GetJoltBodies().DestroyBody(body.Jolt);
+		body.Jolt = {};
+	}
+
+	// Brings the body's Jolt copy up to its desc, which was `before`.
+	void UpdateInJolt(BodyID id, Body &body, const BodyDesc &before) {
+		if (!body.Jolt.IsInvalid() && OnlyPlacementChanged(before, body.Desc)) {
+			MoveInJolt(body);
+			return;
+		}
+		RemoveFromJolt(body);
+		AddToJolt(id, body);
+	}
+
+	void MoveInJolt(const Body &body) {
+		if (!body.Jolt.IsInvalid()) {
+			GetJoltBodies().SetPositionAndRotation(body.Jolt, GetJoltPosition(body.Desc),
+					ToJolt(glm::normalize(body.Desc.Pose.Rotation)), JPH::EActivation::DontActivate);
+		}
+	}
 };
 
 PhysicsWorld::PhysicsWorld() : m_Storage(MakeIunique<Storage>()) {}
@@ -331,31 +432,49 @@ MeshShapeID PhysicsWorld::CreateMeshShape(const MeshShapeDesc &desc) {
 }
 
 void PhysicsWorld::DestroyMeshShape(MeshShapeID id) {
-	m_Storage->Shapes.Remove(id);
+	Storage &s = *m_Storage;
+	// A Jolt body keeps its own reference to the shape, so it has to leave too.
+	const u32 bodyCount = static_cast<u32>(s.Bodies.Size());
+	for (u32 i = 0; i < bodyCount; ++i) {
+		Body &body = s.BodyAt(i);
+		if (body.Desc.Shape == ShapeType::Mesh && body.Desc.Mesh == id) {
+			s.RemoveFromJolt(body);
+		}
+	}
+	s.Shapes.Remove(id);
 }
 
 BodyID PhysicsWorld::CreateBody(const BodyDesc &desc) {
 	Body body;
 	body.Desc = desc;
-	return m_Storage->Bodies.Emplace(std::move(body));
+	BodyID id = m_Storage->Bodies.Emplace(body);
+	m_Storage->AddToJolt(id, *m_Storage->Bodies.Get(id));
+	return id;
 }
 
 void PhysicsWorld::SetBody(BodyID id, const BodyDesc &desc) {
 	if (Body *body = m_Storage->Bodies.Get(id)) {
+		BodyDesc before = body->Desc;
 		body->Desc = desc;
+		m_Storage->UpdateInJolt(id, *body, before);
 	}
 }
 
 void PhysicsWorld::SetPose(BodyID id, const Transform &pose) {
 	if (Body *body = m_Storage->Bodies.Get(id)) {
+		BodyDesc before = body->Desc;
 		body->Desc.Pose = pose;
+		m_Storage->UpdateInJolt(id, *body, before);
 	}
 }
 
 void PhysicsWorld::DestroyBody(BodyID id) {
-	if (!m_Storage->Bodies.Remove(id)) {
+	Body *body = m_Storage->Bodies.Get(id);
+	if (!body) {
 		return;
 	}
+	m_Storage->RemoveFromJolt(*body);
+	m_Storage->Bodies.Remove(id);
 	m_Storage->EndContactsOf(id);
 }
 
@@ -464,6 +583,7 @@ void PhysicsWorld::Step() {
 	for (u32 i = 0; i < bodyCount; ++i) {
 		if (s.BodyAt(i).Desc.Pose.Position != s.StartPositions[i]) {
 			s.Moved.push_back(s.Bodies.HandleAt(i));
+			s.MoveInJolt(s.BodyAt(i));
 		}
 	}
 
