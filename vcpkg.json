@@ -15,6 +15,7 @@
     "tinyobjloader",
     "assimp",
     "glm",
+    "joltphysics",
     "vulkan",
     "vulkan-memory-allocator",
     "yaml-cpp",
