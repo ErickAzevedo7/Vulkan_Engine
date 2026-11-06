@@ -11,6 +11,10 @@
 
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaleHelpers.h>
@@ -90,6 +94,23 @@ u64 PackBodyID(BodyID id) {
 	return (static_cast<u64>(id.Index) << 32) | id.Generation;
 }
 
+BodyID UnpackBodyID(u64 packed) {
+	BodyID id;
+	id.Index = static_cast<u32>(packed >> 32);
+	id.Generation = static_cast<u32>(packed);
+	return id;
+}
+
+class TriggerFilter final : public JPH::ObjectLayerFilter {
+public:
+	explicit TriggerFilter(bool withTriggers) : m_WithTriggers(withTriggers) {}
+
+	bool ShouldCollide(JPH::ObjectLayer layer) const override { return m_WithTriggers || layer != JoltLayers::Trigger; }
+
+private:
+	bool m_WithTriggers;
+};
+
 JPH::ObjectLayer GetJoltLayer(const BodyDesc &desc) {
 	if (desc.IsTrigger) {
 		return JoltLayers::Trigger;
@@ -131,44 +152,6 @@ Triangle TransformTriangle(const Triangle &triangle, const Mat4 &matrix) {
 AABB Expand(const AABB &bounds, f32 amount) {
 	return AABB(bounds.Min - Vec3(amount), bounds.Max + Vec3(amount));
 }
-
-// Against the outside of a box, in its axes. From inside there's no hit.
-bool RayHitsBox(
-		const OrientedBox &box, const Vec3 &origin, const Vec3 &direction, f32 maxT, f32 &outT, Vec3 &outNormal) {
-	Vec3 toBox = box.Center - origin;
-	f32 near = 0.0f;
-	f32 far = maxT;
-	Vec3 normal(0.0f);
-	for (int axis = 0; axis < 3; ++axis) {
-		f32 along = glm::dot(box.Axes[axis], toBox);
-		f32 speed = glm::dot(box.Axes[axis], direction);
-		if (speed == 0.0f) {
-			if (std::abs(along) > box.HalfExtents[axis]) {
-				return false;
-			}
-			continue;
-		}
-		f32 first = (along - box.HalfExtents[axis]) / speed;
-		f32 second = (along + box.HalfExtents[axis]) / speed;
-		if (first > second) {
-			std::swap(first, second);
-		}
-		if (first > near) {
-			near = first;
-			normal = speed > 0.0f ? -box.Axes[axis] : box.Axes[axis];
-		}
-		far = std::min(far, second);
-		if (near > far) {
-			return false;
-		}
-	}
-	if (near <= 0.0f) {
-		return false;
-	}
-	outT = near;
-	outNormal = normal;
-	return true;
-}
 } // namespace
 
 struct PhysicsWorld::Storage {
@@ -193,6 +176,8 @@ struct PhysicsWorld::Storage {
 	// Reused by each push out of a mesh.
 	std::vector<Triangle> NearbyTriangles;
 	bool MovableMeshWarned = false;
+	// Bodies entered Jolt since its broadphase was last rebuilt for fast queries.
+	bool JoltBodiesAdded = false;
 
 	Body &BodyAt(u32 denseIndex) { return *Bodies.Get(Bodies.HandleAt(denseIndex)); }
 
@@ -369,7 +354,9 @@ struct PhysicsWorld::Storage {
 		body.Jolt = GetJoltBodies().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
 		if (body.Jolt.IsInvalid()) {
 			VKE_CORE_WARN("PhysicsWorld: Jolt is out of bodies");
+			return;
 		}
+		JoltBodiesAdded = true;
 	}
 
 	void RemoveFromJolt(Body &body) {
@@ -485,51 +472,45 @@ const BodyDesc *PhysicsWorld::GetBody(BodyID id) const {
 
 bool PhysicsWorld::Raycast(
 		const Vec3 &origin, const Vec3 &direction, f32 maxDistance, bool withTriggers, RayHit &outHit) const {
-	if (glm::dot(direction, direction) == 0.0f) {
+	if (glm::dot(direction, direction) == 0.0f || maxDistance <= 0.0f) {
 		return false;
 	}
 	Vec3 unit = glm::normalize(direction);
 
-	Storage &s = *m_Storage;
-	bool found = false;
-	f32 nearest = maxDistance;
-	const u32 bodyCount = static_cast<u32>(s.Bodies.Size());
-	for (u32 i = 0; i < bodyCount; ++i) {
-		BodyID id = s.Bodies.HandleAt(i);
-		const Body &body = *s.Bodies.Get(id);
-		const BodyDesc &desc = body.Desc;
-		if (desc.IsTrigger && !withTriggers) {
-			continue;
-		}
-
-		f32 distance = 0.0f;
-		Vec3 normal(0.0f);
-		bool hit = false;
-		if (desc.Shape == ShapeType::Box) {
-			hit = RayHitsBox(MakeBox(desc), origin, unit, nearest, distance, normal);
-		} else if (const MeshShape *shape = s.Shapes.Get(desc.Mesh)) {
-			// Not normalized in the mesh's space, so t stays a distance in the world's.
-			Mat4 toMesh = desc.Pose.GetInverseMatrix();
-			Vec3 meshOrigin(toMesh * Vec4(origin, 1.0f));
-			Vec3 meshDirection(toMesh * Vec4(unit, 0.0f));
-			Vec3 meshNormal(0.0f);
-			hit = shape->Tree.Raycast(meshOrigin, meshDirection, nearest, distance, meshNormal);
-			if (hit) {
-				normal = glm::normalize(Vec3(glm::transpose(toMesh) * Vec4(meshNormal, 0.0f)));
-				if (glm::dot(normal, unit) > 0.0f) {
-					normal = -normal;
-				}
-			}
-		}
-		if (!hit || distance >= nearest) {
-			continue;
-		}
-
-		nearest = distance;
-		found = true;
-		outHit = { id, origin + unit * distance, normal, distance, desc.UserData };
+	const JPH::PhysicsSystem &system = m_Storage->Jolt.GetSystem();
+	// Jolt's ray runs from the origin to origin + direction.
+	JPH::RRayCast ray(ToJolt(origin), ToJolt(unit * maxDistance));
+	JPH::RayCastSettings settings;
+	// A ray that starts inside a box only meets its far side, which faces away and is skipped.
+	settings.mTreatConvexAsSolid = false;
+	// Both faces of a mesh's triangles count.
+	settings.mBackFaceModeTriangles = JPH::EBackFaceMode::CollideWithBackFaces;
+	JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> closest;
+	system.GetNarrowPhaseQuery().CastRay(ray, settings, closest, {}, TriggerFilter(withTriggers));
+	if (!closest.HadHit()) {
+		return false;
 	}
-	return found;
+
+	const JPH::RayCastResult &hit = closest.mHit;
+	JPH::BodyLockRead lock(system.GetBodyLockInterface(), hit.mBodyID);
+	if (!lock.Succeeded()) {
+		return false;
+	}
+	BodyID id = UnpackBodyID(lock.GetBody().GetUserData());
+	const Body *body = m_Storage->Bodies.Get(id);
+	if (!body) {
+		return false;
+	}
+
+	f32 distance = hit.mFraction * maxDistance;
+	Vec3 point = origin + unit * distance;
+	Vec3 normal = ToVKE(lock.GetBody().GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, ToJolt(point)));
+	// A mesh's back face gives the normal on its other side.
+	if (glm::dot(normal, unit) > 0.0f) {
+		normal = -normal;
+	}
+	outHit = { id, point, normal, distance, body->Desc.UserData };
+	return true;
 }
 
 void PhysicsWorld::Step() {
@@ -537,6 +518,11 @@ void PhysicsWorld::Step() {
 	s.Moved.clear();
 	s.Events.swap(s.PendingEnds);
 	s.PendingEnds.clear();
+
+	if (s.JoltBodiesAdded) {
+		s.Jolt.GetSystem().OptimizeBroadPhase();
+		s.JoltBodiesAdded = false;
+	}
 
 	const u32 bodyCount = static_cast<u32>(s.Bodies.Size());
 	s.Entries.clear();
