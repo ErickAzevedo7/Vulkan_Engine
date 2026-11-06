@@ -21,7 +21,7 @@ public:
 	PhysicsWorld(const PhysicsWorld &) = delete;
 	PhysicsWorld &operator=(const PhysicsWorld &) = delete;
 
-	// Builds the triangle tree once; bodies share it through the returned handle.
+	// Builds the shape once; bodies share it through the returned handle.
 	MeshShapeID CreateMeshShape(const MeshShapeDesc &desc);
 	// Bodies still using the shape stop colliding.
 	void DestroyMeshShape(MeshShapeID id);

@@ -1,8 +1,5 @@
 #include "physics/PhysicsWorld.h"
 
-#include "Broadphase.h"
-#include "Narrowphase.h"
-#include "TriangleTree.h"
 #include "jolt/JoltMath.h"
 #include "jolt/JoltWorld.h"
 
@@ -28,19 +25,12 @@
 namespace VKE {
 
 struct MeshShape {
-	TriangleTree Tree;
-	// The same triangles for Jolt. Null if Jolt couldn't build them.
+	// Null if Jolt couldn't build the triangles.
 	JPH::ShapeRefC Jolt;
 };
 
 struct Body {
 	BodyDesc Desc;
-	// Updated at the start of each step.
-	AABB Bounds;
-	bool HasShape = false;
-	// Mesh bodies: the mesh's space to world, and back.
-	Mat4 MeshToWorld{ 1.0f };
-	Mat4 WorldToMesh{ 1.0f };
 	// The body's copy in Jolt. Invalid while it has no shape Jolt can use.
 	JPH::BodyID Jolt;
 };
@@ -62,6 +52,8 @@ struct TouchingPair {
 	Vec3 Normal{ 0.0f };
 	u64 UserDataA = 0;
 	u64 UserDataB = 0;
+	// How far the bodies overlap; negative while they are only near.
+	f32 Depth = 0.0f;
 
 	ContactEvent ToEvent(ContactPhase phase) const {
 		Vec3 normal = phase == ContactPhase::End ? Vec3(0.0f) : Normal;
@@ -79,15 +71,9 @@ bool IsStatic(const BodyDesc &desc) {
 	return desc.Motion == BodyMotion::Static || desc.Shape == ShapeType::Mesh;
 }
 
-OrientedBox MakeBox(const BodyDesc &desc) {
-	Mat3 rotation = glm::mat3_cast(desc.Pose.Rotation);
-	OrientedBox box;
-	for (int i = 0; i < 3; ++i) {
-		box.Axes[i] = rotation[i];
-	}
-	box.HalfExtents = glm::abs(desc.HalfExtents * desc.Pose.Scale);
-	box.Center = desc.Pose.Position + rotation * (desc.Center * desc.Pose.Scale);
-	return box;
+// A box's center in the world, which is where its Jolt body sits.
+Vec3 GetBoxCenter(const BodyDesc &desc) {
+	return desc.Pose.Position + glm::mat3_cast(desc.Pose.Rotation) * (desc.Center * desc.Pose.Scale);
 }
 
 // Jolt can't build a box thinner than this.
@@ -124,7 +110,7 @@ JPH::ObjectLayer GetJoltLayer(const BodyDesc &desc) {
 
 // A box body sits in Jolt at the box's center, so its shape needs no offset.
 JPH::RVec3 GetJoltPosition(const BodyDesc &desc) {
-	return ToJolt(desc.Shape == ShapeType::Box ? MakeBox(desc).Center : desc.Pose.Position);
+	return ToJolt(desc.Shape == ShapeType::Box ? GetBoxCenter(desc) : desc.Pose.Position);
 }
 
 // Whether the change from `before` to `after` only moved or turned the body, which Jolt can
@@ -135,38 +121,15 @@ bool OnlyPlacementChanged(const BodyDesc &before, const BodyDesc &after) {
 			before.IsTrigger == after.IsTrigger;
 }
 
-AABB TransformBounds(const AABB &bounds, const Mat4 &matrix) {
-	Vec3 first(matrix * Vec4(bounds.Min, 1.0f));
-	AABB result(first, first);
-	for (int corner = 1; corner < 8; ++corner) {
-		Vec3 local((corner & 1) ? bounds.Max.x : bounds.Min.x, (corner & 2) ? bounds.Max.y : bounds.Min.y,
-				(corner & 4) ? bounds.Max.z : bounds.Min.z);
-		Vec3 world(matrix * Vec4(local, 1.0f));
-		result.Min = glm::min(result.Min, world);
-		result.Max = glm::max(result.Max, world);
-	}
-	return result;
-}
-
-Triangle TransformTriangle(const Triangle &triangle, const Mat4 &matrix) {
-	return { Vec3(matrix * Vec4(triangle.A, 1.0f)), Vec3(matrix * Vec4(triangle.B, 1.0f)),
-		Vec3(matrix * Vec4(triangle.C, 1.0f)) };
-}
-
-AABB Expand(const AABB &bounds, f32 amount) {
-	return AABB(bounds.Min - Vec3(amount), bounds.Max + Vec3(amount));
-}
 } // namespace
 
 struct PhysicsWorld::Storage {
-	// Jolt's side of the world. Nothing is in it yet.
+	// Each body's copy, which every query runs against.
 	JoltWorld Jolt;
 
 	SlotMap<MeshShape> Shapes;
 	SlotMap<Body> Bodies;
 
-	Broadphase Pairs;
-	std::vector<Broadphase::Entry> Entries;
 	std::vector<Vec3> StartPositions;
 
 	// Pairs that were touching at the end of the last step.
@@ -183,65 +146,6 @@ struct PhysicsWorld::Storage {
 
 	Body &BodyAt(u32 denseIndex) { return *Bodies.Get(Bodies.HandleAt(denseIndex)); }
 
-	void UpdateShape(Body &body) {
-		const BodyDesc &desc = body.Desc;
-		if (desc.Shape == ShapeType::Box) {
-			body.HasShape = true;
-			body.Bounds = GetBounds(MakeBox(desc));
-			return;
-		}
-
-		const MeshShape *shape = Shapes.Get(desc.Mesh);
-		body.HasShape = shape && !shape->Tree.IsEmpty();
-		if (!body.HasShape) {
-			return;
-		}
-
-		body.MeshToWorld = desc.Pose.GetMatrix();
-		body.WorldToMesh = glm::inverse(body.MeshToWorld);
-		body.Bounds = TransformBounds(shape->Tree.GetBounds(), body.MeshToWorld);
-	}
-
-	// Calls `visit(const Triangle&)` with each triangle of `mesh`, in world space, near `region`.
-	template <typename Visitor> void VisitTriangles(const Body &mesh, const AABB &region, Visitor &&visit) {
-		const MeshShape *shape = Shapes.Get(mesh.Desc.Mesh);
-		shape->Tree.Query(TransformBounds(region, mesh.WorldToMesh),
-				[&](const Triangle &triangle) { visit(TransformTriangle(triangle, mesh.MeshToWorld)); });
-	}
-
-	// Whether the pair is touching after the pushes, and the normal that moves `a` away from `b`.
-	bool FindContact(const Body &a, const Body &b, Vec3 &outNormal) {
-		if (a.Desc.Shape == ShapeType::Mesh || b.Desc.Shape == ShapeType::Mesh) {
-			bool meshIsA = a.Desc.Shape == ShapeType::Mesh;
-			const Body &box = meshIsA ? b : a;
-			const Body &mesh = meshIsA ? a : b;
-
-			OrientedBox shape = MakeBox(box.Desc);
-			bool touching = false;
-			f32 deepest = -kContactMargin;
-			VisitTriangles(mesh, Expand(GetBounds(shape), kContactMargin), [&](const Triangle &triangle) {
-				Penetration penetration;
-				bool over = IsOverTriangle(shape.Center, triangle);
-				if (!TestBoxTriangle(shape, triangle, kContactMargin, over, penetration)) {
-					return;
-				}
-				if (!touching || penetration.Depth > deepest) {
-					deepest = penetration.Depth;
-					outNormal = meshIsA ? -penetration.Normal : penetration.Normal;
-				}
-				touching = true;
-			});
-			return touching;
-		}
-
-		Penetration penetration;
-		if (!TestBoxBox(MakeBox(a.Desc), MakeBox(b.Desc), kContactMargin, penetration)) {
-			return false;
-		}
-		outNormal = penetration.Normal;
-		return true;
-	}
-
 	void EndContactsOf(BodyID id) {
 		for (auto it = Touching.begin(); it != Touching.end();) {
 			const TouchingPair &pair = it->second;
@@ -250,6 +154,58 @@ struct PhysicsWorld::Storage {
 				it = Touching.erase(it);
 			} else {
 				++it;
+			}
+		}
+	}
+
+	// Adds to NowTouching the pairs the movable `body` touches or nearly touches. Only movables
+	// ask, so two static bodies, triggers or not, never touch.
+	void FindContactsOf(BodyID id, const Body &body) {
+		if (body.Jolt.IsInvalid()) {
+			return;
+		}
+
+		JPH::BodyInterface &bodies = GetJoltBodies();
+		JPH::RefConst<JPH::Shape> shape = bodies.GetShape(body.Jolt);
+		JPH::RMat44 transform = bodies.GetCenterOfMassTransform(body.Jolt);
+		JPH::CollideShapeSettings settings;
+		settings.mMaxSeparationDistance = kContactMargin;
+		JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> hits;
+		Jolt.GetSystem().GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), transform, settings,
+				transform.GetTranslation(), hits, {}, {}, JPH::IgnoreSingleBodyFilter(body.Jolt));
+
+		for (const JPH::CollideShapeResult &hit : hits.mHits) {
+			BodyID otherID = UnpackBodyID(bodies.GetUserData(hit.mBodyID2));
+			const Body *other = Bodies.Get(otherID);
+			if (!other) {
+				continue;
+			}
+
+			// The axis moves the other body away from this one.
+			Vec3 normal(0.0f);
+			if (hit.mPenetrationAxis.LengthSq() > 0.0f) {
+				normal = -ToVKE(hit.mPenetrationAxis.Normalized());
+			}
+			BodyID idA = id;
+			BodyID idB = otherID;
+			const Body *bodyA = &body;
+			const Body *bodyB = other;
+			if (idB.Index < idA.Index) {
+				std::swap(idA, idB);
+				std::swap(bodyA, bodyB);
+				normal = -normal;
+			}
+
+			TouchingPair pair{ idA, idB, bodyA->Desc.IsTrigger || bodyB->Desc.IsTrigger, Vec3(0.0f),
+				bodyA->Desc.UserData, bodyB->Desc.UserData, hit.mPenetrationDepth };
+			if (!pair.IsTrigger) {
+				pair.Normal = normal;
+			}
+			// A mesh gives a hit per triangle, and a pair of movables is found from both sides:
+			// the deepest hit wins.
+			auto [it, added] = NowTouching.try_emplace(MakePairKey(idA, idB), pair);
+			if (!added && pair.Depth > it->second.Depth) {
+				it->second = pair;
 			}
 		}
 	}
@@ -373,8 +329,7 @@ PhysicsWorld::~PhysicsWorld() = default;
 
 MeshShapeID PhysicsWorld::CreateMeshShape(const MeshShapeDesc &desc) {
 	MeshShape shape;
-	shape.Tree.Build(desc.Positions, desc.Indices);
-	if (shape.Tree.IsEmpty()) {
+	if (desc.Indices.size() < 3) {
 		VKE_CORE_WARN("PhysicsWorld: mesh shape has no triangles");
 		return m_Storage->Shapes.Emplace(std::move(shape));
 	}
@@ -506,30 +461,14 @@ void PhysicsWorld::Step() {
 	}
 
 	const u32 bodyCount = static_cast<u32>(s.Bodies.Size());
-	s.Entries.clear();
 	s.StartPositions.resize(bodyCount);
 	for (u32 i = 0; i < bodyCount; ++i) {
-		Body &body = s.BodyAt(i);
+		const Body &body = s.BodyAt(i);
 		if (body.Desc.Shape == ShapeType::Mesh && body.Desc.Motion == BodyMotion::Movable && !s.MovableMeshWarned) {
 			VKE_CORE_WARN("PhysicsWorld: mesh bodies can't be movable and are treated as static");
 			s.MovableMeshWarned = true;
 		}
-
-		s.UpdateShape(body);
 		s.StartPositions[i] = body.Desc.Pose.Position;
-		// Grown by the margin, so pairs that only come close are still checked for contact.
-		if (body.HasShape) {
-			s.Entries.push_back({ Expand(body.Bounds, kContactMargin), i, IsStatic(body.Desc) });
-		}
-	}
-
-	// A mesh is never pushed, so two meshes never need comparing.
-	std::vector<std::pair<u32, u32>> pairs;
-	for (const auto &[a, b] : s.Pairs.FindPairs(s.Entries)) {
-		if (s.BodyAt(a).Desc.Shape == ShapeType::Mesh && s.BodyAt(b).Desc.Shape == ShapeType::Mesh) {
-			continue;
-		}
-		pairs.emplace_back(a, b);
 	}
 
 	for (u32 round = 0; round < kPushRounds; ++round) {
@@ -545,35 +484,15 @@ void PhysicsWorld::Step() {
 		}
 	}
 
+	s.NowTouching.clear();
 	for (u32 i = 0; i < bodyCount; ++i) {
-		if (s.BodyAt(i).Desc.Pose.Position != s.StartPositions[i]) {
+		const Body &body = s.BodyAt(i);
+		if (body.Desc.Pose.Position != s.StartPositions[i]) {
 			s.Moved.push_back(s.Bodies.HandleAt(i));
 		}
-	}
-
-	s.NowTouching.clear();
-	for (const auto &[a, b] : pairs) {
-		BodyID idA = s.Bodies.HandleAt(a);
-		BodyID idB = s.Bodies.HandleAt(b);
-		u32 first = a;
-		u32 second = b;
-		if (idB.Index < idA.Index) {
-			std::swap(idA, idB);
-			std::swap(first, second);
+		if (!IsStatic(body.Desc)) {
+			s.FindContactsOf(s.Bodies.HandleAt(i), body);
 		}
-
-		const Body &bodyA = s.BodyAt(first);
-		const Body &bodyB = s.BodyAt(second);
-		TouchingPair pair{ idA, idB, bodyA.Desc.IsTrigger || bodyB.Desc.IsTrigger, Vec3(0.0f), bodyA.Desc.UserData,
-			bodyB.Desc.UserData };
-		Vec3 normal;
-		if (!s.FindContact(bodyA, bodyB, normal)) {
-			continue;
-		}
-		if (!pair.IsTrigger) {
-			pair.Normal = normal;
-		}
-		s.NowTouching.emplace(MakePairKey(idA, idB), pair);
 	}
 
 	for (const auto &[key, pair] : s.Touching) {
