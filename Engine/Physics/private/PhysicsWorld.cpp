@@ -10,9 +10,11 @@
 #include <core/SlotMap.h>
 
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -49,6 +51,8 @@ namespace {
 constexpr f32 kContactMargin = 0.005f;
 // Pushing a body out of one neighbor can push it into another; a few rounds settle that.
 constexpr u32 kPushRounds = 4;
+// Overlaps one body resolves in a round, one at a time.
+constexpr u32 kPushesPerRound = 4;
 
 struct TouchingPair {
 	// Ordered by slot index, so the same pair always reports the same A and B.
@@ -173,8 +177,6 @@ struct PhysicsWorld::Storage {
 
 	std::vector<BodyID> Moved;
 	std::vector<ContactEvent> Events;
-	// Reused by each push out of a mesh.
-	std::vector<Triangle> NearbyTriangles;
 	bool MovableMeshWarned = false;
 	// Bodies entered Jolt since its broadphase was last rebuilt for fast queries.
 	bool JoltBodiesAdded = false;
@@ -205,71 +207,6 @@ struct PhysicsWorld::Storage {
 		const MeshShape *shape = Shapes.Get(mesh.Desc.Mesh);
 		shape->Tree.Query(TransformBounds(region, mesh.WorldToMesh),
 				[&](const Triangle &triangle) { visit(TransformTriangle(triangle, mesh.MeshToWorld)); });
-	}
-
-	// Moves the movable bodies of a solid pair apart. Returns true if anything moved.
-	bool Push(Body &a, Body &b) {
-		if (a.Desc.Shape == ShapeType::Mesh) {
-			return PushOutOfMesh(b, a);
-		}
-		if (b.Desc.Shape == ShapeType::Mesh) {
-			return PushOutOfMesh(a, b);
-		}
-
-		Penetration penetration;
-		if (!TestBoxBox(MakeBox(a.Desc), MakeBox(b.Desc), 0.0f, penetration) || penetration.Depth <= 0.0f) {
-			return false;
-		}
-
-		Vec3 push = penetration.Normal * penetration.Depth;
-		bool aMoves = !IsStatic(a.Desc);
-		bool bMoves = !IsStatic(b.Desc);
-		if (aMoves && bMoves) {
-			a.Desc.Pose.Position += 0.5f * push;
-			b.Desc.Pose.Position -= 0.5f * push;
-		} else if (aMoves) {
-			a.Desc.Pose.Position += push;
-		} else {
-			b.Desc.Pose.Position -= push;
-		}
-		return true;
-	}
-
-	bool PushOutOfMesh(Body &box, const Body &mesh) {
-		if (IsStatic(box.Desc)) {
-			return false;
-		}
-
-		OrientedBox shape = MakeBox(box.Desc);
-		NearbyTriangles.clear();
-		VisitTriangles(mesh, GetBounds(shape), [&](const Triangle &triangle) { NearbyTriangles.push_back(triangle); });
-
-		// Triangles one after another, each against where the earlier ones left the box, so a
-		// floor and a wall both hold it at once. The ones the box's center is over go first,
-		// pushing along their normals: they are the surfaces it stands on or walks into. The
-		// ones it only grazes, like the edge of a molding, then get the smallest push, which
-		// their normal would overshoot.
-		// Sorted by where the box was before any push, so each triangle is visited once.
-		const Vec3 center = shape.Center;
-		bool pushed = false;
-		for (bool over : { true, false }) {
-			for (const Triangle &triangle : NearbyTriangles) {
-				if (IsOverTriangle(center, triangle) != over) {
-					continue;
-				}
-
-				Penetration penetration;
-				if (!TestBoxTriangle(shape, triangle, 0.0f, over, penetration) || penetration.Depth <= 0.0f) {
-					continue;
-				}
-
-				Vec3 push = penetration.Normal * penetration.Depth;
-				shape.Center += push;
-				box.Desc.Pose.Position += push;
-				pushed = true;
-			}
-		}
-		return pushed;
 	}
 
 	// Whether the pair is touching after the pushes, and the normal that moves `a` away from `b`.
@@ -383,6 +320,50 @@ struct PhysicsWorld::Storage {
 			GetJoltBodies().SetPositionAndRotation(body.Jolt, GetJoltPosition(body.Desc),
 					ToJolt(glm::normalize(body.Desc.Pose.Rotation)), JPH::EActivation::DontActivate);
 		}
+	}
+
+	// Pushes a movable body out of the solid bodies it overlaps, the deepest overlap first, so
+	// a floor and a wall both hold it once the rest is resolved. A movable neighbor takes half
+	// of each push. Returns true if anything moved.
+	bool PushOut(Body &body) {
+		if (body.Jolt.IsInvalid()) {
+			return false;
+		}
+
+		JPH::BodyInterface &bodies = GetJoltBodies();
+		bool pushed = false;
+		for (u32 i = 0; i < kPushesPerRound; ++i) {
+			JPH::RefConst<JPH::Shape> shape = bodies.GetShape(body.Jolt);
+			JPH::RMat44 transform = bodies.GetCenterOfMassTransform(body.Jolt);
+			JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> hits;
+			Jolt.GetSystem().GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), transform,
+					JPH::CollideShapeSettings(), transform.GetTranslation(), hits, {}, TriggerFilter(false),
+					JPH::IgnoreSingleBodyFilter(body.Jolt));
+
+			const JPH::CollideShapeResult *deepest = nullptr;
+			for (const JPH::CollideShapeResult &hit : hits.mHits) {
+				if (hit.mPenetrationDepth > 0.0f && hit.mPenetrationAxis.LengthSq() > 0.0f &&
+						(!deepest || hit.mPenetrationDepth > deepest->mPenetrationDepth)) {
+					deepest = &hit;
+				}
+			}
+			if (!deepest) {
+				break;
+			}
+
+			// The axis moves the other body out, so this one goes the opposite way.
+			Vec3 push = -ToVKE(deepest->mPenetrationAxis.Normalized()) * deepest->mPenetrationDepth;
+			Body *other = Bodies.Get(UnpackBodyID(bodies.GetUserData(deepest->mBodyID2)));
+			if (other && !IsStatic(other->Desc)) {
+				push *= 0.5f;
+				other->Desc.Pose.Position -= push;
+				MoveInJolt(*other);
+			}
+			body.Desc.Pose.Position += push;
+			MoveInJolt(body);
+			pushed = true;
+		}
+		return pushed;
 	}
 };
 
@@ -553,13 +534,11 @@ void PhysicsWorld::Step() {
 
 	for (u32 round = 0; round < kPushRounds; ++round) {
 		bool pushed = false;
-		for (const auto &[a, b] : pairs) {
-			Body &bodyA = s.BodyAt(a);
-			Body &bodyB = s.BodyAt(b);
-			if (bodyA.Desc.IsTrigger || bodyB.Desc.IsTrigger) {
-				continue;
+		for (u32 i = 0; i < bodyCount; ++i) {
+			Body &body = s.BodyAt(i);
+			if (!IsStatic(body.Desc) && !body.Desc.IsTrigger) {
+				pushed |= s.PushOut(body);
 			}
-			pushed |= s.Push(bodyA, bodyB);
 		}
 		if (!pushed) {
 			break;
@@ -569,7 +548,6 @@ void PhysicsWorld::Step() {
 	for (u32 i = 0; i < bodyCount; ++i) {
 		if (s.BodyAt(i).Desc.Pose.Position != s.StartPositions[i]) {
 			s.Moved.push_back(s.Bodies.HandleAt(i));
-			s.MoveInJolt(s.BodyAt(i));
 		}
 	}
 
