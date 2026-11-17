@@ -57,8 +57,8 @@ template <typename T> void WriteList(RHIBuffer &buffer, const std::vector<T> &li
 }
 } // namespace
 
-ForwardPath::ForwardPath(RHIDevice &device, AssetManager &assets, u32 framesInFlight) :
-		m_Device(device), m_FramesInFlight(framesInFlight) {
+ForwardPath::ForwardPath(RHIDevice &device, AssetManager &assets, GpuProfiler &profiler, u32 framesInFlight) :
+		m_Device(device), m_Profiler(profiler), m_FramesInFlight(framesInFlight) {
 	RenderPassDesc scenePassDesc;
 	AttachmentDesc sceneColor;
 	sceneColor.Format = kSceneColorFormat;
@@ -282,7 +282,10 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 	WriteFrameData(frameData, scene, view, targets.Width, targets.Height);
 	RHIBindGroup &frameGroup = *frameData.Group;
 
-	m_ShadowPass->Record(cmd, m_DrawItems);
+	{
+		GpuScope scope(m_Profiler, cmd, "Shadows");
+		m_ShadowPass->Record(cmd, m_DrawItems);
+	}
 
 	ClearValue sceneClear;
 	sceneClear.R = 0.02f;
@@ -290,6 +293,7 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 	sceneClear.B = 0.05f;
 
 	cmd.BeginRenderPass(*m_ScenePass, *targets.Targets[frameIndex].Framebuffer, sceneClear);
+	m_Profiler.Begin(cmd, "Opaque");
 	cmd.BindPipeline(*m_Pipeline);
 	cmd.BindBindGroup(kFrameSet, frameGroup);
 	cmd.BindBindGroup(kEnvironmentSet, environmentGroup);
@@ -318,14 +322,20 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 		cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
 	}
 
+	m_Profiler.End(cmd);
+
 	// Last in the pass, so it only touches pixels the scene left empty.
-	m_SkyboxPass->Record(cmd, frameGroup, environmentGroup);
+	{
+		GpuScope scope(m_Profiler, cmd, "Skybox");
+		m_SkyboxPass->Record(cmd, frameGroup, environmentGroup);
+	}
 
 	cmd.EndRenderPass();
 }
 
 void ForwardPath::Resolve(
 		RHICommandBuffer &cmd, u32 frameIndex, SceneTargets &targets, RHIRenderPass &outputPass, bool encodeSrgb) {
+	GpuScope scope(m_Profiler, cmd, "Tonemap");
 	m_TonemapPass->Record(cmd, outputPass, *targets.TonemapSources[frameIndex], m_Exposure, encodeSrgb);
 }
 

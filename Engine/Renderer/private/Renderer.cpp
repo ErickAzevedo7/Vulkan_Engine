@@ -63,8 +63,8 @@ void Renderer::Render(const RenderScene &scene, const RenderView &view) {
 	}
 }
 
-ViewTextureID Renderer::CreateViewTexture(u32 width, u32 height) {
-	return m_Frame ? m_Frame->CreateViewTexture(width, height) : ViewTextureID{};
+ViewTextureID Renderer::CreateViewTexture(u32 width, u32 height, std::string_view name) {
+	return m_Frame ? m_Frame->CreateViewTexture(width, height, name) : ViewTextureID{};
 }
 
 void Renderer::ResizeViewTexture(ViewTextureID id, u32 width, u32 height) {
@@ -94,6 +94,11 @@ void Renderer::SetExposure(f32 exposure) {
 	if (m_Frame) {
 		m_Frame->SetExposure(exposure);
 	}
+}
+
+const std::vector<GpuTiming> &Renderer::GetGpuTimings() const {
+	static const std::vector<GpuTiming> kNone;
+	return m_Frame ? m_Frame->GetGpuTimings() : kNone;
 }
 
 void Renderer::SetShadowsEnabled(bool enabled) {

@@ -6,6 +6,9 @@
 #include <renderer/RenderTypes.h>
 #include <renderer/WorldDraw.h>
 
+#include <string_view>
+#include <vector>
+
 namespace VKE {
 class IWindow;
 } // namespace VKE
@@ -65,8 +68,9 @@ public:
 	// Draws one frame with just `scene` in the window.
 	void Render(const RenderScene &scene, const RenderView &view);
 
-	// Starts out black. Changing the size keeps the ID; the contents are cleared.
-	ViewTextureID CreateViewTexture(u32 width, u32 height);
+	// Starts out black. Changing the size keeps the ID; the contents are cleared. `name` is
+	// what the GPU timings call the scenes drawn into it.
+	ViewTextureID CreateViewTexture(u32 width, u32 height, std::string_view name = "View");
 	void ResizeViewTexture(ViewTextureID id, u32 width, u32 height);
 	void DestroyViewTexture(ViewTextureID id);
 
@@ -79,6 +83,11 @@ public:
 
 	// Lights that ask for shadows only get them while this is on.
 	void SetShadowsEnabled(bool enabled);
+
+	// How long the GPU took on each part of a recent frame, a few frames behind: the whole
+	// frame, then each scene drawn and its passes, then the output with the 2D layer. Empty
+	// before the first frame comes back, or when the GPU can't time its work.
+	const std::vector<GpuTiming> &GetGpuTimings() const;
 
 private:
 	IWindow &m_Window;

@@ -6,6 +6,7 @@
 #include <math/MathTypes.h>
 #include <reflection/Marks.h>
 
+#include <string>
 #include <vector>
 
 namespace VKE {
@@ -74,6 +75,14 @@ struct RenderView {
 	// The projection the renderer draws with, for an output of `aspect` width over height.
 	// Clip space is Y-up, with depth in [0, 1].
 	Mat4 GetProjection(f32 aspect) const { return glm::perspectiveRH_ZO(FieldOfView, aspect, NearPlane, FarPlane); }
+};
+
+// How long the GPU spent on one part of a frame. Parts nest: a part follows the one it is
+// inside, one Depth deeper.
+struct GpuTiming {
+	std::string Name;
+	u32 Depth = 0;
+	f32 Milliseconds = 0.0f;
 };
 
 } // namespace VKE

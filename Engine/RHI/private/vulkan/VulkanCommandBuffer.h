@@ -38,6 +38,9 @@ public:
 	void CopyTextureToBuffer(
 			RHITexture &source, const ScissorRect &rect, RHIBuffer &destination, size_t offset) override;
 
+	void ResetTimestamps(RHITimestampPool &pool, u32 first, u32 count) override;
+	void WriteTimestamp(RHITimestampPool &pool, u32 index) override;
+
 	VkCommandBuffer GetHandle() const { return m_CommandBuffer; }
 
 private:

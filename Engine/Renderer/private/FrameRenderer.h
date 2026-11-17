@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ForwardPath.h"
+#include "GpuProfiler.h"
 #include "OverlayPass.h"
 #include "PickPass.h"
 #include "WorldPass.h"
@@ -17,6 +18,8 @@
 #include <rhi/RHISwapchain.h>
 #include <rhi/RHITexture.h>
 
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace VKE {
@@ -34,6 +37,8 @@ class RenderScene;
 // A view texture's GPU side: the scene targets it draws through, and the displayable
 // color the 2D layer samples, one per frame in flight; and what picking in it needs.
 struct ViewTexture {
+	// What its GPU timings are called.
+	std::string Name;
 	Iunique<SceneTargets> Scene;
 	std::vector<Iunique<RHITexture>> Colors;
 	std::vector<Iunique<RHIFramebuffer>> Framebuffers;
@@ -71,12 +76,14 @@ public:
 	void DrawOverlay(const OverlayDrawList &list);
 	void EndFrame();
 
-	ViewTextureID CreateViewTexture(u32 width, u32 height);
+	ViewTextureID CreateViewTexture(u32 width, u32 height, std::string_view name);
 	void ResizeViewTexture(ViewTextureID id, u32 width, u32 height);
 	void DestroyViewTexture(ViewTextureID id);
 
 	OverlayImageID CreateOverlayImage(u32 width, u32 height, const void *pixels);
 	void DestroyOverlayImage(OverlayImageID id);
+
+	const std::vector<GpuTiming> &GetGpuTimings() const { return m_Profiler->GetTimings(); }
 
 	void SetExposure(f32 exposure) { m_ForwardPath->SetExposure(exposure); }
 	void SetShadowsEnabled(bool enabled) { m_ForwardPath->SetShadowsEnabled(enabled); }
@@ -93,7 +100,7 @@ private:
 
 	void CreateWindowTargets();
 	void RecreateSwapchain();
-	ViewTexture MakeViewTexture(u32 width, u32 height);
+	ViewTexture MakeViewTexture(u32 width, u32 height, std::string name);
 	void Retire(ViewTexture view);
 	void Retire(OverlayImage image);
 	void ReleaseRetired(bool all);
@@ -104,6 +111,7 @@ private:
 	// Destroyed in reverse declaration order.
 	Iunique<RHIDevice> m_Device;
 	Iunique<RHISwapchain> m_Swapchain;
+	Iunique<GpuProfiler> m_Profiler;
 	// Draws into the swapchain image, presented afterwards.
 	Iunique<RHIRenderPass> m_OutputPass;
 	// Draws into a view texture's color, sampled afterwards.

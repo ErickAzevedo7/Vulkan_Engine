@@ -80,7 +80,7 @@ ViewportPanel::ViewportPanel(EditorScene &scene, AssetManager &assets, Renderer 
 		m_Scene(scene), m_Renderer(renderer), m_UI(ui), m_Markers(assets) {}
 
 void ViewportPanel::Create() {
-	m_Texture = m_Renderer.CreateViewTexture(640, 360);
+	m_Texture = m_Renderer.CreateViewTexture(640, 360, "Viewport");
 }
 
 void ViewportPanel::Destroy() {

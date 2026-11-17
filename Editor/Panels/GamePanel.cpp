@@ -22,7 +22,7 @@ GamePanel::GamePanel(EditorScene &scene, Renderer &renderer, UISystem &ui) :
 		m_Scene(scene), m_Renderer(renderer), m_UI(ui) {}
 
 void GamePanel::Create() {
-	m_Texture = m_Renderer.CreateViewTexture(640, 360);
+	m_Texture = m_Renderer.CreateViewTexture(640, 360, "Game");
 }
 
 void GamePanel::Destroy() {

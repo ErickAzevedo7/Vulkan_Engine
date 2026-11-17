@@ -7,6 +7,7 @@
 #include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
 #include "VulkanTexture.h"
+#include "VulkanTimestampPool.h"
 #include "VulkanUtils.h"
 
 namespace VKE {
@@ -172,6 +173,16 @@ void VulkanCommandBuffer::CopyTextureToBuffer(
 	barrier.size = VK_WHOLE_SIZE;
 	vkCmdPipelineBarrier(m_CommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1,
 			&barrier, 0, nullptr);
+}
+
+void VulkanCommandBuffer::ResetTimestamps(RHITimestampPool &pool, u32 first, u32 count) {
+	auto &timestamps = static_cast<VulkanTimestampPool &>(pool);
+	vkCmdResetQueryPool(m_CommandBuffer, timestamps.GetHandle(), first, count);
+}
+
+void VulkanCommandBuffer::WriteTimestamp(RHITimestampPool &pool, u32 index) {
+	auto &timestamps = static_cast<VulkanTimestampPool &>(pool);
+	vkCmdWriteTimestamp(m_CommandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestamps.GetHandle(), index);
 }
 
 Iunique<RHICommandBuffer> RHICommandBuffer::Create(RHIDevice &device) {

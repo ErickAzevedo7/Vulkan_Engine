@@ -291,6 +291,10 @@ struct DeviceLimits {
 	f32 MaxSamplerAnisotropy = 1.0f;
 	// Widest and tallest a 2D texture can be.
 	u32 MaxTextureSize = 0;
+	// Nanoseconds per timestamp tick.
+	f32 TimestampPeriod = 0.0f;
+	// How many low bits of a timestamp count; 0 when command buffers can't write timestamps.
+	u32 TimestampValidBits = 0;
 };
 
 } // namespace VKE

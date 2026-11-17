@@ -7,6 +7,7 @@
 #include "Panels/GamePanel.h"
 #include "Panels/HierarchyPanel.h"
 #include "Panels/InspectorPanel.h"
+#include "Panels/ProfilerPanel.h"
 #include "Panels/ViewportPanel.h"
 #include "ScriptCompiler.h"
 
@@ -116,12 +117,14 @@ private:
 	ViewportPanel m_Viewport;
 	AssetBrowserPanel m_AssetBrowser;
 	GamePanel m_Game;
+	ProfilerPanel m_Profiler;
 	bool m_ShowHierarchy = true;
 	bool m_ShowInspector = true;
 	bool m_ShowViewport = true;
 	bool m_ShowConsole = true;
 	bool m_ShowAssets = true;
 	bool m_ShowGame = true;
+	bool m_ShowProfiler = false;
 	// Files may change on disk while the editor is in the background: they are scanned
 	// again when it gets the focus back.
 	bool m_WindowFocused = true;

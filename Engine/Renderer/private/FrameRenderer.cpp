@@ -20,6 +20,7 @@ bool IsSrgbFormat(Format format) {
 FrameRenderer::FrameRenderer(IWindow &window, AssetManager &assets) : m_Window(window) {
 	m_Device = RHIDevice::Create(m_Window);
 	m_Swapchain = RHISwapchain::Create(*m_Device, m_Window);
+	m_Profiler = MakeIunique<GpuProfiler>(*m_Device, m_Swapchain->GetFramesInFlightCount());
 
 	m_OutputNeedsEncoding = !IsSrgbFormat(m_Swapchain->GetColorFormat());
 	if (!m_OutputNeedsEncoding) {
@@ -52,7 +53,7 @@ FrameRenderer::FrameRenderer(IWindow &window, AssetManager &assets) : m_Window(w
 	m_WorldRenderPass = RHIRenderPass::Create(*m_Device, worldPassDesc);
 
 	u32 framesInFlight = m_Swapchain->GetFramesInFlightCount();
-	m_ForwardPath = MakeIunique<ForwardPath>(*m_Device, assets, framesInFlight);
+	m_ForwardPath = MakeIunique<ForwardPath>(*m_Device, assets, *m_Profiler, framesInFlight);
 	m_OverlayPass = MakeIunique<OverlayPass>(*m_Device, *m_OutputPass, framesInFlight);
 	m_WorldPass = MakeIunique<WorldPass>(*m_Device, *m_WorldRenderPass, framesInFlight);
 	m_PickPass = MakeIunique<PickPass>(*m_Device, m_ForwardPath->GetGpuCache());
@@ -124,6 +125,7 @@ bool FrameRenderer::BeginFrame() {
 	m_WindowSceneDrawn = false;
 	m_OverlayListCount = 0;
 	m_CommandBuffers[m_FrameIndex]->Begin();
+	m_Profiler->BeginFrame(*m_CommandBuffers[m_FrameIndex], m_FrameIndex);
 	return true;
 }
 
@@ -135,6 +137,7 @@ void FrameRenderer::DrawScene(
 	RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
 
 	if (!target.IsValid()) {
+		GpuScope scope(*m_Profiler, cmd, "Window");
 		m_ForwardPath->Record(cmd, m_FrameIndex, scene, view, *m_WindowScene);
 		m_WindowSceneDrawn = true;
 		return;
@@ -145,6 +148,7 @@ void FrameRenderer::DrawScene(
 		VKE_CORE_WARN("Renderer::DrawScene: the view texture no longer exists");
 		return;
 	}
+	GpuScope scope(*m_Profiler, cmd, viewTexture->Name);
 	m_ForwardPath->Record(cmd, m_FrameIndex, scene, view, *viewTexture->Scene);
 
 	cmd.BeginRenderPass(*m_ViewPass, *viewTexture->Framebuffers[m_FrameIndex], ClearValue{});
@@ -155,6 +159,7 @@ void FrameRenderer::DrawScene(
 	Mat4 viewProjection = view.GetProjection(aspect) * view.View;
 
 	if (world && !world->Indices.empty()) {
+		GpuScope worldScope(*m_Profiler, cmd, "World shapes");
 		cmd.BeginRenderPass(*m_WorldRenderPass, *viewTexture->WorldFramebuffers[m_FrameIndex], ClearValue{});
 		m_WorldPass->Record(cmd, m_FrameIndex, *world, viewProjection, view.Position, viewTexture->Width,
 				viewTexture->Height, [this](const OverlayTexture &texture) { return ResolveOverlayTexture(texture); });
@@ -166,6 +171,7 @@ void FrameRenderer::DrawScene(
 		if (!viewTexture->Pick) {
 			viewTexture->Pick = m_PickPass->CreateTarget(viewTexture->Width, viewTexture->Height);
 		}
+		GpuScope pickScope(*m_Profiler, cmd, "Picking");
 		m_PickPass->Record(cmd, scene, viewProjection, *viewTexture->Pick, viewTexture->PickX, viewTexture->PickY);
 		viewTexture->PickRequested = false;
 		viewTexture->PickInFlight = true;
@@ -218,14 +224,19 @@ void FrameRenderer::EndFrame() {
 	m_InFrame = false;
 	RHICommandBuffer &cmd = *m_CommandBuffers[m_FrameIndex];
 
+	m_Profiler->Begin(cmd, "Output");
 	cmd.BeginRenderPass(*m_OutputPass, *m_OutputFramebuffers[m_ImageIndex], ClearValue{});
 	if (m_WindowSceneDrawn) {
 		m_ForwardPath->Resolve(cmd, m_FrameIndex, *m_WindowScene, *m_OutputPass, m_OutputNeedsEncoding);
 	}
+	m_Profiler->Begin(cmd, "UI");
 	m_OverlayPass->Record(cmd, m_FrameIndex, m_OverlayLists.data(), m_OverlayListCount, m_Swapchain->GetWidth(),
 			m_Swapchain->GetHeight(), !m_OutputNeedsEncoding,
 			[this](const OverlayTexture &texture) { return ResolveOverlayTexture(texture); });
+	m_Profiler->End(cmd);
 	cmd.EndRenderPass();
+	m_Profiler->End(cmd);
+	m_Profiler->EndFrame(cmd);
 	cmd.End();
 
 	if (!m_Swapchain->SubmitAndPresent(cmd)) {
@@ -252,11 +263,12 @@ RHITexture *FrameRenderer::ResolveOverlayTexture(const OverlayTexture &texture) 
 	}
 }
 
-ViewTexture FrameRenderer::MakeViewTexture(u32 width, u32 height) {
+ViewTexture FrameRenderer::MakeViewTexture(u32 width, u32 height, std::string name) {
 	width = std::max(width, 1u);
 	height = std::max(height, 1u);
 
 	ViewTexture viewTexture;
+	viewTexture.Name = std::move(name);
 	viewTexture.Width = width;
 	viewTexture.Height = height;
 	viewTexture.Scene = m_ForwardPath->CreateTargets(width, height, "ViewScene");
@@ -291,8 +303,8 @@ ViewTexture FrameRenderer::MakeViewTexture(u32 width, u32 height) {
 	return viewTexture;
 }
 
-ViewTextureID FrameRenderer::CreateViewTexture(u32 width, u32 height) {
-	return m_Views.Emplace(MakeViewTexture(width, height));
+ViewTextureID FrameRenderer::CreateViewTexture(u32 width, u32 height, std::string_view name) {
+	return m_Views.Emplace(MakeViewTexture(width, height, std::string(name)));
 }
 
 void FrameRenderer::ResizeViewTexture(ViewTextureID id, u32 width, u32 height) {
@@ -306,8 +318,9 @@ void FrameRenderer::ResizeViewTexture(ViewTextureID id, u32 width, u32 height) {
 		return;
 	}
 
+	std::string name = viewTexture->Name;
 	Retire(std::move(*viewTexture));
-	*viewTexture = MakeViewTexture(width, height);
+	*viewTexture = MakeViewTexture(width, height, std::move(name));
 }
 
 void FrameRenderer::DestroyViewTexture(ViewTextureID id) {

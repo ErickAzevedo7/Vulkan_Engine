@@ -404,6 +404,13 @@ void VulkanDevice::QueryDeviceInfo() {
 	m_Limits.MaxPushConstantSize = properties.limits.maxPushConstantsSize;
 	m_Limits.MaxTextureSize = properties.limits.maxImageDimension2D;
 	m_Limits.MaxSamplerAnisotropy = m_EnabledFeatures.samplerAnisotropy ? properties.limits.maxSamplerAnisotropy : 1.0f;
+	m_Limits.TimestampPeriod = properties.limits.timestampPeriod;
+
+	u32 familyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &familyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> families(familyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &familyCount, families.data());
+	m_Limits.TimestampValidBits = families[m_GraphicsQueueFamily].timestampValidBits;
 
 	const VkFormat depthCandidates[] = { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
 		VK_FORMAT_D24_UNORM_S8_UINT };

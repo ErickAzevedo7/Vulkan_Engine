@@ -2,6 +2,7 @@
 
 #include "DrawItem.h"
 #include "GpuCache.h"
+#include "GpuProfiler.h"
 #include "LightClusters.h"
 #include "RenderTarget.h"
 #include "ShadowPass.h"
@@ -57,7 +58,8 @@ struct SceneTargets {
 // sorted into clusters of the view, so their number has no fixed limit.
 class ForwardPath {
 public:
-	ForwardPath(RHIDevice &device, AssetManager &assets, u32 framesInFlight);
+	// Times its passes as parts of `profiler`.
+	ForwardPath(RHIDevice &device, AssetManager &assets, GpuProfiler &profiler, u32 framesInFlight);
 	~ForwardPath();
 
 	Iunique<SceneTargets> CreateTargets(u32 width, u32 height, const char *debugName);
@@ -84,6 +86,7 @@ private:
 	void WriteFrameData(FrameData &data, const RenderScene &scene, const RenderView &view, u32 width, u32 height);
 
 	RHIDevice &m_Device;
+	GpuProfiler &m_Profiler;
 	u32 m_FramesInFlight;
 
 	// Destroyed in reverse declaration order.

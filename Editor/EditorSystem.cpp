@@ -129,6 +129,7 @@ void EditorSystem::SaveEditorState() const {
 void EditorSystem::OnUpdate(FrameTime ft) {
 	m_Console.Update();
 	UpdateFrameStats(ft.GetDeltaF());
+	m_Profiler.Update(m_Renderer.GetGpuTimings(), ft.GetDeltaF());
 
 	IWindow &window = m_Platform.GetWindow();
 	if (window.ShouldClose()) {
@@ -168,6 +169,9 @@ void EditorSystem::OnUpdate(FrameTime ft) {
 	}
 	if (m_ShowAssets) {
 		m_AssetBrowser.Draw(&m_ShowAssets);
+	}
+	if (m_ShowProfiler) {
+		m_Profiler.Draw(&m_ShowProfiler, 1000.0f * m_AverageFrameTime);
 	}
 	if (AssetID scene = m_AssetBrowser.TakeSceneToOpen(); scene.IsValid() && scene != m_Scene.GetID()) {
 		Request(Action::OpenScene, scene);
@@ -491,6 +495,7 @@ void EditorSystem::DrawMenuBar() {
 		ImGui::MenuItem(WithIcon(Icons::Gamepad2, "Game").c_str(), nullptr, &m_ShowGame);
 		ImGui::MenuItem(WithIcon(Icons::Terminal, "Console").c_str(), nullptr, &m_ShowConsole);
 		ImGui::MenuItem(WithIcon(Icons::Boxes, "Assets").c_str(), nullptr, &m_ShowAssets);
+		ImGui::MenuItem(WithIcon(Icons::Layers, "Profiler").c_str(), nullptr, &m_ShowProfiler);
 		ImGui::Separator();
 		if (ImGui::MenuItem(WithIcon(Icons::LayoutGrid, "Reset layout").c_str())) {
 			m_ShowHierarchy = true;

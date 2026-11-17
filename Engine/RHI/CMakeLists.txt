@@ -17,6 +17,7 @@ target_sources(VKE_RHI PRIVATE
     private/vulkan/VulkanSampler.cpp
     private/vulkan/VulkanDescriptorAllocator.cpp
     private/vulkan/VulkanBindGroup.cpp
+    private/vulkan/VulkanTimestampPool.cpp
 )
 
 target_include_directories(VKE_RHI

@@ -17,6 +17,7 @@ target_sources(VKE_Renderer PRIVATE
     private/WorldDraw.cpp
     private/WorldPass.cpp
     private/PickPass.cpp
+    private/GpuProfiler.cpp
 )
 
 target_include_directories(VKE_Renderer

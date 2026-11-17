@@ -12,6 +12,7 @@ class RHIPipeline;
 class RHIBuffer;
 class RHIBindGroup;
 class RHITexture;
+class RHITimestampPool;
 
 // Records GPU commands. Keep one per frame in flight and reuse it.
 class RHICommandBuffer {
@@ -51,6 +52,12 @@ public:
 	// by a pass whose attachment sets CopiedAfter; `destination` must be a Readback buffer.
 	virtual void CopyTextureToBuffer(
 			RHITexture &source, const ScissorRect &rect, RHIBuffer &destination, size_t offset = 0) = 0;
+
+	// Makes `count` slots from `first` ready to be written again. Outside any render pass.
+	virtual void ResetTimestamps(RHITimestampPool &pool, u32 first, u32 count) = 0;
+	// Writes the GPU's clock into slot `index` once all the work recorded before it is done,
+	// so the ticks between two slots are what the commands between them added.
+	virtual void WriteTimestamp(RHITimestampPool &pool, u32 index) = 0;
 };
 
 } // namespace VKE
