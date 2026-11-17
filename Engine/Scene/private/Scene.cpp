@@ -5,6 +5,8 @@
 #include "scene/GameObject.h"
 #include "scene/components/CameraComponent.h"
 
+#include <core/Profiling.h>
+
 #include <algorithm>
 
 namespace VKE {
@@ -86,6 +88,7 @@ GameObject *Scene::Get(Handle<GameObject> handle) const {
 }
 
 void Scene::Update() {
+	VKE_PROFILE_FUNCTION();
 	SceneSystems systems = GetSystems();
 	SyncQueued(systems);
 	m_PhysicsWorld.Step();
@@ -95,6 +98,7 @@ void Scene::Update() {
 }
 
 void Scene::Sync() {
+	VKE_PROFILE_FUNCTION();
 	SceneSystems systems = GetSystems();
 	SyncQueued(systems);
 	m_Contacts.clear();
@@ -105,6 +109,7 @@ SceneSystems Scene::GetSystems() {
 }
 
 void Scene::SyncQueued(SceneSystems &systems) {
+	VKE_PROFILE_FUNCTION();
 	std::vector<GameObject *> queue;
 	queue.swap(m_SyncQueue);
 	for (GameObject *object : queue) {

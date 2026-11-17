@@ -4,6 +4,7 @@
 #include "jolt/JoltWorld.h"
 
 #include <core/Log.h>
+#include <core/Profiling.h>
 #include <core/SlotMap.h>
 
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -450,6 +451,7 @@ bool PhysicsWorld::Raycast(
 }
 
 void PhysicsWorld::Step() {
+	VKE_PROFILE_FUNCTION();
 	Storage &s = *m_Storage;
 	s.Moved.clear();
 	s.Events.swap(s.PendingEnds);
@@ -471,27 +473,33 @@ void PhysicsWorld::Step() {
 		s.StartPositions[i] = body.Desc.Pose.Position;
 	}
 
-	for (u32 round = 0; round < kPushRounds; ++round) {
-		bool pushed = false;
-		for (u32 i = 0; i < bodyCount; ++i) {
-			Body &body = s.BodyAt(i);
-			if (!IsStatic(body.Desc) && !body.Desc.IsTrigger) {
-				pushed |= s.PushOut(body);
+	{
+		VKE_PROFILE_SCOPE("Push movable bodies out");
+		for (u32 round = 0; round < kPushRounds; ++round) {
+			bool pushed = false;
+			for (u32 i = 0; i < bodyCount; ++i) {
+				Body &body = s.BodyAt(i);
+				if (!IsStatic(body.Desc) && !body.Desc.IsTrigger) {
+					pushed |= s.PushOut(body);
+				}
 			}
-		}
-		if (!pushed) {
-			break;
+			if (!pushed) {
+				break;
+			}
 		}
 	}
 
-	s.NowTouching.clear();
-	for (u32 i = 0; i < bodyCount; ++i) {
-		const Body &body = s.BodyAt(i);
-		if (body.Desc.Pose.Position != s.StartPositions[i]) {
-			s.Moved.push_back(s.Bodies.HandleAt(i));
-		}
-		if (!IsStatic(body.Desc)) {
-			s.FindContactsOf(s.Bodies.HandleAt(i), body);
+	{
+		VKE_PROFILE_SCOPE("Find contacts");
+		s.NowTouching.clear();
+		for (u32 i = 0; i < bodyCount; ++i) {
+			const Body &body = s.BodyAt(i);
+			if (body.Desc.Pose.Position != s.StartPositions[i]) {
+				s.Moved.push_back(s.Bodies.HandleAt(i));
+			}
+			if (!IsStatic(body.Desc)) {
+				s.FindContactsOf(s.Bodies.HandleAt(i), body);
+			}
 		}
 	}
 

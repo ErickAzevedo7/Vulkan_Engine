@@ -5,6 +5,7 @@
 #include "scripting/GameModule.h"
 
 #include <core/Assert.h>
+#include <core/Profiling.h>
 #include <scene/GameObject.h>
 #include <scene/Prefab.h>
 #include <scene/Scene.h>
@@ -83,18 +84,25 @@ void ScriptRun::SetInputArea(bool focused, f32 viewX, f32 viewY) {
 }
 
 void ScriptRun::Update(f32 deltaTime) {
+	VKE_PROFILE_FUNCTION();
 	m_DeltaTime = deltaTime;
 	m_Time += deltaTime;
 	++m_Frame;
 
 	StartNewScripts();
-	ForEachRunning([&](ScriptComponent &script) { script.CallUpdate(deltaTime); });
+	{
+		VKE_PROFILE_SCOPE("Scripts: OnUpdate");
+		ForEachRunning([&](ScriptComponent &script) { script.CallUpdate(deltaTime); });
+	}
 	if (m_HasFault) {
 		return;
 	}
 	m_Scene.Update();
 	DeliverContacts();
-	ForEachRunning([&](ScriptComponent &script) { script.CallLateUpdate(deltaTime); });
+	{
+		VKE_PROFILE_SCOPE("Scripts: OnLateUpdate");
+		ForEachRunning([&](ScriptComponent &script) { script.CallLateUpdate(deltaTime); });
+	}
 	if (m_HasFault) {
 		return;
 	}
@@ -172,6 +180,7 @@ void ScriptRun::ReportFault(std::string message) {
 }
 
 void ScriptRun::StartNewScripts() {
+	VKE_PROFILE_FUNCTION();
 	size_t count = m_Scripts.size();
 	for (size_t i = 0; i < count && !m_HasFault; ++i) {
 		ScriptComponent *script = m_Scripts[i];
@@ -182,6 +191,7 @@ void ScriptRun::StartNewScripts() {
 }
 
 void ScriptRun::DeliverContacts() {
+	VKE_PROFILE_FUNCTION();
 	for (const Contact &contact : m_Scene.GetContacts()) {
 		if (m_HasFault) {
 			return;
@@ -222,6 +232,7 @@ void ScriptRun::DeliverContact(
 }
 
 void ScriptRun::DestroyQueued() {
+	VKE_PROFILE_FUNCTION();
 	// By index: an OnStop can ask for more. Asking twice, or for what went with a parent,
 	// finds nothing.
 	for (size_t i = 0; i < m_ToDestroy.size(); ++i) {
