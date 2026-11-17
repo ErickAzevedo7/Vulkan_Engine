@@ -4,6 +4,7 @@
 #include <core/FrameTime.h>
 #include <core/Globals.h>
 #include <core/Log.h>
+#include <core/Profiling.h>
 
 #include <chrono>
 
@@ -40,8 +41,10 @@ void Application::Run() {
 		FrameTime ft(delta, m_TotalTime);
 
 		for (auto &system : m_Systems) {
+			VKE_PROFILE_SCOPE_DYNAMIC(system->GetName());
 			system->OnUpdate(ft);
 		}
+		VKE_PROFILE_FRAME();
 	}
 }
 
