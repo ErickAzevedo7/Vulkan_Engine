@@ -4,6 +4,7 @@
 #include "LightClusters.h"
 
 #include <core/Log.h>
+#include <core/Profiling.h>
 #include <platform/FileSystem.h>
 
 #include <algorithm>
@@ -229,6 +230,7 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 }
 
 void ShadowPass::Record(RHICommandBuffer &cmd, const std::vector<DrawItem> &items) {
+	VKE_PROFILE_FUNCTION();
 	if (m_Views.empty()) {
 		return;
 	}

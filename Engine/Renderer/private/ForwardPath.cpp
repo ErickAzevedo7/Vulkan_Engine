@@ -4,6 +4,7 @@
 
 #include <assets/AssetManager.h>
 #include <core/Log.h>
+#include <core/Profiling.h>
 #include <platform/FileSystem.h>
 #include <renderer/RenderScene.h>
 
@@ -163,6 +164,7 @@ Iunique<SceneTargets> ForwardPath::CreateTargets(u32 width, u32 height, const ch
 }
 
 void ForwardPath::CollectDrawItems(const RenderScene &scene) {
+	VKE_PROFILE_FUNCTION();
 	m_DrawItems.clear();
 	m_SceneBounds = AABB(Vec3(FLT_MAX), Vec3(-FLT_MAX));
 
@@ -237,16 +239,21 @@ void ForwardPath::WriteFrameData(
 	frame.CameraPosition = Vec4(view.Position, 1.0f);
 	frame.EnvironmentParameters = Vec4(scene.GetEnvironment().Intensity, 0.0f, 0.0f, 0.0f);
 
-	m_LightClusters.Build(scene.GetLights().Values(), view, frame.Projection, width, height, frame);
+	{
+		VKE_PROFILE_SCOPE("Build light clusters");
+		m_LightClusters.Build(scene.GetLights().Values(), view, frame.Projection, width, height, frame);
+	}
 
 	m_Shadows.clear();
 	if (m_ShadowsEnabled && !m_DrawItems.empty()) {
+		VKE_PROFILE_SCOPE("Place shadows in the atlas");
 		f32 pixelsAtOneMeter = 0.5f * static_cast<f32>(height) * std::abs(frame.Projection[1][1]);
 		m_ShadowPass->Prepare(m_LightClusters, view.Position, pixelsAtOneMeter, m_SceneBounds, m_Shadows);
 	} else {
 		m_ShadowPass->Clear();
 	}
 
+	VKE_PROFILE_SCOPE("Upload frame data");
 	const std::vector<GpuLight> &lights = m_LightClusters.GetLights();
 	const std::vector<GpuCluster> &clusters = m_LightClusters.GetClusters();
 	const std::vector<u32> &indices = m_LightClusters.GetIndices();
@@ -274,12 +281,16 @@ void ForwardPath::WriteFrameData(
 
 void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScene &scene, const RenderView &view,
 		SceneTargets &targets) {
+	VKE_PROFILE_FUNCTION();
 	// Uploads any assets seen for the first time.
 	CollectDrawItems(scene);
 	RHIBindGroup &environmentGroup = GetEnvironmentGroup(scene);
 
 	FrameData &frameData = targets.Frames[frameIndex];
-	WriteFrameData(frameData, scene, view, targets.Width, targets.Height);
+	{
+		VKE_PROFILE_SCOPE("Write frame data");
+		WriteFrameData(frameData, scene, view, targets.Width, targets.Height);
+	}
 	RHIBindGroup &frameGroup = *frameData.Group;
 
 	{
@@ -298,28 +309,31 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 	cmd.BindBindGroup(kFrameSet, frameGroup);
 	cmd.BindBindGroup(kEnvironmentSet, environmentGroup);
 
-	const GpuMaterial *boundMaterial = nullptr;
-	const GpuMesh *boundMesh = nullptr;
-	for (const DrawItem &item : m_DrawItems) {
-		if (item.Material != boundMaterial) {
-			cmd.BindBindGroup(kMaterialSet, *item.Material->BindGroup);
-			boundMaterial = item.Material;
-		}
-		if (item.Mesh != boundMesh) {
-			cmd.BindVertexBuffer(*item.Mesh->VertexBuffer);
-			cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, IndexType::U32);
-			boundMesh = item.Mesh;
-		}
+	{
+		VKE_PROFILE_SCOPE("Record opaque draws");
+		const GpuMaterial *boundMaterial = nullptr;
+		const GpuMesh *boundMesh = nullptr;
+		for (const DrawItem &item : m_DrawItems) {
+			if (item.Material != boundMaterial) {
+				cmd.BindBindGroup(kMaterialSet, *item.Material->BindGroup);
+				boundMaterial = item.Material;
+			}
+			if (item.Mesh != boundMesh) {
+				cmd.BindVertexBuffer(*item.Mesh->VertexBuffer);
+				cmd.BindIndexBuffer(*item.Mesh->IndexBuffer, IndexType::U32);
+				boundMesh = item.Mesh;
+			}
 
-		ObjectPushConstants object;
-		object.Model = item.Instance->Transform;
-		Mat3 normalMatrix = glm::transpose(glm::inverse(Mat3(object.Model)));
-		for (int column = 0; column < 3; ++column) {
-			object.NormalMatrix[column] = Vec4(normalMatrix[column], 0.0f);
-		}
+			ObjectPushConstants object;
+			object.Model = item.Instance->Transform;
+			Mat3 normalMatrix = glm::transpose(glm::inverse(Mat3(object.Model)));
+			for (int column = 0; column < 3; ++column) {
+				object.NormalMatrix[column] = Vec4(normalMatrix[column], 0.0f);
+			}
 
-		cmd.PushConstants(ShaderStageFlags::Vertex, 0, sizeof(object), &object);
-		cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
+			cmd.PushConstants(ShaderStageFlags::Vertex, 0, sizeof(object), &object);
+			cmd.DrawIndexed(item.Submesh->IndexCount, 1, item.Submesh->FirstIndex, 0, 0);
+		}
 	}
 
 	m_Profiler.End(cmd);

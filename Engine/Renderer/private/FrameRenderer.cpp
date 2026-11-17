@@ -2,6 +2,7 @@
 
 #include <core/Assert.h>
 #include <core/Log.h>
+#include <core/Profiling.h>
 #include <platform/Window.h>
 
 #include <algorithm>
@@ -101,6 +102,7 @@ void FrameRenderer::RecreateSwapchain() {
 }
 
 bool FrameRenderer::BeginFrame() {
+	VKE_PROFILE_FUNCTION();
 	VKE_CORE_ASSERT(!m_InFrame, "BeginFrame called twice without EndFrame");
 	if (m_Window.IsMinimized()) {
 		return false;
@@ -109,7 +111,13 @@ bool FrameRenderer::BeginFrame() {
 	if (m_Window.ConsumeResizedFlag()) {
 		RecreateSwapchain();
 	}
-	if (!m_Swapchain->AcquireNextImage(m_ImageIndex)) {
+	bool acquired = false;
+	{
+		// Waits for the GPU to finish the frame that last used this slot.
+		VKE_PROFILE_SCOPE("Wait for GPU and acquire image");
+		acquired = m_Swapchain->AcquireNextImage(m_ImageIndex);
+	}
+	if (!acquired) {
 		RecreateSwapchain();
 		return false;
 	}
@@ -131,6 +139,7 @@ bool FrameRenderer::BeginFrame() {
 
 void FrameRenderer::DrawScene(
 		const RenderScene &scene, const RenderView &view, ViewTextureID target, const WorldDrawList *world) {
+	VKE_PROFILE_FUNCTION();
 	if (!m_InFrame) {
 		return;
 	}
@@ -205,6 +214,7 @@ bool FrameRenderer::TakePickResult(ViewTextureID target, MeshInstanceID &mesh) {
 }
 
 void FrameRenderer::DrawOverlay(const OverlayDrawList &list) {
+	VKE_PROFILE_FUNCTION();
 	if (!m_InFrame) {
 		return;
 	}
@@ -218,6 +228,7 @@ void FrameRenderer::DrawOverlay(const OverlayDrawList &list) {
 }
 
 void FrameRenderer::EndFrame() {
+	VKE_PROFILE_FUNCTION();
 	if (!m_InFrame) {
 		return;
 	}
@@ -239,7 +250,12 @@ void FrameRenderer::EndFrame() {
 	m_Profiler->EndFrame(cmd);
 	cmd.End();
 
-	if (!m_Swapchain->SubmitAndPresent(cmd)) {
+	bool presented = false;
+	{
+		VKE_PROFILE_SCOPE("Submit and present");
+		presented = m_Swapchain->SubmitAndPresent(cmd);
+	}
+	if (!presented) {
 		RecreateSwapchain();
 	}
 }
