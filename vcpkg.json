@@ -19,6 +19,13 @@
     "vulkan",
     "vulkan-memory-allocator",
     "yaml-cpp",
-    "spdlog"
+    "spdlog",
+    {
+      "name": "tracy",
+      "default-features": false,
+      "features": [
+        "on-demand"
+      ]
+    }
   ]
 }
