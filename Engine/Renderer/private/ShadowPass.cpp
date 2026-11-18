@@ -208,7 +208,7 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 			for (u32 face = 0; face < 6; ++face) {
 				const ShadowTile &tile = m_Tiles[request.FirstTile + face];
 				Mat4 viewProjection = projection * views[face];
-				m_Views.push_back({ viewProjection, tile, true, light.Position, farPlane });
+				m_Views.push_back({ viewProjection, Frustum(viewProjection), tile, true, light.Position, farPlane });
 				outShadows.push_back(
 						{ viewProjection, Vec4(2.0f / inner, 0.0f, 0.0f, 0.0f), ToAtlasRect(tile, m_AtlasSize) });
 			}
@@ -224,7 +224,8 @@ void ShadowPass::Prepare(LightClusters &lights, const Vec3 &viewPosition, f32 pi
 									 : FitDirectional(direction, sceneBounds, request.Size, texelSize);
 
 		const ShadowTile &tile = m_Tiles[request.FirstTile];
-		m_Views.push_back({ viewProjection, tile, isSpot, light.Position, light.Settings.Range });
+		m_Views.push_back(
+				{ viewProjection, Frustum(viewProjection), tile, isSpot, light.Position, light.Settings.Range });
 		outShadows.push_back({ viewProjection, Vec4(texelSize, 0.0f, 0.0f, 0.0f), ToAtlasRect(tile, m_AtlasSize) });
 	}
 }
@@ -256,6 +257,9 @@ void ShadowPass::Record(RHICommandBuffer &cmd, const std::vector<DrawItem> &item
 
 		for (const DrawItem &item : items) {
 			if (view.CullToRange && !TouchesSphere(item.WorldBounds, view.Position, view.Range)) {
+				continue;
+			}
+			if (!view.Sees.Intersects(item.WorldBounds)) {
 				continue;
 			}
 

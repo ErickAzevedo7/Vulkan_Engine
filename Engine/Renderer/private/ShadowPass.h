@@ -6,6 +6,7 @@
 
 #include <core/Types.h>
 #include <math/AABB.h>
+#include <math/Frustum.h>
 #include <renderer/RenderTypes.h>
 #include <rhi/RHICommandBuffer.h>
 #include <rhi/RHIDevice.h>
@@ -49,6 +50,8 @@ private:
 	// One depth render of the scene, into one tile of the atlas.
 	struct ShadowView {
 		Mat4 ViewProjection;
+		// Items outside it can't cast into the tile.
+		Frustum Sees;
 		ShadowTile Tile;
 		// Lights with a range only see the items that touch this sphere.
 		bool CullToRange = false;

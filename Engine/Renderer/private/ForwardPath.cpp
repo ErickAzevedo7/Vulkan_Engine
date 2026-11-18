@@ -294,6 +294,18 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 	RHIBindGroup &frameGroup = *frameData.Group;
 
 	{
+		VKE_PROFILE_SCOPE("Cull to the camera");
+		f32 aspect = static_cast<f32>(targets.Width) / static_cast<f32>(targets.Height);
+		Frustum frustum(view.GetProjection(aspect) * view.View);
+		m_VisibleItems.clear();
+		for (const DrawItem &item : m_DrawItems) {
+			if (frustum.Intersects(item.WorldBounds)) {
+				m_VisibleItems.push_back(&item);
+			}
+		}
+	}
+
+	{
 		GpuScope scope(m_Profiler, cmd, "Shadows");
 		m_ShadowPass->Record(cmd, m_DrawItems);
 	}
@@ -313,7 +325,8 @@ void ForwardPath::Record(RHICommandBuffer &cmd, u32 frameIndex, const RenderScen
 		VKE_PROFILE_SCOPE("Record opaque draws");
 		const GpuMaterial *boundMaterial = nullptr;
 		const GpuMesh *boundMesh = nullptr;
-		for (const DrawItem &item : m_DrawItems) {
+		for (const DrawItem *visible : m_VisibleItems) {
+			const DrawItem &item = *visible;
 			if (item.Material != boundMaterial) {
 				cmd.BindBindGroup(kMaterialSet, *item.Material->BindGroup);
 				boundMaterial = item.Material;

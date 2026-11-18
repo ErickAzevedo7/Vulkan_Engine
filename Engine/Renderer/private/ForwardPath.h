@@ -11,6 +11,7 @@
 
 #include <core/Types.h>
 #include <math/AABB.h>
+#include <math/Frustum.h>
 #include <renderer/RenderTypes.h>
 #include <rhi/RHIBindGroup.h>
 #include <rhi/RHIBuffer.h>
@@ -109,6 +110,8 @@ private:
 	LightClusters m_LightClusters;
 	std::vector<GpuShadow> m_Shadows;
 	std::vector<DrawItem> m_DrawItems;
+	// The draw items the camera sees, in the same order.
+	std::vector<const DrawItem *> m_VisibleItems;
 	// World-space bounds of everything in m_DrawItems.
 	AABB m_SceneBounds;
 	f32 m_Exposure = 1.0f;

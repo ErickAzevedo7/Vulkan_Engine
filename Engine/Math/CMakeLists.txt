@@ -5,6 +5,7 @@ find_package(glm CONFIG REQUIRED)
 target_sources(VKE_Math PRIVATE
     private/Transform.cpp
     private/AABB.cpp
+    private/Frustum.cpp
 )
 
 target_include_directories(VKE_Math
